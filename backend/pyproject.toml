@@ -9,6 +9,9 @@ dependencies = [
   "sqlalchemy>=2.0.40,<2.1",
   "psycopg[binary]>=3.2,<4",
   "uvicorn>=0.35,<1",
+  "google-auth>=2.40,<3",
+  "requests>=2.32,<3",
+  "httpx>=0.28,<1",
 ]
 
 [dependency-groups]
@@ -33,3 +36,7 @@ python_version = "3.11"
 strict = true
 files = ["app"]
 plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["google.*", "requests.*"]
+ignore_missing_imports = true

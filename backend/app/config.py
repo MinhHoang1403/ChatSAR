@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     knowledge_enabled: bool = False
     llamaparse_enabled: bool = False
     langfuse_enabled: bool = False
+    session_secret: SecretStr = SecretStr("")
+    google_client_id: str = ""
+    app_origin: str = "http://localhost:18181"
+    app_env: str = "development"
 
     @property
     def generation_allowed(self) -> bool:

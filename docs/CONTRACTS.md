@@ -15,10 +15,12 @@ Mỗi literal phải giữ `raw_phrase`, `value_type`, `candidate_value`, và sa
 | GET `/live` | Không auth | 200 `{status:"ok",request_id}`; không gọi DB/provider |
 | GET `/ready` | Không auth | 200/503 `{status:"ok" hoặc "unavailable",request_id}`; DB + version migration đúng |
 | GET `/health` | Không auth | Readiness + `{cloud_calls_allowed:false}`; không trả URL/key/exception |
-| POST `/api/auth/google` | GIS form `credential`, `g_csrf_token`; cookie CSRF cùng giá trị | Verify CSRF trước token, chữ ký/iss/aud/exp/sub; rotate session; HttpOnly cookie; không trả Google token |
+| GET `/api/auth/config` | Không auth | Client ID công khai nếu có, nonce/CSRF; challenge cookie có chữ ký, HttpOnly, TTL 10 phút |
+| POST `/api/auth/google` | GIS JS callback gửi JSON `credential`, `g_csrf_token`; challenge cookie gắn nonce/CSRF | Verify CSRF trước token, chữ ký/iss/aud/exp/sub/nonce; nonce single-use trong DB; rotate session; HttpOnly cookie; không trả Google token |
 | POST `/api/auth/logout` | Session cookie + `X-CSRF-Token` | Revoke DB session, clear cookie; 204 |
 | GET `/api/me` | Session cookie | `{id,display_name,csrf_token}`; không email làm khóa; unauth 401 |
 | GET/POST `/api/workspaces` | POST `{name}` + CSRF | List owner-scoped; create 201 `{id,name}` |
+| GET `/api/workspaces/{id}` | Session cookie | Select workspace đã kiểm owner; ngoài quyền trả 404 |
 | POST `/api/workspaces/{id}/datasets` | Multipart `file`, optional `sheet_name`, idempotency key + CSRF | 202 `{dataset_id,revision_id,job_id,status}`; kiểm owner trước đọc bytes |
 | GET `/api/datasets/{id}/preview` | `revision_id`, `offset`, `limit` | Columns + candidate types/rows/warnings; owner + revision checked |
 | POST `/api/datasets/{id}/confirm` | `{revision_id,columns,grain,timezone,units}` + CSRF | Atomic publish; 200 `{revision_id,status:"ready",row_count,checksum}`; lỗi row-level không bỏ hàng |

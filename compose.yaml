@@ -13,6 +13,10 @@ services:
       KNOWLEDGE_ENABLED: ${KNOWLEDGE_ENABLED:-false}
       LLAMAPARSE_ENABLED: ${LLAMAPARSE_ENABLED:-false}
       LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-false}
+      SESSION_SECRET: ${SESSION_SECRET:?Set local session secret}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:18181}
+      APP_ENV: ${APP_ENV:-development}
     ports:
       - "127.0.0.1:${API_PORT:-18081}:8000"
     depends_on:

@@ -32,13 +32,17 @@ Giữ nguyên `.env` và flags enabled. Tối đa 10 lời gọi Gemini và 10 K
 | Docker runtime/restart | PASS | web/api/db healthy; `/live`, `/ready`, `/health` HTTP 200 trực tiếp và qua web trước/sau `docker compose restart`; migration còn |
 | Browser F1 | PASS thủ công bởi chủ dự án | Người dùng xác nhận trang hiển thị đúng và “Kết nối hệ thống sẵn sàng” trong hội thoại |
 | Browser automation | BLOCKED | Công cụ không hỗ trợ URL policy với Cốc Cốc Windows; không gọi đây là automated E2E PASS |
-| CI đúng commit đã push | NOT_RUN tại lúc lập file | Chỉ nghiệm thu F1 sau khi có run thật |
+| CI đúng commit đã push | PASS | `b2c692c40f989b8e68ade3e888fed5a74ffa7f3e`, https://github.com/MinhHoang1403/ChatSAR/actions/runs/40850413238 |
 
 Reader thật bị từ chối INSERT/UPDATE/DELETE/DDL/TEMP/đọc metadata; read-only mặc định, timeout 5 giây; Decimal/NULL/TEXT ID đúng. Transaction DDL rollback không để bảng nửa chừng. Đây không phải chứng cứ API owner isolation (thuộc F2/F3).
 
 ## Các mốc còn lại
 
-F2/F3/F4 chưa triển khai ở commit nền tảng. Google live BLOCKED vì chưa có Client ID. Gemini/Knowledge live chưa chạy; 8 negative semantic cases đã lưu nhưng chưa chạy qua app. Không dùng oracle-only hoặc mock để báo semantic PASS. Kết quả milestone và CI sẽ cập nhật tại chính file này.
+F1 đã đạt các điều kiện nền tảng, browser kiểm tra thủ công do chủ dự án xác nhận; browser automation vẫn BLOCKED độc lập.
+
+F2: đã triển khai users/sessions/workspaces, Google ID-token interface + nonce/CSRF, cookie/session expiry/revoke/rotation và owner guards; frontend login/workspaces shell. 17 backend unit tests PASS; 7 integration tests API với PostgreSQL thật PASS (Google identity chỉ mock trong harness). Không có endpoint đăng nhập test trong runtime. Google live/browser E2E vẫn BLOCKED vì chưa có Client ID. F3/F4 được phép tiếp tục qua harness theo chỉ đạo mới; không gọi toàn bộ F2 PASS.
+
+Gemini/Knowledge live chưa chạy; 8 negative semantic cases đã lưu nhưng chưa chạy qua app. Không dùng oracle-only hoặc mock để báo semantic PASS. Kết quả milestone và CI sẽ cập nhật tại chính file này.
 
 ## Google OAuth khi frontend/backend đã xác minh
 
