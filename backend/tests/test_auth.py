@@ -66,3 +66,26 @@ def test_unauthenticated_and_cross_origin_fail_before_database(
             ).status_code
             == 403
         )
+
+
+def test_public_canonical_origin_and_loopback_alias_guard(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://unused:unused@localhost/unused")
+    monkeypatch.setenv("SESSION_SECRET", "synthetic-session-key-for-test-only-123456789")
+    monkeypatch.setenv("APP_ORIGIN", "http://localhost:18181")
+    get_settings.cache_clear()
+    try:
+        with TestClient(create_app(recover_jobs=False)) as client:
+            config = client.get("/api/auth/config")
+            assert config.status_code == 200
+            assert config.json()["app_origin"] == "http://localhost:18181"
+            assert config.headers["Cache-Control"] == "no-store"
+            for origin, expected in [
+                ("http://127.0.0.1:18181", 403),
+                ("http://localhost:18181", 422),
+            ]:
+                response = client.post("/api/auth/google", json={}, headers={"Origin": origin})
+                assert response.status_code == expected
+                if expected == 403:
+                    assert response.json()["error"]["code"] == "ORIGIN_REJECTED"
+    finally:
+        get_settings.cache_clear()

@@ -188,6 +188,8 @@ def wire(value: Any) -> Any:
         return str(value)
     if isinstance(value, (datetime, date)):
         return value.isoformat()
+    if type(value) is int and abs(value) > 9007199254740991:
+        return str(value)
     return value
 
 

@@ -44,9 +44,59 @@ F2: đã triển khai users/sessions/workspaces, Google ID-token interface + non
 
 F3: upload CSV/XLSX local, preview/chọn sheet, review types/NULL/khóa/đơn vị/timezone/grain và publish atomic thành bảng `data.r_<revision UUID>`. Original file trong volume `chatsar_uploads`; checksum và catalog ở PostgreSQL. Nguồn private mặc định; chỉ khi user xác nhận synthetic mới đủ điều kiện gửi metadata cho smoke test AI. Quan hệ hiện chưa cấu hình; không suy JOIN.
 
-Kiểm tra F3 local: 23 unit tests tổng cộng, 13 integration tests (7 auth + 6 ingestion) PASS. Harness HTTP thật chạy upload → preview → confirm → ready; sau restart session/workspace/file/checksum/catalog/typed rows giữ nguyên, gồm Decimal 0.10/0.20, TEXT 0007 và NULL. Duplicate key/invalid date không publish; source corrupt/cap bị từ chối; upload cùng file trả revision cũ; interrupted job chuyển failed rồi retry cùng revision. CI của phần F3 sẽ được đối chiếu sau push. Browser automation/Google live vẫn chưa được thực hiện, không lấy tests API làm browser PASS.
+Kiểm tra F3 local: 23 unit tests tổng cộng, 13 integration tests (7 auth + 6 ingestion) PASS. Harness HTTP thật chạy upload → preview → confirm → ready; sau restart session/workspace/file/checksum/catalog/typed rows giữ nguyên, gồm Decimal 0.10/0.20, TEXT 0007 và NULL. Duplicate key/invalid date không publish; source corrupt/cap bị từ chối; upload cùng file trả revision cũ; interrupted job chuyển failed rồi retry cùng revision. CI PASS tại `a0abd0e9b40bd3676a6e4917c82108d239fa503b`: https://github.com/MinhHoang1403/ChatSAR/actions/runs/40854606057 . Browser automation/Google live vẫn chưa được thực hiện, không lấy tests API làm browser PASS.
 
-Gemini/Knowledge live chưa chạy; 8 negative semantic cases đã lưu nhưng chưa chạy qua app. Không dùng oracle-only hoặc mock để báo semantic PASS. Kết quả milestone và CI sẽ cập nhật tại chính file này.
+## F4 — phần triển khai và kiểm thử
+
+Một đường Question → proposal → catalog/literal binding → SQLAlchemy Core SELECT → reader PostgreSQL → typed envelope. Không nhận SQL/role/schema/owner từ model hoặc client. Có conversations/messages/result references, idempotency, follow-up từ question + plan của lượt answered cùng revision; đổi nguồn trả STALE_CONTEXT. React có chọn nguồn/provider, chat, loading/errors, bảng kết quả, nguồn/cách tính và lịch sử. UI đã build và phục vụ qua Docker; chưa coi authenticated UI/browser E2E là PASS.
+
+| Kiểm tra cuối phần độc lập | Kết quả | Bằng chứng |
+|---|---|---|
+| Backend unit | PASS 56 tests | `uv run --frozen pytest -q` trong backend; gồm contract/provider mock, canonical origin và transport SDK thật với mạng bị cấm |
+| Lint/format/mypy | PASS | `ruff check app tests`, `ruff format --check app tests`, `mypy` strict, 14 app modules |
+| PostgreSQL/API integration | PASS 18 tests | `python -m evaluations.integration`: 7 auth + 11 ingestion/query/chat; provider chỉ mock trong harness |
+| Independent oracle | PASS 25 cases | `python -m evaluations.oracle`; gold SQL không import compiler; manifest/checksums gốc không đổi |
+| Manifest/Decimal/DB privileges | PASS 10 tests, không skip | `CHATSAR_POSTGRES_TESTS=1 python -m unittest discover -s evaluations/tests -v` |
+| Fixture fidelity | PASS 3 domains | `python -m evaluations.model_live --providers gemini --cases logistics_sum hotel_sum library_sum --prepare-only`; tất cả rows/columns/NULL đối chiếu lại sau ingestion, không gọi model |
+| Frontend TypeScript/build | PASS | `npm run typecheck`, `npm run build`; không phải browser E2E |
+| HTTP/Docker persistence | PASS | `python -m evaluations.persistence`; session/workspace/source/catalog/typed rows và lịch sử refusal còn sau restart; không gọi model |
+| Lịch sử answer model thật | PASS trên 2 ca đã trả đúng | `evaluations.model_live --restart` so sánh nguyên envelope/result refs/revision trước/sau restart, không gọi lại model |
+| Langfuse thật | PASS | Auth HTTP 200, Observations v2 HTTP 200, đọc lại các bước provider/binding/execution/answer cùng trace |
+| Google live + browser authenticated E2E | BLOCKED, đang kiểm tra | Client ID đã được cấu hình; đang xác minh lỗi ORIGIN_REJECTED khi đăng nhập; automation Cốc Cốc bị công cụ chặn URL policy |
+| CI F4 | Chờ đối chiếu sau push | Không suy từ CI của F3 sang F4 |
+
+Integration đã kiểm COUNT rows/non-null/distinct, SUM/AVG/MIN/MAX, NULL aggregate, Decimal, group/order/limit, AND/OR/IN, timestamp `[start,end)` theo timezone, literal chính xác, owner A/B, result ownership, idempotency/conflict, source chưa ready, stale context và raw SQL field bị chặn. Metamorphic test đảo thứ tự/thêm dòng ngoài filter giữ nguyên SUM. Chưa có JOIN, suy quan hệ, tự quy đổi đơn vị hoặc tự suy ngày đầu/cuối tháng từ ngôn ngữ.
+
+Coverage guard đối chiếu các span và entity đã biết; không chứng minh mọi qualifier trong ngôn ngữ đều được model hiểu đúng. Tám negative cases trong manifest là baseline: các guard liên quan có unit/integration tests, nhưng **chưa chạy toàn bộ 8 câu tự nhiên qua model thật**. Không ghi đây là semantic negative 8/8 PASS.
+
+## Model-live — số đo và giới hạn
+
+Cấu hình do chủ dự án cập nhật: cloud allowed, max 10 requests tổng, budget 10 USD; Gemini/Knowledge/Langfuse enabled tại lần chạy cuối. Không sửa `.env`, không dùng LlamaParse hay GPU BGE. Chủ dự án đã bổ sung Google Client ID; public config HTTP 200 xác nhận sự hiện diện và định dạng mà không in giá trị. Dependency thực: google-genai 2.34.0, langfuse 5.0.4; server Langfuse 4.70.1.
+
+Ledger có **10 reservations: Gemini 5, Knowledge 5**. Hai thử Gemini khi flag còn false bị chặn trước reserve/network, không tính là direct calls. Trình tự thử và failures được giữ trong `artifacts/model-live.json` local, không xóa/reset ledger.
+
+| Ca model trả đúng | Oracle / actual | Revision nguồn / request |
+|---|---|---|
+| Gemini logistics_exact_district (regression) | `10.00` / `10.00`, filter TEXT giữ `quận 3`, SUM fee | revision `901d90f1-bca8-4b90-b074-b0a0835760eb`; request `63125e4b-6cf0-4381-b758-17d83be39640` |
+| Gemini library_sum (held-out, chạy một lần) | `1.25` / `1.25`, SUM fine | revision `9a8a0f9e-8948-4cdb-87ca-4f2277674f36`; request `fe0de9ed-efa8-468c-a805-966b15835ee6` |
+
+Checksum CSV của hai ca lần lượt `0444352adc8414e91ead9823aa9c0de9b581833123447da0f2afd91faadcd54b`, `e73476d4e27fa127279d6314ef3bebf47e5950c63041d15a82fbdd45ffac5d57`. Sources/users của harness được dọn đúng UUID sau đối chiếu; kết quả/số đo synthetic được lưu trong artifact local và báo cáo này, không phải dữ liệu demo còn sẵn trong tài khoản người dùng.
+
+Gemini: 2/5 application attempts trả answer đúng; hai failure về schema trước khi hoàn thiện contract, một APITimeoutError ở ca hotel_sum (20 giây). Hai queries đã compile/execute đều chạy thành công và đúng gold (2/2 executed), gồm một ca critical `quận 3` và một ca held-out. Không dùng tỷ lệ 2/2 này làm accuracy toàn benchmark. Latency end-to-end khoảng 21.15 s và 18.62 s; SQL của ca thư viện khoảng 16.8 ms. Tokens hai ca: input/output 2035/448 và 1977/302, thought 0. Timeout hiện được chốt 30 giây, không có tự fallback.
+
+Knowledge: 4 JSON proposals nhưng bị chặn vì thiếu/mất trường catalog/query hoặc coverage; không trả fact sai ra người dùng. Lần thứ năm HTTP 403 từ Docker, đã dừng Knowledge ngay, không prompt tuning để vượt quyền. Usage có thật ở 4 responses: 824/764, 824/738, 830/829, 1974/1030; response 403 không có usage. **Model-live chưa đạt**, hiện BLOCKED ở permission/network 403; không gửi Authorization/dummy key. So sánh chất lượng trên hai câu logistics_sum/hotel_sum đã thử nhưng chưa có tập hai provider thành công để kết luận model nào tốt hơn.
+
+Tổng usage Gemini đã biết (kể cả một response schema lỗi có usage 1998/65) tương ứng khoảng **0.0038405 USD** theo giá công bố 0.30/2.50 USD mỗi triệu input/output tokens. Không phải hóa đơn; các request không trả usage chưa biết chi phí. Tổng các khoản reserve Gemini là **0.0693980 USD**, là dự phòng của ứng dụng, không phải mức tiền thực đã thu. Knowledge cost unknown, không ghi bằng 0.
+
+**Giới hạn kiểm kê HTTP lịch sử:** test transport phát hiện SDK mutates attempts=0 → 1 rồi bridge Interactions hiểu là một retry cho HTTP 429/5xx. Vì vậy 10 ledger reservations không chứng minh có đúng 10 HTTP requests lịch sử. Không có audit transport đầy đủ cho các lượt trước; không bịa số request/billing. Đã dừng gọi live và bổ sung `request_client` chặn lần dispatch thứ hai trước transport. Test SDK thật qua MockTransport với 503/429/timeout và socket bị cấm xác nhận chỉ một dispatch; không phát sinh cloud. Không sửa vendor SDK hoặc coi mock này là lần nghiệm thu provider-live bổ sung. Muốn benchmark tiếp cần chủ dự án cấp giới hạn mới; không tự tăng cấu hình hay reset ledger.
+
+**Fidelity harness:** CSV lịch sử làm NULL delivery_status thành empty TEXT do review sentinel. Hai ca model trả đúng không dùng cột đó; các cột SUM/filter liên quan giữ đúng giá trị, kết quả gold không thay đổi. Đã sửa harness dùng sentinel không trùng dữ liệu + nullable review rõ ràng, và kiểm mọi ô/NULL ở 3 domain qua HTTP; không gọi model lại hoặc giả rằng model đã được chạy trên fixture mới. Fixtures/gold gốc bất biến.
+
+Langfuse đọc lại trace `9b9246e1a14e141f903f27ed244afe10`: provider input/output tokens + latency, bind_and_compile validation passed, execute_read_only row_count 1 + latency, answer_question answered. Metadata mặc định không gửi question/raw rows/SQL/secrets; dùng API v2 vì API traces cũ trả 404 trên server này. Bằng chứng đã lọc ở `artifacts/langfuse-proof.json` local.
+
+## Exit gate hiện tại
+
+**Phần triển khai F1–F4 đã có; chưa nghiệm thu toàn bộ Giai đoạn 1.** Google OAuth và browser E2E còn BLOCKED. Knowledge-live gặp 403. Chưa chạy toàn bộ development/regression/held-out/negative model benchmark; ba ca library held-out còn NOT_RUN, không tuning theo ca library_sum đã đo. Chưa có phép đo release accuracy/latency đầy đủ hoặc xác nhận số HTTP requests lịch sử của SDK. Giữ feature branch; không merge main, không sang Giai đoạn 2.
 
 ## Google OAuth khi frontend/backend đã xác minh
 

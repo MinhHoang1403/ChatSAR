@@ -1,6 +1,6 @@
 """Metadata SQLAlchemy Core khớp migrations do repository quản lý."""
 
-from sqlalchemy import Column, DateTime, Integer, MetaData, String, Table, Uuid
+from sqlalchemy import Column, DateTime, Float, Integer, MetaData, Numeric, String, Table, Uuid
 from sqlalchemy.dialects.postgresql import JSONB
 
 metadata = MetaData(schema="app")
@@ -63,4 +63,51 @@ jobs = Table(
     Column("status", String),
     Column("error_code", String),
     Column("updated_at", DateTime(timezone=True)),
+)
+
+conversations = Table(
+    "conversations",
+    metadata,
+    Column("id", Uuid, primary_key=True),
+    Column("workspace_id", Uuid),
+    Column("title", String),
+    Column("created_at", DateTime(timezone=True)),
+)
+messages = Table(
+    "messages",
+    metadata,
+    Column("id", Uuid, primary_key=True),
+    Column("conversation_id", Uuid),
+    Column("revision_id", Uuid),
+    Column("question", String),
+    Column("request_key", String),
+    Column("request_hash", String),
+    Column("provider", String),
+    Column("status", String),
+    Column("envelope", JSONB),
+    Column("query_plan", JSONB),
+    Column("created_at", DateTime(timezone=True)),
+)
+results = Table(
+    "result_records",
+    metadata,
+    Column("id", Uuid, primary_key=True),
+    Column("message_id", Uuid),
+    Column("envelope", JSONB),
+)
+provider_usage = Table(
+    "provider_usage",
+    metadata,
+    Column("id", Uuid, primary_key=True),
+    Column("provider", String),
+    Column("model", String),
+    Column("status", String),
+    Column("input_tokens", Integer),
+    Column("output_tokens", Integer),
+    Column("thought_tokens", Integer),
+    Column("estimated_cost_usd", Numeric),
+    Column("reserved_cost_usd", Numeric),
+    Column("latency_ms", Float),
+    Column("error_code", String),
+    Column("created_at", DateTime(timezone=True)),
 )

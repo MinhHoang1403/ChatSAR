@@ -12,10 +12,13 @@ from starlette.responses import Response
 
 from app.auth import router as auth_router
 from app.config import get_settings
+from app.conversation import recover_messages
+from app.conversation import router as conversation_router
 from app.database import database_ready
 from app.datasets import recover_ingestion
 from app.datasets import router as dataset_router
 from app.errors import AppError
+from app.observability import flush_observations
 from app.workspace import router as workspace_router
 
 
@@ -25,9 +28,11 @@ async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     if application.state.recover_jobs:
         try:
             recover_ingestion()
+            recover_messages()
         except SQLAlchemyError:
             pass
     yield
+    flush_observations()
 
 
 def create_app(*, recover_jobs: bool = True) -> FastAPI:
@@ -36,6 +41,7 @@ def create_app(*, recover_jobs: bool = True) -> FastAPI:
     application.include_router(auth_router)
     application.include_router(workspace_router)
     application.include_router(dataset_router)
+    application.include_router(conversation_router)
 
     @application.exception_handler(AppError)
     async def application_error(request: Request, error: AppError) -> JSONResponse:

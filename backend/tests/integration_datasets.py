@@ -2,9 +2,11 @@
 
 import io
 import unittest
+from contextlib import nullcontext
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
@@ -16,7 +18,19 @@ from app.auth import SESSION_COOKIE, create_session, digest
 from app.config import get_settings
 from app.datasets import recover_ingestion
 from app.main import create_app
-from app.schema import datasets, jobs, revisions, users, workspaces
+from app.providers import Proposal
+from app.query import Predicate, QueryPlan, compile_query, execute_query
+from app.schema import (
+    conversations,
+    datasets,
+    jobs,
+    messages,
+    results,
+    revisions,
+    users,
+    workspaces,
+)
+from app.tabular import wire
 
 
 class DatasetIntegration(unittest.TestCase):
@@ -49,6 +63,19 @@ class DatasetIntegration(unittest.TestCase):
     def tearDown(self) -> None:
         self.client.close()
         with db.get_engine().begin() as connection:
+            conversation_ids = select(conversations.c.id).where(
+                conversations.c.workspace_id == self.workspace_id
+            )
+            message_ids = select(messages.c.id).where(
+                messages.c.conversation_id.in_(conversation_ids)
+            )
+            connection.execute(delete(results).where(results.c.message_id.in_(message_ids)))
+            connection.execute(
+                delete(messages).where(messages.c.conversation_id.in_(conversation_ids))
+            )
+            connection.execute(
+                delete(conversations).where(conversations.c.workspace_id == self.workspace_id)
+            )
             rows = (
                 connection.execute(
                     select(revisions)
@@ -265,6 +292,312 @@ class DatasetIntegration(unittest.TestCase):
                 f"/api/workspaces/{self.workspace_id}/datasets", files={"file": (name, content)}
             )
             self.assertEqual(response.status_code, status)
+
+    def published(self, content: bytes, kinds: dict | None = None) -> dict:
+        uploaded = self.upload(content)
+        preview = self.preview(uploaded["dataset_id"])
+        review = self.publish_input(preview)
+        for column in review["columns"]:
+            if kinds and column["name"] in kinds:
+                column["data_type"] = kinds[column["name"]]
+            if column["data_type"] != "text":
+                column["null_values"] = [""]
+        response = self.client.post(f"/api/datasets/{uploaded['dataset_id']}/confirm", json=review)
+        self.assertEqual(response.status_code, 200, response.text)
+        with db.get_engine().connect() as connection:
+            revision = dict(
+                connection.execute(
+                    select(revisions).where(revisions.c.id == UUID(uploaded["revision_id"]))
+                )
+                .mappings()
+                .one()
+            )
+            revision["checksum"] = response.json()["checksum"]
+        return revision
+
+    def plan(self, revision: dict, question: str, **fields: object) -> QueryPlan:
+        return QueryPlan.model_validate(
+            {
+                "task": "SQL",
+                "table_id": str(revision["dataset_id"]),
+                "source_revision_id": str(revision["id"]),
+                "raw_user_spans": [question],
+                "coverage": [question],
+                **fields,
+            }
+        )
+
+    def test_typed_compiler_postgres_count_null_decimal_and_metamorphic(self) -> None:
+        revision = self.published(b"code,amount\n0007,0.10\n0012,0.20\n0100,\n0101,0.00\n")
+        code, amount = [c["id"] for c in revision["columns"]]
+        expected = {
+            "COUNT_ROWS": 4,
+            "COUNT_NON_NULL": 3,
+            "COUNT_DISTINCT": 3,
+            "SUM": Decimal("0.30"),
+            "AVG": Decimal("0.10"),
+            "MIN": Decimal("0.00"),
+            "MAX": Decimal("0.20"),
+        }
+        for operator, gold in expected.items():
+            aggregate = {"operator": operator, "output_id": "total"}
+            if operator != "COUNT_ROWS":
+                aggregate["column_id"] = amount
+            plan = self.plan(revision, "Kiểm thử", aggregations=[aggregate])
+            rows, _ = execute_query(compile_query(plan, revision, "Kiểm thử"))
+            self.assertEqual(Decimal(str(rows[0][0])), Decimal(str(gold)))
+        empty = self.plan(
+            revision,
+            "9999",
+            aggregations=[{"operator": "SUM", "column_id": amount, "output_id": "total"}],
+            filters={
+                "operator": "EQ",
+                "column_id": code,
+                "literal": {"raw_phrase": "9999", "value_type": "text", "candidate_value": "9999"},
+            },
+        )
+        self.assertEqual(execute_query(compile_query(empty, revision, "9999"))[0], [[None]])
+        grouped = self.plan(
+            revision,
+            "Nhóm",
+            select_columns=[code],
+            group_by=[code],
+            aggregations=[{"operator": "SUM", "column_id": amount, "output_id": "total"}],
+            order_by=[{"field_id": code}],
+        )
+        self.assertEqual(
+            execute_query(compile_query(grouped, revision, "Nhóm"))[0],
+            [["0007", "0.10"], ["0012", "0.20"], ["0100", None], ["0101", "0.00"]],
+        )
+        # Thứ tự nguồn và bản ghi ngoài điều kiện không đổi phép SUM đã lọc.
+        filtered = self.plan(
+            revision,
+            "0007",
+            aggregations=[{"operator": "SUM", "column_id": amount, "output_id": "total"}],
+            filters={
+                "operator": "EQ",
+                "column_id": code,
+                "literal": {"raw_phrase": "0007", "value_type": "text", "candidate_value": "0007"},
+            },
+        )
+        self.assertEqual(execute_query(compile_query(filtered, revision, "0007"))[0], [["0.10"]])
+
+    def test_chat_result_history_ownership_idempotency_and_verified_followup(self) -> None:
+        revision = self.published(b"code,amount\n0007,0.10\n0012,0.20\n0100,\n")
+        code, amount = [c["id"] for c in revision["columns"]]
+        created = self.client.post(
+            "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+        )
+        conversation_id = created.json()["id"]
+        path = f"/api/conversations/{conversation_id}/messages"
+        body = {"question": "Tổng 0007", "dataset_revision_id": str(revision["id"])}
+        plan = self.plan(
+            revision,
+            body["question"],
+            aggregations=[{"operator": "SUM", "column_id": amount, "output_id": "total"}],
+            entities=["0007"],
+            filters={
+                "operator": "EQ",
+                "column_id": code,
+                "literal": {"raw_phrase": "0007", "candidate_value": "0007", "value_type": "text"},
+            },
+        )
+
+        def propose(question: str, source: dict, provider: str, context: dict | None) -> Proposal:
+            if question == "Còn trung bình?":
+                self.assertEqual(context["question"], "Tổng 0007")
+                self.assertNotIn("display_text", context)
+                followup = plan.model_copy(
+                    update={"raw_user_spans": [question], "coverage": [question]}
+                )
+                followup.aggregations[0] = followup.aggregations[0].model_copy(
+                    update={"operator": "AVG"}
+                )
+                return Proposal(followup, "offline", "offline", None, None, 0, None)
+            return Proposal(plan, "offline", "offline", None, None, 0, None)
+
+        with (
+            patch("app.conversation.generate_proposal", side_effect=propose) as mocked,
+            patch("app.conversation.observation", side_effect=lambda *a, **k: nullcontext(None)),
+        ):
+            first = self.client.post(
+                path, json=body, headers={"Idempotency-Key": "test-request-key"}
+            )
+            self.assertEqual(first.status_code, 200, first.text)
+            answer = first.json()
+            self.assertEqual(answer["status"], "answered", answer)
+            self.assertEqual(answer["facts"]["rows"], [["0.10"]])
+            self.assertEqual(answer["facts"]["scope"]["checksum"], revision["checksum"])
+            again = self.client.post(
+                path, json=body, headers={"Idempotency-Key": "test-request-key"}
+            )
+            self.assertEqual(again.json()["result_id"], answer["result_id"])
+            self.assertEqual(mocked.call_count, 1)
+            changed = self.client.post(
+                path,
+                json={**body, "question": "Khác"},
+                headers={"Idempotency-Key": "test-request-key"},
+            )
+            self.assertEqual(changed.status_code, 409)
+            followup = self.client.post(
+                path,
+                json={**body, "question": "Còn trung bình?"},
+                headers={"Idempotency-Key": "followup-request"},
+            )
+            self.assertEqual(followup.json()["status"], "answered", followup.text)
+            self.assertEqual(
+                len(self.client.get(f"/api/conversations/{conversation_id}").json()["messages"]), 2
+            )
+            self.assertEqual(
+                self.client.get(f"/api/results/{answer['result_id']}").json()["facts"]["rows"],
+                [["0.10"]],
+            )
+            self.as_user(self.token_b)
+            for target in [
+                f"/api/conversations/{conversation_id}",
+                f"/api/results/{answer['result_id']}",
+            ]:
+                self.assertEqual(self.client.get(target).status_code, 404)
+            self.assertEqual(
+                self.client.post(
+                    path, json=body, headers={"Idempotency-Key": "forbidden-request"}
+                ).status_code,
+                404,
+            )
+            self.assertEqual(mocked.call_count, 2)
+            self.as_user(self.token_a)
+            other = self.published(b"code,amount\n0099,1.00\n")
+            stale = self.client.post(
+                path,
+                json={**body, "dataset_revision_id": str(other["id"])},
+                headers={"Idempotency-Key": "changed-source-key"},
+            )
+            self.assertEqual(stale.status_code, 409)
+            self.assertEqual(stale.json()["error"]["code"], "STALE_CONTEXT")
+            raw = self.client.post(
+                path,
+                json={**body, "sql": "SELECT 1"},
+                headers={"Idempotency-Key": "raw-sql-request"},
+            )
+            self.assertEqual(raw.status_code, 422)
+            self.assertEqual(mocked.call_count, 2)
+
+    def test_second_schema_oracle_and_unpublished_source_no_provider_call(self) -> None:
+        revision = self.published(
+            b"room_type,nights,charge\nstandard,2,100.05\nsuite,1,200.10\nstandard,0,\nsuite,3,0.00\n"
+        )
+        room, nights, charge = [c["id"] for c in revision["columns"]]
+        plan = self.plan(
+            revision,
+            "Theo phòng",
+            select_columns=[room],
+            group_by=[room],
+            aggregations=[{"operator": "SUM", "column_id": nights, "output_id": "nights"}],
+            order_by=[{"field_id": room}],
+        )
+        rows, _ = execute_query(compile_query(plan, revision, "Theo phòng"))
+        self.assertEqual(rows, [["standard", "2"], ["suite", "4"]])
+        # Oracle SQL viết tay riêng, không gọi compiler hay dùng SQL mà compiler tạo.
+        with db.get_reader_engine().connect() as connection:
+            gold = connection.exec_driver_sql(
+                f'SELECT "{room}",SUM("{nights}") FROM data."{revision["physical_table"]}" '
+                f'GROUP BY "{room}" ORDER BY "{room}"'
+            ).all()
+        self.assertEqual(rows, [[wire(value) for value in row] for row in gold])
+        created = self.client.post(
+            "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+        ).json()
+        uploaded = self.upload(b"other,value\nx,1\n")
+        with patch("app.conversation.generate_proposal") as mocked:
+            response = self.client.post(
+                f"/api/conversations/{created['id']}/messages",
+                json={"question": "Tổng?", "dataset_revision_id": uploaded["revision_id"]},
+                headers={"Idempotency-Key": "not-ready-request"},
+            )
+            self.assertEqual(response.status_code, 409)
+            mocked.assert_not_called()
+
+    def test_timestamp_half_open_and_boolean_tree_in_sort_limit(self) -> None:
+        revision = self.published(
+            b"code,at,amount\n0001,2026-08-31T17:00:00Z,0.10\n0002,2026-09-30T16:59:59Z,0.20\n0003,2026-09-30T17:00:00Z,9.99\n",
+            {"at": "timestamp"},
+        )
+        code, at, amount = [c["id"] for c in revision["columns"]]
+        start, end = "2026-09-01T00:00:00+07:00", "2026-10-01T00:00:00+07:00"
+        question = f"{start} {end} 0001 0002 0"
+
+        def leaf(operator: str, column_id: str, raw: str, kind: str) -> dict:
+            return {
+                "operator": operator,
+                "column_id": column_id,
+                "literal": {"raw_phrase": raw, "candidate_value": raw, "value_type": kind},
+            }
+
+        plan = self.plan(
+            revision,
+            question,
+            select_columns=[code, amount],
+            limit=1,
+            filters={
+                "operator": "AND",
+                "children": [
+                    leaf("GTE", at, start, "timestamp"),
+                    leaf("LT", at, end, "timestamp"),
+                    {
+                        "operator": "OR",
+                        "children": [
+                            leaf("EQ", code, "0001", "text"),
+                            leaf("EQ", code, "0002", "text"),
+                        ],
+                    },
+                    leaf("GT", amount, "0", "numeric"),
+                ],
+            },
+            order_by=[{"field_id": code, "direction": "desc"}],
+        )
+        self.assertEqual(
+            execute_query(compile_query(plan, revision, question))[0], [["0002", "0.20"]]
+        )
+        plan = plan.model_copy(
+            update={
+                "filters": Predicate.model_validate(
+                    {
+                        "operator": "IN",
+                        "column_id": code,
+                        "values": [
+                            {"raw_phrase": v, "candidate_value": v, "value_type": "text"}
+                            for v in ["0001", "0002"]
+                        ],
+                    }
+                )
+            }
+        )
+        self.assertEqual(
+            execute_query(compile_query(plan, revision, question))[0], [["0002", "0.20"]]
+        )
+
+    def test_row_reordering_and_irrelevant_records_preserve_filtered_sum(self) -> None:
+        for content in [
+            b"code,amount\n0007,0.10\n0012,0.20\n",
+            b"code,amount\n0999,999.99\n0012,0.20\n0007,0.10\n",
+        ]:
+            revision = self.published(content)
+            code, amount = [c["id"] for c in revision["columns"]]
+            plan = self.plan(
+                revision,
+                "0007",
+                aggregations=[{"operator": "SUM", "column_id": amount, "output_id": "total"}],
+                filters={
+                    "operator": "EQ",
+                    "column_id": code,
+                    "literal": {
+                        "raw_phrase": "0007",
+                        "candidate_value": "0007",
+                        "value_type": "text",
+                    },
+                },
+            )
+            self.assertEqual(execute_query(compile_query(plan, revision, "0007"))[0], [["0.10"]])
 
 
 if __name__ == "__main__":

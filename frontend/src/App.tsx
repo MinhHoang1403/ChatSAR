@@ -3,6 +3,8 @@ import type { FormEvent } from 'react';
 import { api, identity, record, workspaceList } from './api';
 import type { Identity, Workspace } from './api';
 import Datasets from './Datasets';
+import type { Dataset } from './Datasets';
+import Chat from './Chat';
 
 export default function App() {
   const [me, setMe] = useState<Identity | null>(null);
@@ -34,6 +36,7 @@ export default function App() {
     let active = true;
     api('/auth/config').then((config) => {
       if (!record(config) || typeof config.google_client_id !== 'string'
+        || typeof config.app_origin !== 'string'
         || typeof config.nonce !== 'string' || typeof config.csrf_token !== 'string') {
         throw new Error('Cấu hình đăng nhập không hợp lệ.');
       }
@@ -41,6 +44,10 @@ export default function App() {
       const nonce = config.nonce;
       const csrf = config.csrf_token;
       if (!active) return;
+      if (window.location.origin !== config.app_origin) {
+        window.location.replace(config.app_origin);
+        return;
+      }
       setGoogleReady(Boolean(clientId));
       if (!clientId) return;
       const initialize = () => {
@@ -126,11 +133,19 @@ export default function App() {
             <button disabled={busy || !name.trim()}>Tạo mới</button></div>
         </form>
         {!workspaces.length && <p>Chưa có không gian làm việc. Hãy tạo không gian đầu tiên.</p>}
-        {selected && <Datasets key={selected.id} workspaceId={selected.id} csrf={me.csrf_token} />}
+        {selected && <WorkspaceView key={selected.id} workspaceId={selected.id} csrf={me.csrf_token} />}
       </>}
       <footer>ChatSAR · Dữ liệu có nguồn, câu trả lời có căn cứ</footer>
     </main>
   </div>;
+}
+
+function WorkspaceView({ workspaceId, csrf }: { workspaceId: string; csrf: string }) {
+  const [scope, setScope] = useState<Dataset | null>(null);
+  return <>
+    <Datasets workspaceId={workspaceId} csrf={csrf} onReady={setScope} />
+    <Chat workspaceId={workspaceId} csrf={csrf} scope={scope} />
+  </>;
 }
 
 function message(error: unknown): string {

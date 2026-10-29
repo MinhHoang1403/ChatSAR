@@ -22,11 +22,13 @@ Người cấp quyền: chủ dự án, yêu cầu bắt đầu preflight và Gi
 | SQL | LLM chỉ đề xuất typed plan; server bind rồi SQLAlchemy Core compile | Thực thi raw SQL model; nhiều generator/fallback | Strict structure không chứng minh hiểu đúng câu hỏi; oracle độc lập là bắt buộc |
 | Literal/kiểu | Giữ raw phrase + typed value + provenance; Decimal, TEXT ID, NULL rõ | Ép float; tự chuẩn hóa giá trị mơ hồ | Cases quận 3/3, 0007/7, COUNT và precision |
 | Google | Web Client ChatSAR riêng, GIS POST + double-submit CSRF, session DB | Dùng client/session ShopQuery; email làm khóa | Backend verify chữ ký/iss/aud/exp/sub; live login cần cấu hình thực |
-| Cloud | OFF, ngân sách 0, không fallback ngầm, chỉ dữ liệu tổng hợp trong tests | Suy ra được dùng free tier; tự chọn ngân sách dương | Không có quyền gọi trả phí; benchmark live BLOCKED đến khi được cấp hạn mức |
+| Cloud | OFF mặc định; chỉ bật theo quyền/hạn mức người dùng điền; không fallback ngầm, chỉ synthetic | Suy ra free tier; tự chọn ngân sách dương | Chủ dự án đã cấp smoke tests; cấu hình hiện tại 10 requests tổng và 10 USD, thấp hơn mức 10/provider; kết quả ở PREFLIGHT |
 | Benchmark | SQL oracle viết tay + expected cố định + đối chứng Decimal; tách development/regression/held-out | Sinh gold bằng compiler; sửa expected theo model | Khóa checksum trước compiler/tuning. Held-out bị dùng để sửa phải chuyển sang regression |
 | Hạ tầng | Một Compose project `chatsar`; tài nguyên/volumes riêng; bind localhost | Copy source/test stack; tái sử dụng DB/volume dự án khác | Kiểm tra ports cả container đang dừng; không restart/dọn dịch vụ khác |
 
 Các chi tiết trên do Codex đề xuất trong phạm vi kế hoạch được chủ dự án cho triển khai ngày 29/10/2026; không ghi nhận có một lần phê duyệt riêng từng chi tiết hoặc benchmark threshold.
+
+F4 cụ thể hóa bằng một QueryPlan/binder/compiler, một adapter lựa chọn provider mỗi lượt và read-only reader engine. Các biện pháp coverage chỉ là guard nội bộ; oracle/gold độc lập mới dùng để chấm nghĩa. Schema provider được chiếu bỏ maxItems lồng nhau và yêu cầu properties đầy đủ theo giới hạn constrained decoding chính thức; server giữ nguyên caps. Kiểm thử HTTP giả lập phát hiện SDK 2.34.0 đổi attempts=0 thành 1 rồi bridge Interactions hiểu là retry: thêm chốt một HTTP dispatch trong client mỗi reservation, không sửa dependency/vendor SDK và không gọi live thêm để thử.
 
 ## Điều kiện bên ngoài và phạm vi bị chặn
 
@@ -48,5 +50,10 @@ Các chi tiết trên do Codex đề xuất trong phạm vi kế hoạch đượ
 - Docker health dependencies: https://docs.docker.com/compose/how-tos/startup-order/
 - Gemini model (không chứng minh account access): https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
 - Langfuse compatibility: https://langfuse.com/self-hosting/upgrade/versioning
+- Gemini JSON Schema và giới hạn grammar: https://ai.google.dev/gemini-api/docs/structured-output
+- Gemini Interactions/store/continuation: https://ai.google.dev/gemini-api/docs/interactions-overview
+- Gemini pricing dùng để ước tính, không phải hóa đơn: https://ai.google.dev/gemini-api/docs/pricing
+- Langfuse Observations API v2: https://langfuse.com/docs/api-and-data-platform/features/public-api
+- PostgreSQL aggregate return types: https://www.postgresql.org/docs/17/functions-aggregate.html
 
 Nguồn xác nhận cơ chế; lựa chọn lưu trữ, giới hạn và oracle là thiết kế nội bộ cần kiểm thử. Không lấy tài liệu làm bằng chứng runtime PASS.

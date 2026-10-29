@@ -149,7 +149,12 @@ def login_config(response: Response) -> dict[str, Any]:
         samesite="lax",
     )
     response.headers["Cache-Control"] = "no-store"
-    return {"google_client_id": get_settings().google_client_id, "nonce": nonce, "csrf_token": csrf}
+    return {
+        "google_client_id": get_settings().google_client_id,
+        "app_origin": get_settings().app_origin,
+        "nonce": nonce,
+        "csrf_token": csrf,
+    }
 
 
 @router.post("/auth/google")

@@ -8,7 +8,7 @@ type Column = {
   null_values: string[]; date_format: string; decimal_separator: string; unit: string | null;
   null_count?: number; empty_count?: number; duplicate_count?: number;
 };
-type Dataset = { id: string; name: string; revision_id: string; status: string };
+export type Dataset = { id: string; name: string; revision_id: string; status: string };
 type Preview = { dataset_id: string; revision_id: string; status: string; name: string;
   sheets: string[]; sheet_name: string; columns: Column[]; rows: unknown[][]; row_count: number };
 const kinds: Kind[] = ['text', 'integer', 'numeric', 'boolean', 'date', 'timestamp'];

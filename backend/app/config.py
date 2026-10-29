@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     app_env: str = "development"
     storage_root: str = "/srv/chatsar/storage"
     reader_database_url: SecretStr = SecretStr("")
+    gemini_api_key: SecretStr = SecretStr("")
+    gemini_model: str = "gemini-3.5-flash-lite"
+    knowledge_base_url: str = "https://ai.inetcloud.vn/memochat/v1"
+    knowledge_model: str = "knowledge"
+    langfuse_base_url: str = ""
+    langfuse_public_key: SecretStr = SecretStr("")
+    langfuse_secret_key: SecretStr = SecretStr("")
 
     @property
     def generation_allowed(self) -> bool:
