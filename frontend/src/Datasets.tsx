@@ -1,43 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, record } from './api';
+import AIReview from './AIReview';
 
-type Kind = 'text' | 'integer' | 'numeric' | 'boolean' | 'date' | 'timestamp';
-type Column = {
-  id: string; name: string; data_type: Kind; nullable: boolean; primary_key: boolean;
-  null_values: string[]; date_format: string; decimal_separator: string; unit: string | null;
-  null_count?: number; empty_count?: number; duplicate_count?: number;
-};
-export type Dataset = { id: string; name: string; revision_id: string; status: string };
-type Preview = { dataset_id: string; revision_id: string; status: string; name: string;
-  sheets: string[]; sheet_name: string; columns: Column[]; rows: unknown[][]; row_count: number };
-const kinds: Kind[] = ['text', 'integer', 'numeric', 'boolean', 'date', 'timestamp'];
-
-function parsePreview(data: unknown): Preview {
-  if (!record(data) || typeof data.dataset_id !== 'string' || typeof data.revision_id !== 'string'
-    || typeof data.status !== 'string' || typeof data.name !== 'string' || !Array.isArray(data.sheets)
-    || !data.sheets.every((v: unknown) => typeof v === 'string') || typeof data.sheet_name !== 'string'
-    || !Array.isArray(data.columns) || !Array.isArray(data.rows) || !data.rows.every(Array.isArray)
-    || typeof data.row_count !== 'number') throw new Error('Preview chưa đúng định dạng.');
-  const columns = data.columns.map((value: unknown): Column => {
-    if (!record(value) || typeof value.id !== 'string' || typeof value.name !== 'string'
-      || !kinds.includes(value.data_type as Kind) || typeof value.nullable !== 'boolean') {
-      throw new Error('Thông tin cột chưa đúng định dạng.');
-    }
-    return { id: value.id, name: value.name, data_type: value.data_type as Kind,
-      nullable: value.nullable, primary_key: value.primary_key === true,
-      null_values: Array.isArray(value.null_values) ? value.null_values.filter((v): v is string => typeof v === 'string') : [],
-      date_format: typeof value.date_format === 'string' ? value.date_format : '%Y-%m-%d',
-      decimal_separator: value.decimal_separator === ',' ? ',' : '.',
-      unit: typeof value.unit === 'string' ? value.unit : null,
-      null_count: typeof value.null_count === 'number' ? value.null_count : undefined,
-      empty_count: typeof value.empty_count === 'number' ? value.empty_count : undefined,
-      duplicate_count: typeof value.duplicate_count === 'number' ? value.duplicate_count : undefined };
-  });
-  return { dataset_id: data.dataset_id, revision_id: data.revision_id, status: data.status,
-    name: data.name, sheets: data.sheets as string[], sheet_name: data.sheet_name,
-    columns, rows: data.rows as unknown[][], row_count: data.row_count };
-}
+import { datasetList, parsePreview, kinds, kindNames } from './data';
+import type { Column, Dataset, Preview, Kind } from './data';
+export { datasetList } from './data';
+export type { Column, Dataset, Preview } from './data';
 
 export default function Datasets({ workspaceId, csrf, onReady }: {
   workspaceId: string; csrf: string; onReady?: (dataset: Dataset) => void;
@@ -50,17 +19,13 @@ export default function Datasets({ workspaceId, csrf, onReady }: {
   const [grain, setGrain] = useState('Một dòng dữ liệu');
   const [timezone, setTimezone] = useState('Asia/Ho_Chi_Minh');
   const [synthetic, setSynthetic] = useState(false);
+  const [description, setDescription] = useState('');
+  const [sharing, setSharing] = useState<string[]>([]);
+  const [mappingDraft, setMappingDraft] = useState<Record<string, string>>({});
 
   async function refresh() {
     const data = await api(`/workspaces/${workspaceId}/datasets`);
-    if (!Array.isArray(data)) throw new Error('Danh sách dữ liệu chưa đúng định dạng.');
-    setList(data.map((value: unknown) => {
-      if (!record(value) || typeof value.id !== 'string' || typeof value.name !== 'string'
-        || typeof value.revision_id !== 'string' || typeof value.status !== 'string') {
-        throw new Error('Thông tin dữ liệu chưa đúng định dạng.');
-      }
-      return { id: value.id, name: value.name, revision_id: value.revision_id, status: value.status };
-    }));
+    setList(datasetList(data));
   }
 
   useEffect(() => {
@@ -73,6 +38,9 @@ export default function Datasets({ workspaceId, csrf, onReady }: {
       const query = sheet ? `?sheet_name=${encodeURIComponent(sheet)}` : '';
       const result = parsePreview(await api(`/datasets/${datasetId}/preview${query}`));
       setPreview(result);
+      setMappingDraft({});
+      setDescription(result.description); setGrain(result.grain || 'Một dòng dữ liệu');
+      setTimezone(result.timezone); setSharing(result.sharing_providers); setSynthetic(result.data_classification === 'synthetic');
       if (result.status === 'ready') onReady?.({ id: result.dataset_id, name: result.name,
         revision_id: result.revision_id, status: 'ready' });
     } catch (e: unknown) { setError(message(e)); }
@@ -104,10 +72,12 @@ export default function Datasets({ workspaceId, csrf, onReady }: {
       const columns = preview.columns.map((column) => ({ id: column.id, name: column.name,
         data_type: column.data_type, nullable: column.nullable, primary_key: column.primary_key,
         null_values: column.null_values, date_format: column.date_format,
-        decimal_separator: column.decimal_separator, unit: column.unit }));
+        decimal_separator: column.decimal_separator, unit: column.unit,
+        description: column.description ?? '', aliases: column.aliases ?? [], role: column.role ?? 'other',
+        value_mappings: mappingDraft[column.id] === undefined ? column.value_mappings ?? [] : parseMappings(mappingDraft[column.id]), aggregation_policy: column.aggregation_policy ?? 'unspecified' }));
       await api(`/datasets/${preview.dataset_id}/confirm`, { method: 'POST', body: JSON.stringify({
         revision_id: preview.revision_id, columns, sheet_name: preview.sheet_name || null,
-        timezone, grain, data_classification: synthetic ? 'synthetic' : 'private',
+        timezone, grain, description, sharing_providers: sharing, data_classification: synthetic ? 'synthetic' : 'private',
       }) }, csrf);
       await refresh(); await open(preview.dataset_id);
     } catch (e: unknown) { setError(message(e)); }
@@ -115,10 +85,11 @@ export default function Datasets({ workspaceId, csrf, onReady }: {
   }
 
   return <section className="dataset-panel">
-    <h2>Dữ liệu trong không gian làm việc</h2>
+    <ol className="setup-steps"><li>1. Tải file</li><li>2. Kiểm tra đề xuất</li><li>3. Xác nhận và sử dụng</li></ol>
     <form onSubmit={upload} className="upload-form">
       <label>Chọn CSV hoặc XLSX (tối đa 20 MiB)<input type="file" accept=".csv,.xlsx"
         onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
+      {file && <p>{file.name} · {(file.size / 1024).toFixed(1)} KB</p>}
       <button disabled={busy || !file}>Tải lên và xem trước</button>
     </form>
     {error && <p role="alert" className="error">{error}</p>}
@@ -134,7 +105,13 @@ export default function Datasets({ workspaceId, csrf, onReady }: {
         <option value="" disabled>Chọn sheet để xem trước</option>
         {preview.sheets.map((sheet) => <option key={sheet}>{sheet}</option>)}</select></label>}
       {preview.columns.length > 0 && <>
-        <p>Kiểu tự nhận diện chỉ là đề xuất. Hãy kiểm tra khóa, NULL và kiểu trước khi công bố.</p>
+        {preview.status !== 'ready' && <AIReview key={`${preview.revision_id}:${preview.sheet_name}`} preview={preview} csrf={csrf}
+          onBusy={setBusy} onProposal={(columns, desc, rowMeaning) => { setPreview((old) => old ? { ...old, columns } : old); setMappingDraft({}); setDescription(desc); setGrain(rowMeaning); }} />}
+        <div className="review-summary"><strong>{preview.row_count} dòng · {preview.columns.length} cột</strong><span>File nguồn được giữ nguyên</span></div>
+        <div className="column-summary">{preview.columns.map((column) => <div key={column.id}><strong>{column.name}</strong><span>{kindNames[column.data_type]}{column.unit ? ` · ${column.unit}` : ''}</span>
+          <small>{(column.null_count ?? 0) + (column.empty_count ?? 0) > 0 ? 'Có ô trống, cần kiểm tra cách xử lý' : 'Đã nhận diện kiểu dữ liệu'}{column.primary_key ? ' · Mã duy nhất được đề xuất' : ''}</small></div>)}</div>
+        <details className="advanced"><summary>Chỉnh sửa chi tiết</summary>
+        <label>Mô tả dữ liệu<input value={description} disabled={preview.status === 'ready'} maxLength={1000} onChange={(e) => setDescription(e.target.value)} /></label>
         <div className="table-scroll"><table><thead><tr><th>Cột</th><th>Kiểu</th><th>Cho phép NULL</th>
           <th>Ô trống → NULL</th><th>Khóa</th><th>Đơn vị</th><th>Kiểm kê</th></tr></thead>
           <tbody>{preview.columns.map((column, index) => <tr key={column.id}>
@@ -142,7 +119,7 @@ export default function Datasets({ workspaceId, csrf, onReady }: {
               disabled={preview.status === 'ready'} onChange={(event) => edit(index, { name: event.target.value })} /></td>
             <td><select value={column.data_type} disabled={preview.status === 'ready'}
               onChange={(event) => edit(index, { data_type: event.target.value as Kind })}>
-              {kinds.map((kind) => <option key={kind}>{kind}</option>)}</select>
+              {kinds.map((kind) => <option key={kind} value={kind}>{kindNames[kind]}</option>)}</select>
               {column.data_type === 'date' && <select value={column.date_format} disabled={preview.status === 'ready'}
                 onChange={(event) => edit(index, { date_format: event.target.value })}>
                 <option>%Y-%m-%d</option><option>%d/%m/%Y</option><option>%m/%d/%Y</option></select>}
@@ -159,22 +136,41 @@ export default function Datasets({ workspaceId, csrf, onReady }: {
               onChange={(event) => edit(index, { unit: event.target.value || null })} /></td>
             <td>{column.null_count ?? '—'} NULL / {column.empty_count ?? '—'} trống / {column.duplicate_count ?? '—'} trùng</td>
           </tr>)}</tbody></table></div>
+        {preview.columns.map((column, index) => <fieldset key={column.id}><legend>{column.name}</legend>
+          <label>Ý nghĩa cột<input value={column.description ?? ''} maxLength={500} disabled={preview.status === 'ready'} onChange={(e) => edit(index, { description: e.target.value })} /></label>
+          <label>Tên gọi tương đương (ngăn bằng dấu phẩy)<input key={`${column.id}:${(column.aliases ?? []).join(',')}`} defaultValue={(column.aliases ?? []).join(', ')} disabled={preview.status === 'ready'} onBlur={(e) => edit(index, { aliases: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} /></label>
+          <label>Vai trò<select value={column.role ?? 'other'} disabled={preview.status === 'ready'} onChange={(e) => edit(index, { role: e.target.value })}>
+            <option value="other">Chưa xác định</option><option value="identifier">Mã đối tượng</option><option value="status">Trạng thái</option><option value="time">Thời gian</option><option value="amount">Số tiền</option><option value="quantity">Số lượng</option><option value="name">Tên đối tượng</option></select></label>
+          <label>Cách tổng hợp<select value={column.aggregation_policy ?? 'unspecified'} disabled={preview.status === 'ready'} onChange={(e) => edit(index, { aggregation_policy: e.target.value })}><option value="unspecified">Chưa có hạn chế được xác nhận</option><option value="additive">Có thể cộng theo mỗi dòng</option><option value="non_additive">Không cộng hoặc lấy trung bình</option></select></label>
+          <label>Tên gọi của giá trị (mỗi dòng: cách gọi=giá trị thật)<textarea value={mappingDraft[column.id] ?? (column.value_mappings ?? []).map((m) => `${m.phrase}=${m.value}`).join('\n')} disabled={preview.status === 'ready'}
+            onChange={(e) => setMappingDraft((old) => ({ ...old, [column.id]: e.target.value }))} /></label>
+        </fieldset>)}
+        <label>Mỗi dòng đại diện cho<input value={grain} disabled={preview.status === 'ready'} maxLength={300} onChange={(e) => setGrain(e.target.value)} /></label>
+        <label>Múi giờ<input value={timezone} disabled={preview.status === 'ready'} onChange={(e) => setTimezone(e.target.value)} /></label>
+        <label className="check"><input type="checkbox" checked={synthetic} disabled={preview.status === 'ready'} onChange={(e) => setSynthetic(e.target.checked)} />Đây thực sự là dữ liệu tổng hợp dùng để kiểm thử AI</label>
+        </details>
         <div className="table-scroll"><table><thead><tr>{preview.columns.map((c) => <th key={c.id}>{c.name}</th>)}</tr></thead>
           <tbody>{preview.rows.map((row, i) => <tr key={i}>{row.map((value, j) => <td key={j}>{display(value)}</td>)}</tr>)}</tbody></table></div>
         {preview.status !== 'ready' ? <div className="publish-fields">
-          <label>Một dòng đại diện cho <input value={grain} onChange={(event) => setGrain(event.target.value)} /></label>
-          <label>Múi giờ <input value={timezone} onChange={(event) => setTimezone(event.target.value)} /></label>
-          <label><input type="checkbox" checked={synthetic} onChange={(event) => setSynthetic(event.target.checked)} />
-            Đây là dữ liệu tổng hợp, được phép dùng trong kiểm thử AI có giới hạn</label>
-          <p>Chưa có quan hệ bảng được xác nhận. Truy vấn hiện áp dụng một bảng.</p>
-          <button disabled={busy || !grain.trim()} onClick={publish}>Xác nhận và công bố</button>
-        </div> : <p role="status">Đã công bố revision; dữ liệu sẵn sàng và không sửa ngầm.</p>}
+          <p>Cho phép gửi tên cột, thống kê, một số giá trị giới hạn và câu hỏi tới mô hình để hỏi dữ liệu. File gốc không được gửi.</p>
+          {['gemini', 'knowledge'].map((provider) => <label className="check" key={provider}><input type="checkbox" checked={sharing.includes(provider)}
+            onChange={(e) => setSharing((old) => e.target.checked ? [...old, provider] : old.filter((p) => p !== provider))} />{provider === 'gemini' ? 'Gemini (Google)' : 'Knowledge (dịch vụ công ty)'}</label>)}
+          <p className="muted">Xác nhận nghĩa các cột và cách xử lý ô trống trước khi sử dụng. Bạn có thể giữ dữ liệu riêng tư và chỉ xem trước local.</p>
+          <button disabled={busy || !grain.trim()} onClick={publish}>Xác nhận và sử dụng dữ liệu</button>
+        </div> : <p role="status" className="success">Dữ liệu đã sẵn sàng. Đóng cửa sổ để bắt đầu hỏi.</p>}
       </>}
     </div>}
   </section>;
 }
 
 function message(error: unknown): string { return error instanceof Error ? error.message : 'Chưa thể xử lý yêu cầu.'; }
+function parseMappings(text: string): { phrase: string; value: string }[] {
+  return text.split('\n').filter((line) => line.trim()).map((line) => {
+    const at = line.indexOf('=');
+    if (at < 1 || !line.slice(0, at).trim()) throw new Error('Tên gọi giá trị cần đúng dạng: cách gọi=giá trị thật.');
+    return { phrase: line.slice(0, at).trim(), value: line.slice(at + 1) };
+  });
+}
 function display(value: unknown): string {
   if (value === null) return 'NULL';
   if (value === '') return '“”';

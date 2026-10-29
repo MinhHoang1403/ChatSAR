@@ -37,6 +37,7 @@ jobs:
         working-directory: frontend
         run: |
           npm run typecheck
+          npm test
           npm run build
       - name: Create isolated local configuration
         run: |

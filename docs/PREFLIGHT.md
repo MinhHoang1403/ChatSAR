@@ -127,6 +127,10 @@ Langfuse đọc lại trace `9b9246e1a14e141f903f27ed244afe10`: provider input/o
 
 82 unit + 23 integration PASS (7 auth, 16 datasets/query/setup); ruff/format/mypy PASS. Cùng adapter/hạn mức/transport chính thức phục vụ hai contract QueryPlan và SetupProposal, không thêm SDK path. Tests local giữ TEXT zero đầu/Decimal/NULL/empty, phát hiện duplicate key/AI type sai/date mơ hồ; integration kiểm consent, owner B bị chặn trước provider, timeout fallback local, idempotency không gọi lại, đề xuất sai bị loại, đề xuất hợp lệ vẫn needs_review và restart pending chuyển interrupted. File/publish đi qua cùng validate_rows, không ghi lại dữ liệu AI. AI-live chưa chạy vì chưa cấp lượt mới; UX review thuộc Workstream D.
 
+### Workstream D — UI
+
+Frontend TypeScript/build + 6 SSR/DTO tests PASS. Giao diện sáng xanh dương, sidebar lịch sử/tìm kiếm/workspace/account, header nguồn, chat/composer riêng, Data Manager modal và AI review/local review/advanced metadata/sharing consent. Client có deadline 90 s và giữ idempotency để không hiểu timeout là quyền gọi lại. Browser IAB đã đọc được màn hình login mới và nút Google thật sau build; chưa đăng nhập IAB. Khi chọn phiên Cốc Cốc hiện hữu, công cụ dừng với lý do URL policy enforcement chưa hỗ trợ browser Windows này; đã dừng mọi UI automation trong lượt. Không dùng HTTP/SSR để đánh browser E2E hoặc responsive visual PASS.
+
 **Phần triển khai F1–F4 đã có; chưa nghiệm thu toàn bộ Giai đoạn 1.** Google OAuth/workspace live đã xác minh; browser E2E BLOCKED bởi tool và để người dùng test sau. Hai ca HTTP bổ sung có 1 PASS, 1 provider timeout; deadline mới chưa được nghiệm thu live. Knowledge bị 403 ở lần thử cuối. Chưa chạy toàn bộ development/regression/held-out/negative model benchmark; ba ca library held-out còn NOT_RUN, không tuning theo ca library_sum đã đo. Chưa có phép đo release accuracy/latency đầy đủ hoặc xác nhận số HTTP requests lịch sử trước SDK guard. Đã dùng đủ 12 reservations trong quyền hiện tại, không tự gọi thêm. Giữ feature branch/PR nháp; không merge main, không sang Giai đoạn 2.
 
 ## Google OAuth khi frontend/backend đã xác minh

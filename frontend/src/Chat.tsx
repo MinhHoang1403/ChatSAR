@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, record } from './api';
 import type { Dataset } from './Datasets';
+import Result from './Result';
 
-type Conversation = { id: string; title: string };
-type Answer = { status: string; display_text: string; facts: Record<string, unknown>;
+export type Conversation = { id: string; title: string };
+export type Answer = { status: string; display_text: string; facts: Record<string, unknown>;
   display_rows: unknown[][]; limitations: string[] };
 type Message = { id: string; question: string; revision_id: string; envelope: Answer | null };
 
@@ -26,11 +27,13 @@ function conversation(value: unknown): Conversation {
   return { id: value.id, title: value.title };
 }
 
-export default function Chat({ workspaceId, csrf, scope }: {
-  workspaceId: string; csrf: string; scope: Dataset | null;
+export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onList, onBusy, onManageData }: {
+  workspaceId: string; csrf: string; scope: Dataset | null; selected: string;
+  onSelect: (id: string) => void; onList: (items: Conversation[]) => void;
+  onBusy: (busy: boolean) => void; onManageData: () => void;
 }) {
   const [list, setList] = useState<Conversation[]>([]);
-  const [selected, setSelected] = useState('');
+  const setSelected = onSelect;
   const [history, setHistory] = useState<Message[]>([]);
   const [question, setQuestion] = useState('');
   const [provider, setProvider] = useState('gemini');
@@ -48,6 +51,9 @@ export default function Chat({ workspaceId, csrf, scope }: {
     }).catch((e: unknown) => { if (active) setError(message(e)); });
     return () => { active = false; };
   }, [workspaceId]);
+
+  useEffect(() => { onList(list); }, [list, onList]);
+  useEffect(() => { onBusy(busy); }, [busy, onBusy]);
 
   async function readHistory(id: string): Promise<Message[]> {
     const data = await api(`/conversations/${id}`);
@@ -96,61 +102,35 @@ export default function Chat({ workspaceId, csrf, scope }: {
     finally { setBusy(false); }
   }
 
-  return <section className="chat" aria-labelledby="chat-title">
-    <h2 id="chat-title">Hỏi dữ liệu</h2>
-    <p>{scope ? `Nguồn đang chọn: ${scope.name}` : 'Mở một bộ dữ liệu đã xác nhận ở phía trên để bắt đầu.'}</p>
-    <div className="chat-controls">
-      <label>Cuộc trò chuyện <select value={selected} disabled={busy} onChange={(e) => setSelected(e.target.value)}>
-        <option value="">Cuộc trò chuyện mới</option>
-        {list.map((item) => <option key={item.id} value={item.id}>{item.title}</option>)}
-      </select></label>
-      <label>Mô hình <select value={provider} disabled={busy} onChange={(e) => setProvider(e.target.value)}>
-        <option value="gemini">Gemini</option><option value="knowledge">Knowledge</option>
-      </select></label>
+  const stale = Boolean(scope && history.some((item) => item.envelope?.status === 'answered' && item.revision_id !== scope.revision_id));
+  return <section className="chat" aria-label="Hỏi dữ liệu">
+    <div className="messages" aria-live="polite">
+      {loading && <p role="status">Đang tải lịch sử…</p>}
+      {!loading && !history.length && !busy && <div className="empty-chat"><span className="empty-symbol">C</span>
+        <h1>Bạn muốn biết điều gì từ dữ liệu?</h1><p>{scope ? `Đang sử dụng ${scope.name}. Hãy đặt câu hỏi về số liệu, điều kiện hoặc nhóm dữ liệu.` : 'Tải CSV hoặc Excel, kiểm tra đề xuất và chọn dữ liệu để bắt đầu.'}</p>
+        {!scope && <button className="secondary" onClick={onManageData}>Tải dữ liệu lên</button>}</div>}
+      {history.map((item) => <article key={item.id} className="message">
+        <div className="user-message"><span>Bạn</span><p>{item.question}</p></div>
+        <div className="assistant-message"><span className="assistant-label">ChatSAR</span>
+          {scope && item.revision_id !== scope.revision_id && <p className="scope-note">Kết quả này thuộc nguồn trước đó. Tạo cuộc trò chuyện mới để hỏi nguồn hiện tại.</p>}
+          {item.envelope ? <Result value={item.envelope} /> : <p>Yêu cầu đang xử lý. Dùng “Cập nhật lịch sử” để xem kết quả, không cần gửi lại.</p>}
+        </div></article>)}
+      {busy && <div className="pending-message"><p className="user-message">{question}</p><p role="status">ChatSAR đang hiểu câu hỏi và lấy kết quả. Có thể mất tối đa khoảng một phút…</p></div>}
     </div>
-    {loading && <p role="status">Đang tải lịch sử…</p>}
-    {!loading && !history.length && <p>Chưa có lượt hỏi trong cuộc trò chuyện này.</p>}
-    <div className="messages" aria-live="polite">{history.map((item) => <article key={item.id} className="message">
-      <h3>{item.question}</h3>
-      {scope && item.revision_id !== scope.revision_id && <p className="scope-note">Kết quả này thuộc phiên bản dữ liệu khác với nguồn đang chọn.</p>}
-      {item.envelope ? <Result value={item.envelope} /> : <p>Yêu cầu đang xử lý. Tải lại lịch sử để xem kết quả; không cần gửi lại.</p>}
-    </article>)}</div>
-    {error && <p className="error" role="alert">{error}</p>}
-    <form onSubmit={send}>
-      <label htmlFor="question">Câu hỏi của bạn</label>
-      <textarea id="question" value={question} maxLength={4000} required disabled={busy}
-        placeholder="Ví dụ: Tổng số tiền trong dữ liệu là bao nhiêu?" onChange={(e) => setQuestion(e.target.value)} />
-      <button disabled={busy || loading || !scope || !question.trim()}>{busy ? 'Đang lấy kết quả…' : 'Gửi câu hỏi'}</button>
-    </form>
+    <div className="composer-area">
+      {error && <p className="error" role="alert">{error}</p>}
+      {stale && <p className="scope-note">Nguồn đã đổi. <button className="secondary" disabled={busy} onClick={() => onSelect('')}>Tạo cuộc trò chuyện mới</button></p>}
+      <form className="composer" onSubmit={send}>
+        <label htmlFor="question" className="sr-only">Câu hỏi của bạn</label>
+        <textarea id="question" value={question} maxLength={4000} required disabled={busy}
+          placeholder={scope ? 'Hỏi một câu về dữ liệu của bạn…' : 'Chọn dữ liệu trước khi đặt câu hỏi'} onChange={(e) => setQuestion(e.target.value)} />
+        <div className="composer-actions"><label>Mô hình<select value={provider} disabled={busy} onChange={(e) => setProvider(e.target.value)}><option value="gemini">Gemini</option><option value="knowledge">Knowledge</option></select></label>
+          {selected && <button type="button" className="quiet" disabled={busy || loading} onClick={async () => { setLoading(true); try { setHistory(await readHistory(selected)); } catch (e: unknown) { setError(message(e)); } finally { setLoading(false); } }}>Cập nhật lịch sử</button>}
+          <button className="send-button" disabled={busy || loading || !scope || stale || !question.trim()}>{busy ? 'Đang xử lý…' : 'Gửi ↑'}</button></div>
+      </form>
+      <p className="composer-note">{!scope ? 'Chưa chọn dữ liệu. Mở Quản lý dữ liệu để chuẩn bị nguồn.' : 'Kết quả có nguồn đối chiếu. Hãy kiểm tra điều kiện khi câu hỏi có nhiều cách hiểu.'}</p>
+    </div>
   </section>;
-}
-
-function Result({ value }: { value: Answer }) {
-  const columns = Array.isArray(value.facts.columns) ? value.facts.columns.filter(record) : [];
-  const scope = record(value.facts.scope) ? value.facts.scope : null;
-  const filters = Array.isArray(value.facts.filters) ? value.facts.filters.filter(record) : [];
-  return <>
-    <p>{value.display_text}</p>
-    {value.display_rows.length > 0 && <div className="table-scroll"><table>
-      <thead><tr>{columns.map((c, i) => <th key={i}>{cell(c.name)}{c.unit ? ` (${cell(c.unit)})` : ''}</th>)}</tr></thead>
-      <tbody>{value.display_rows.map((row, i) => <tr key={i}>{row.map((v, j) => <td key={j}>{cell(v)}</td>)}</tr>)}</tbody>
-    </table></div>}
-    {scope && <details><summary>Nguồn và cách tính</summary>
-      <p>Phiên bản dữ liệu: <code>{cell(scope.source_revision)}</code></p>
-      <p>Mỗi dòng nguồn: {cell(scope.grain)} · Múi giờ: {cell(scope.timezone)}</p>
-      <p>Phép tính: {columns.map((c) => cell(c.name)).join(', ')}</p>
-      {filters.length > 0 && <p>Giá trị lọc đã đối chiếu: {filters.map((f) => cell(f.raw_phrase)).join(', ')}</p>}
-      <p>Mã đối chiếu nguồn: <code>{cell(scope.checksum)}</code></p>
-      <p>Kết quả lấy từ dữ liệu đã xác nhận. Cần kiểm tra điều kiện lọc khi câu hỏi có nhiều nghĩa.</p>
-    </details>}
-    {value.limitations.map((text, i) => <p className="limitation" key={i}>{text}</p>)}
-  </>;
-}
-
-function cell(value: unknown): string {
-  if (value === null) return 'Chưa có giá trị';
-  if (typeof value === 'boolean') return value ? 'Có' : 'Không';
-  return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 }
 function message(error: unknown): string {
   return error instanceof Error ? error.message : 'Chưa thể lấy kết quả. Vui lòng thử lại.';

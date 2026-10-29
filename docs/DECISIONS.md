@@ -60,6 +60,8 @@ Baseline exact SHA `40be61a952eae81aba7a7bf02d09d5cb8e32cd0f`, local=remote, wor
 
 Một lượt model là lựa chọn mặc định; so sánh hai cấu trúc bằng fixture offline chỉ đo được tính nhất quán/độ lớn schema, không suy ra accuracy, tokens hoặc latency model thật. Hai lượt cần bằng chứng live tốt hơn và ngân sách riêng nên chưa được chọn. Mục tiêu 90 semantic scenarios là bộ đánh giá, không phải quyền gọi cloud 90 lần. Case đã dùng phát triển không được gọi held-out.
 
+Workstream D: tham khảo đọc Sidebar/ChatHeader của Shopquery-AI trên GitHub để hiểu new chat/history/data manager/account/source selector; không copy code hoặc tác động runtime của dự án đó. ChatSAR dùng CSS/React hiện hữu, không thêm UI framework. Authentication, Workspace, Chat, Result, Datasets, AIReview và DTO tách theo trách nhiệm. Native dialog có focus/ESC; sidebar, composer, review kỹ thuật thu gọn, quyền metadata/provider riêng và Gemini mặc định. Có 6 tests SSR/DTO bằng node:test + Vite sẵn có, không mở server/test runtime thứ hai. SSR không thay thế browser interaction/responsive QA.
+
 
 - PostgreSQL privileges: https://www.postgresql.org/docs/17/ddl-priv.html
 - SQLAlchemy Core SELECT: https://docs.sqlalchemy.org/en/20/core/selectable.html
