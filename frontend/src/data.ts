@@ -11,7 +11,8 @@ export type Column = {
 export type Dataset = { id: string; name: string; revision_id: string; status: string };
 export type Preview = { dataset_id: string; revision_id: string; status: string; name: string;
   sheets: string[]; sheet_name: string; columns: Column[]; rows: unknown[][]; row_count: number;
-  description: string; grain: string; timezone: string; sharing_providers: string[]; data_classification: string };
+  description: string; grain: string; timezone: string; sharing_providers: string[]; data_classification: string;
+  checksum?: string; setup_proposal?: unknown };
 export const kinds: Kind[] = ['text', 'integer', 'numeric', 'boolean', 'date', 'timestamp'];
 export const kindNames: Record<Kind, string> = { text: 'Văn bản / mã', integer: 'Số nguyên', numeric: 'Số thập phân', boolean: 'Có / không', date: 'Ngày', timestamp: 'Ngày và giờ' };
 
@@ -38,7 +39,8 @@ export function parsePreview(data: unknown): Preview {
     grain: typeof data.grain === 'string' ? data.grain : 'Một dòng dữ liệu',
     timezone: typeof data.timezone === 'string' ? data.timezone : 'Asia/Ho_Chi_Minh',
     sharing_providers: Array.isArray(data.sharing_providers) ? data.sharing_providers.filter((v): v is string => typeof v === 'string') : [],
-    data_classification: typeof data.data_classification === 'string' ? data.data_classification : 'private' };
+    data_classification: typeof data.data_classification === 'string' ? data.data_classification : 'private',
+    checksum: typeof data.checksum === 'string' ? data.checksum : '', setup_proposal: data.setup_proposal };
 }
 
 

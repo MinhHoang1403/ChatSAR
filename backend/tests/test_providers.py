@@ -148,6 +148,13 @@ def test_fallback_only_for_finished_transient_failure_with_opt_in_and_permission
     revision["sharing_providers"] = []
     assert not providers.can_fallback(AppError(503, code, "safe"), revision, "gemini", True)
     assert not providers.can_fallback(AppError(503, code, "safe"), revision, "knowledge", True)
+    assert not providers.can_fallback(
+        AppError(503, code, "safe"),
+        {"data_classification": "synthetic"},
+        "gemini",
+        True,
+        elapsed_seconds=21,
+    )
 
 
 def test_forbidden_or_unconfirmed_knowledge_never_triggers_fallback(
@@ -160,6 +167,44 @@ def test_forbidden_or_unconfirmed_knowledge_never_triggers_fallback(
         "gemini",
         True,
     )
+
+
+@pytest.mark.parametrize(
+    "payload,accepted",
+    [
+        ({"columns": [{"id": "c_" + "a" * 32, "name": "Mã", "data_type": "text"}]}, True),
+        ({"columns": []}, False),
+        ({"columns": "wrong", "sql": "DROP TABLE data"}, False),
+    ],
+)
+def test_shared_adapter_validates_setup_contract_without_query_only_fields(
+    adapter: tuple, monkeypatch: pytest.MonkeyPatch, payload: dict, accepted: bool
+) -> None:
+    from app.setup import SetupProposal
+
+    _, revision, reserve, finish = adapter
+    factory = httpx.Client
+    monkeypatch.setattr(
+        providers.httpx,
+        "Client",
+        lambda **kw: factory(
+            **kw,
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200, json={"choices": [{"message": {"content": json.dumps(payload)}}]}
+                )
+            ),
+        ),
+    )
+    if accepted:
+        reply = providers.generate_structured({"profile": []}, revision, "knowledge", SetupProposal)
+        assert isinstance(reply.plan, SetupProposal)
+        assert reply.plan.columns[0].name == "Mã"
+    else:
+        with pytest.raises(AppError) as error:
+            providers.generate_structured({"profile": []}, revision, "knowledge", SetupProposal)
+        assert error.value.code == "PROVIDER_SCHEMA"
+    assert reserve.call_count == finish.call_count == 1
 
 
 def test_incomplete_sql_plan_is_rejected_and_usage_retained(

@@ -198,7 +198,7 @@ def compile_query(
             if mapped:
                 if len(mapped) != 1:
                     raise ValueError("Ambiguous mapping")
-                original = typed_value(mapped[0].value, query_review, revision["timezone"])
+                original = typed_value(mapped[0].value, original_review, revision["timezone"])
                 origin = "owner_confirmed_mapping"
             else:
                 original = None
@@ -228,7 +228,7 @@ def compile_query(
                         question if value.raw_phrase in question else previous_question
                     ).index(value.raw_phrase),
                     "length": len(value.raw_phrase),
-                    "source": origin,
+                    "source": "user_phrase" if value.raw_phrase in question else "verified_context",
                 },
             }
         )
@@ -299,7 +299,7 @@ def compile_query(
     aliases = set(order_fields)
     names = {
         "COUNT_ROWS": "Số dòng",
-        "COUNT_NON_NULL": "Số giá trị không NULL",
+        "COUNT_NON_NULL": "Số giá trị đã có",
         "COUNT_DISTINCT": "Số giá trị khác nhau",
         "SUM": "Tổng",
         "AVG": "Trung bình",
@@ -412,6 +412,15 @@ def contains_phrase(question: str, phrase: str) -> bool:
 def validate_structure(
     plan: QueryPlan, revision: dict[str, Any], question: str, evidence: list[dict[str, Any]]
 ) -> None:
+    for item in revision["columns"]:
+        review = ColumnReview.model_validate(item)
+        for mapping in review.value_mappings:
+            if contains_phrase(question, mapping.phrase) and not any(
+                e["column_id"] == review.id and e["raw_phrase"] == mapping.phrase for e in evidence
+            ):
+                raise fail(
+                    "Một tên gọi đã xác nhận chưa được đưa vào điều kiện lọc.", "QUERY_CLARIFY"
+                )
     ranking = re.search(r"\btop\s+(\d+)\b", question, re.IGNORECASE)
     if ranking and (
         not plan.order_by or plan.limit != int(ranking[1]) or plan.result_mode != "top"
@@ -486,18 +495,18 @@ def execute_query(compiled: CompiledQuery) -> tuple[list[list[Any]], float]:
                 ):
                     table = next(iter(compiled.statement.get_final_froms()))
                     target = table.c[item["column_id"]]
-                    if (
-                        compiled.grounding_required
-                        and isinstance(target.type, Text)
-                        and connection.execute(
-                            select(target).where(target == item["canonical_value"]).limit(1)
-                        ).first()
-                        is None
-                    ):
-                        raise fail(
-                            "Không tìm thấy giá trị lọc trong dữ liệu. Vui lòng xác nhận lại.",
-                            "QUERY_CLARIFY",
+                    if compiled.grounding_required and isinstance(target.type, Text):
+                        exists = (
+                            connection.execute(
+                                select(target).where(target == item["canonical_value"]).limit(1)
+                            ).first()
+                            is not None
                         )
+                        item["source_match"] = "exact" if exists else "no_match"
+                        # Literal nguyên văn không khớp có thể mô tả tập rỗng hợp lệ.
+                        # Không bịa canonical value/mapping hoặc đổi SUM(empty) thành 0.
+                        if not exists and item["mapping_source"] == "owner_confirmed_mapping":
+                            raise fail("Mapping không còn khớp giá trị nguồn.", "QUERY_CLARIFY")
             rows = connection.execute(compiled.statement).fetchmany(501)
     compiled.truncated = len(rows) > compiled.limit
     return [[wire(value) for value in row] for row in rows[: compiled.limit]], (

@@ -6,7 +6,9 @@ ChatSAR là MVP demo hỏi đáp dữ liệu bằng tiếng Việt, hướng đ�
 - **RAG:** tìm nội dung trong PDF/DOCX/TXT/Markdown rồi trả lời kèm trích dẫn nguồn.
 - **Hybrid:** kết hợp số liệu SQL với tài liệu giải thích hoặc đánh giá quy tắc ngưỡng đơn giản.
 
-**Trạng thái:** Phần triển khai F1–F4 nằm trên `feature/sql-foundation`: Google login/workspaces, upload/review/publish CSV/XLSX, typed SQL một bảng, chat/history/provenance và adapters Gemini/Knowledge. Google login/logout/workspace đã có xác nhận browser thủ công + DB thật. Gemini có kết quả đúng oracle trên logistics và thư viện held-out; hai ca HTTP bổ sung có logistics PASS và hotel timeout. Tracing/persistence đã kiểm thật; xem [bằng chứng, thất bại và gates](docs/PREFLIGHT.md). Chưa nghiệm thu toàn bộ Giai đoạn 1: browser E2E chờ người dùng test sau, Knowledge bị 403 ở lần thử cuối, deadline mới và benchmark đầy đủ chưa nghiệm thu live. RAG/Hybrid là mục tiêu các giai đoạn sau, chưa được triển khai.
+**Trạng thái: PARTIALLY_READY.** Giai đoạn 1 trên `feature/sql-foundation` có Google/workspaces, CSV/XLSX, Smart Data Setup (local hoặc AI metadata có consent), catalog nghiệp vụ, SQL một bảng, chat/history/source và giao diện sáng xanh dương. Kết quả bị cắt được báo rõ; Decimal/NULL/TEXT ID được giữ nguyên. Gemini mặc định, Knowledge dự phòng theo opt-in/quyền dữ liệu/kết nối/hạn mức.
+
+94 unit, 24 integration, 25 SQL oracle gốc, 13 manifest/quyền DB, 75 phép kiểm gold SQL của bộ 90 tình huống và 7 frontend SSR/DTO đã PASS local. Đây không phải accuracy model. Model-live của bản cải tiến cần quyền bổ sung; browser sau đăng nhập bị chặn bởi công cụ Cốc Cốc. Google live trước đó đã có bằng chứng thủ công + DB. Chưa nghiệm thu cuối, chưa merge main; RAG/Hybrid chưa triển khai. Xem [bằng chứng và blockers](docs/PREFLIGHT.md).
 
 ## Thiết kế dự kiến
 

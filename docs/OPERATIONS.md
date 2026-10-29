@@ -17,7 +17,7 @@ npm.cmd ci --ignore-scripts --prefix frontend
 
 # Khởi động DB duy nhất và áp dụng migration.
 docker compose up -d --wait db
-foreach ($name in @('foundation','identity','datasets','conversation')) {
+foreach ($name in @('foundation','identity','datasets','conversation','catalog')) {
   Get-Content "backend/migrations/$name.sql" -Raw -Encoding UTF8 | docker compose exec -T db psql -X -q -U chatsar_admin -d chatsar -v ON_ERROR_STOP=1
   if ($LASTEXITCODE -ne 0) { throw "Migration thất bại: $name" }
 }
@@ -30,6 +30,9 @@ docker compose up -d --wait
 $env:CHATSAR_POSTGRES_TESTS = '1'
 py -3.11 -m unittest discover -s evaluations/tests -v
 py -3.11 -m evaluations.oracle
+py -3.11 -m evaluations.semantic
+py -3.11 -m evaluations.planning
+py -3.11 -m evaluations.acceptance  # chỉ prepare; không gọi model
 py -3.11 -m evaluations.runtime
 py -3.11 -m evaluations.integration
 py -3.11 -m evaluations.model_live --providers gemini --cases logistics_sum hotel_sum library_sum --prepare-only
@@ -40,6 +43,7 @@ py -3.11 -m evaluations.persistence
 # Types: uv run --frozen mypy
 # Unit: uv run --frozen pytest -q
 # Frontend: npm.cmd run typecheck; npm.cmd run build (trong frontend/)
+# Frontend SSR/DTO: npm.cmd test --prefix frontend (không phải browser E2E)
 
 # Dừng đúng ChatSAR khi cần, giữ nguyên volume.
 docker compose stop
@@ -51,7 +55,13 @@ Các bước backup/restore đầy đủ chưa được nghiệm thu ở F1; ph�
 
 ## Chat, cloud và tracing
 
-Sau Google login: tạo/chọn workspace → tải CSV/XLSX → review kiểu/NULL/timezone → xác nhận → mở bộ dữ liệu ready → chọn mô hình và gửi câu hỏi. Dữ liệu private không được gửi model; chỉ chọn synthetic cho dữ liệu thực sự tổng hợp. Khi đổi nguồn của conversation đã có câu trả lời, tạo conversation mới. Lịch sử và kết quả được lưu trong PostgreSQL; không dùng localStorage để lưu session.
+Luồng review mới: Quản lý dữ liệu → tải file → chọn sheet → Phân tích local hoặc cấp quyền metadata cho lượt AI → xem đề xuất → Chỉnh sửa chi tiết nếu cần → cấp quyền gửi metadata/câu hỏi cho từng provider nếu muốn chat nguồn private → Xác nhận và sử dụng dữ liệu → đóng hộp thoại → chọn nguồn ở header → gửi câu hỏi. Gemini mặc định. Nguồn private vẫn private khi cấp quyền chia sẻ; quyền setup một lượt không tự cho phép gửi query tới Gemini/Knowledge. Không cần chọn synthetic cho dữ liệu thật. Nếu AI lỗi, dùng local review, kiểm ô trống/ngày/đơn vị rồi xác nhận. Không tự sửa .env.
+
+Migration catalog là additive, không tạo bảng dữ liệu thay thế; rollback ứng dụng giữ cột mới và không DROP. Ready revision cũ vẫn đọc được với defaults, không cần reupload hoặc sửa file nguồn. Kết quả partial không dùng làm premise follow-up. Fallback cần opt-in theo request và bằng chứng Knowledge từng truy cập được; 403 gần nhất chặn fallback tự động. Timeout không tự gọi lại provider khác.
+
+`evaluations.acceptance --live --max-requests 3 --expected-ledger 12` là kế hoạch tối đa ba HTTP requests Gemini trên hotel/maintenance synthetic, chỉ được chạy sau quyền mới từ người dùng. Dừng khi setup/provider/answer không đạt, không retry/Knowledge. Không reset ledger hoặc tăng cap 10/provider. Prepare-only có thể chạy không cần quyền generation và đối chiếu toàn bộ typed rows/checksum, sau đó dọn đúng test owner. Hạn mức .env không thay cho quyền tác vụ.
+
+Sau Google login: tạo/chọn workspace → tải CSV/XLSX → review kiểu/NULL/timezone → xác nhận → mở bộ dữ liệu ready → chọn mô hình và gửi câu hỏi. Dữ liệu private chỉ được gửi metadata/câu hỏi tới đúng provider có quyền sharing_providers; chỉ chọn synthetic cho dữ liệu thực sự tổng hợp. Khi đổi nguồn của conversation đã có câu trả lời, tạo conversation mới. Lịch sử và kết quả được lưu trong PostgreSQL; không dùng localStorage để lưu session.
 
 Origin browser phải trùng `APP_ORIGIN`: `localhost` và `127.0.0.1` là hai origin khác nhau. Giao diện đọc origin chuẩn từ `/api/auth/config` rồi chuyển về đó trước khi khởi tạo Google Login. Không nới allowlist/CSRF để chấp nhận tùy ý các origin. Sau đổi cấu hình local cần `docker compose up -d --wait` để container nạp lại; không build lại image chỉ vì đổi `.env`.
 

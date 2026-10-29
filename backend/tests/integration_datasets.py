@@ -237,14 +237,32 @@ class DatasetIntegration(unittest.TestCase):
             "literal": {"raw_phrase": "9999", "candidate_value": "9999", "value_type": "text"},
         }
         payload["raw_user_spans"] = payload["coverage"] = ["9999"]
-        from app.errors import AppError
         from app.query import ground_catalog
 
-        with self.assertRaises(AppError) as error:
-            execute_query(
-                compile_query(QueryPlan.model_validate(payload), ground_catalog(revision), "9999")
-            )
-        self.assertEqual(error.exception.code, "QUERY_CLARIFY")
+        query = compile_query(QueryPlan.model_validate(payload), ground_catalog(revision), "9999")
+        self.assertEqual(execute_query(query)[0], [])
+        self.assertEqual(query.filters[0]["source_match"], "no_match")
+        payload.update(
+            select_columns=[],
+            aggregations=[
+                {"operator": "SUM", "column_id": body["columns"][1]["id"], "output_id": "total"}
+            ],
+        )
+        with patch(
+            "app.conversation.generate_proposal",
+            return_value=Proposal(
+                QueryPlan.model_validate(payload), "gemini", "offline", None, None, 0, None
+            ),
+        ):
+            empty = self.client.post(
+                f"/api/conversations/{chat}/messages",
+                json={"question": "9999", "dataset_revision_id": uploaded["revision_id"]},
+                headers={"Idempotency-Key": uuid4().hex},
+            ).json()
+        self.assertEqual(empty["display_rows"], [[None]])
+        self.assertEqual(empty["status"], "answered")
+        self.assertEqual(empty["facts"]["filters"][0]["source_match"], "no_match")
+        self.assertTrue(empty["limitations"])
 
     def test_catalog_mappings_must_exist_and_metadata_persists(self) -> None:
         uploaded = self.upload(b"code,amount\n0007,0.10\n0008,0.20\n")

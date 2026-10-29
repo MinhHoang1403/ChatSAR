@@ -66,3 +66,13 @@ def test_text_empty_not_null_and_leading_zero_cannot_be_erased() -> None:
     proposal.columns[0].data_type = "integer"
     with pytest.raises(AppError):
         validate_rows(parsed, proposal.columns, "UTC")
+
+
+def test_mapping_cannot_override_an_existing_exact_value() -> None:
+    from app.tabular import ValueMapping
+
+    parsed = read_table("district\nquận 3\n3\n".encode(), ".csv")
+    revision_id = uuid4()
+    proposal = local_proposal(parsed, revision_id)
+    proposal.columns[0].value_mappings = [ValueMapping(phrase="quận 3", value="3")]
+    assert check_proposal(proposal, parsed, revision_id)

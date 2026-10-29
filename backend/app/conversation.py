@@ -243,7 +243,9 @@ def send_message(
             try:
                 proposal = generate_proposal(body.question, revision, body.provider, context)
             except AppError as error:
-                if not can_fallback(error, revision, body.provider, body.allow_fallback):
+                if not can_fallback(
+                    error, revision, body.provider, body.allow_fallback, perf_counter() - started
+                ):
                     raise
                 proposal = generate_proposal(body.question, revision, "knowledge", context)
             timings["provider"] = (perf_counter() - started) * 1000 - timings["catalog"]
@@ -276,7 +278,7 @@ def send_message(
                     text = (
                         compiled.columns[0]["name"]
                         + ": "
-                        + (str(value) if value is not None else "Chưa có giá trị (NULL)")
+                        + (str(value) if value is not None else "Chưa có giá trị")
                         + (" " + unit if unit and value is not None else "")
                     )
                 else:
@@ -323,11 +325,19 @@ def send_message(
                             "result_id": str(result_id),
                         }
                     ],
-                    "limitations": [
-                        f"Chỉ hiển thị {plan.limit} dòng; hãy thu hẹp điều kiện để xem thêm."
-                    ]
-                    if partial
-                    else [],
+                    "limitations": (
+                        [f"Chỉ hiển thị {plan.limit} dòng; hãy thu hẹp điều kiện để xem thêm."]
+                        if partial
+                        else []
+                    )
+                    + (
+                        [
+                            "Có giá trị lọc không khớp dữ liệu nguồn. "
+                            "Kết quả giữ điều kiện nguyên văn, không tự chọn giá trị gần giống."
+                        ]
+                        if any(f.get("source_match") == "no_match" for f in compiled.filters)
+                        else []
+                    ),
                     "display_text": text,
                     "request_id": request.state.request_id,
                     "result_id": str(result_id),

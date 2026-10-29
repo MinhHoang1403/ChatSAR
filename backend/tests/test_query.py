@@ -149,6 +149,8 @@ def test_approved_mapping_keeps_original_and_canonical(revision: dict) -> None:
     assert compiled.filters[0]["mapping_source"] == "owner_confirmed_mapping"
     assert compiled.filters[0]["canonical_value"] == "DELIVERED"
     with pytest.raises(AppError):
+        compile_query(proposal(revision, "đã giao"), revision, "đã giao")
+    with pytest.raises(AppError):
         compile_query(
             proposal(revision, "đã giao", filters=leaf("đã giao", "OTHER")), revision, "đã giao"
         )
@@ -187,3 +189,17 @@ def test_all_rows_uses_extra_row_probe(revision: dict) -> None:
     compiled = compile_query(proposal(revision, result_mode="all", limit=5), revision, "Tổng")
     assert compiled.statement.compile().params["param_1"] == 6
     assert compiled.limit == 5
+
+
+def test_mapping_uses_reviewed_date_format_before_iso_binding(revision: dict) -> None:
+    revision["columns"][2].update(
+        {
+            "date_format": "%d/%m/%Y",
+            "value_mappings": [{"phrase": "ngày kiểm tra", "value": "01/02/2026"}],
+        }
+    )
+    plan = proposal(
+        revision, "ngày kiểm tra", filters=leaf("ngày kiểm tra", "2026-02-01", DAY, "date")
+    )
+    compiled = compile_query(plan, revision, "ngày kiểm tra")
+    assert compiled.filters[0]["canonical_value"] == "2026-02-01"

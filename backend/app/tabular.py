@@ -309,6 +309,12 @@ def validate_rows(
                 raise invalid("Mapping không khớp kiểu cột đã chọn.") from None
             if target is None or target not in values:
                 raise invalid("Mapping phải trỏ tới một giá trị thật trong dữ liệu.")
+            try:
+                exact = typed_value(mapping.phrase, column, timezone)
+            except (ValueError, TypeError, ArithmeticError):
+                exact = None
+            if exact is not None and exact in values and exact != target:
+                raise invalid("Mapping xung đột với một giá trị nguyên văn trong dữ liệu.")
     return rows
 
 

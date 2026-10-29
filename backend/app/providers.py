@@ -29,6 +29,7 @@ INPUT_USD_PER_MILLION = Decimal("0.30")
 OUTPUT_USD_PER_MILLION = Decimal("2.50")
 MAX_OUTPUT_TOKENS = 4096
 REQUEST_TIMEOUT_SECONDS = 60
+FALLBACK_START_LIMIT_SECONDS = 20
 router = APIRouter(prefix="/api")
 
 INSTRUCTIONS = """Bạn chỉ đề xuất QueryPlan cho câu hỏi dữ liệu một bảng. Không sinh SQL.
@@ -238,6 +239,8 @@ def generate_proposal(
                     "value_mappings",
                     "aggregation_policy",
                     "primary_key",
+                    "date_format",
+                    "decimal_separator",
                 )
             }
             for c in revision["columns"]
@@ -499,10 +502,15 @@ def knowledge_available() -> bool:
 
 
 def can_fallback(
-    error: AppError, revision: dict[str, Any], provider: Provider, opted_in: bool
+    error: AppError,
+    revision: dict[str, Any],
+    provider: Provider,
+    opted_in: bool,
+    elapsed_seconds: float = 0,
 ) -> bool:
     return (
         opted_in
+        and elapsed_seconds <= FALLBACK_START_LIMIT_SECONDS
         and provider == "gemini"
         and error.code in ("PROVIDER_RATE_LIMIT", "PROVIDER_TEMPORARY")
         and (

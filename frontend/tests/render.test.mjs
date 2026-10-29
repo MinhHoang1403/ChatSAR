@@ -51,3 +51,9 @@ test('API DTO rejects unknown data shape and preserves catalog metadata', async 
   assert.equal(parsed.columns[0].description, col.description);
   assert.equal(parsed.columns[0].value_mappings[0].value, '0007');
 });
+test('saved setup is offered without another cloud call only for matching checksum and sheet', async () => {
+  const p = { ...preview, checksum: 'file-hash', setup_proposal: { status: 'complete', response: { checksum: 'file-hash', sheet_name: '' } } };
+  const props = { preview: p, csrf: 'csrf', onBusy: noop, onProposal: noop };
+  assert.match(await render('AIReview', props), /Mở đề xuất đã lưu/);
+  assert.doesNotMatch(await render('AIReview', { ...props, preview: { ...p, checksum: 'different-hash' } }), /Mở đề xuất đã lưu/);
+});

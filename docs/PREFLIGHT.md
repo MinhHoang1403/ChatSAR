@@ -1,5 +1,50 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Trạng thái bản cải tiến ngày 30/10/2026
+
+**PARTIALLY_READY — chưa nghiệm thu cuối.** Hoàn thiện độc lập Workstreams A–F: catalog nghiệp vụ, grounded values/mappings, kết quả partial, Smart Setup có consent/full-table validation/local fallback, UI sáng xanh dương và Gemini mặc định/Knowledge fallback có điều kiện. Mô hình, parser, SQLAlchemy Core, Google/session/ownership và một Compose chatsar được giữ. Không thay Master/Implementation Plan, không merge main/sang Giai đoạn 2.
+
+| Kiểm thử bản hiện tại | Tổng | PASS | FAIL | BLOCKED | NOT_RUN |
+|---|---:|---:|---:|---:|---:|
+| Backend unit | 94 | 94 | 0 | 0 | 0 |
+| PostgreSQL/API integration (provider mock) | 24 | 24 | 0 | 0 | 0 |
+| SQL oracle baseline bất biến | 25 | 25 | 0 | 0 | 0 |
+| Gold SQL cho semantic scenarios (có tham chiếu lại baseline) | 75 | 75 | 0 | 0 | 0 |
+| Manifest/Decimal/DB privileges | 13 | 13 | 0 | 0 | 0 |
+| Semantic model benchmark mới | 90 | 0 | 0 | 0 | 90 |
+| Provider contract, nhóm con của unit | 24 | 24 | 0 | 0 | 0 |
+| Model-live mới, kế hoạch tối đa 3 lượt Gemini | 3 | 0 | 0 | 3 | 0 |
+| Frontend SSR/DTO | 7 | 7 | 0 | 0 | 0 |
+| Browser E2E sau redesign | 20 | 0 | 0 | 20 | 0 |
+| Auth + reader security, nhóm con đã đếm ở trên | 24 | 24 | 0 | 0 | 0 |
+| Docker/HTTP restart persistence | 1 luồng | 1 | 0 | 0 | 0 |
+
+Lệnh đã chạy: backend ruff/format/mypy/pytest; `evaluations.integration`, `oracle`, `semantic`, `acceptance` prepare-only, `planning`, `persistence`, `runtime`; `CHATSAR_POSTGRES_TESTS=1 unittest discover -s evaluations/tests`; frontend typecheck/test/build. Một cảnh báo deprecation từ Starlette/httpx, không skip test. Các hàng nhóm con không cộng thành tổng độc lập. Chưa có model-live của bản này, nên không có mẫu số release accuracy/semantic coverage/false refusal/silent wrong answer hoặc p50/p95 model latency mới. Không lấy 75 gold checks hoặc 94 unit làm bằng chứng hiểu câu hỏi 95%.
+
+Semantic scenarios đã khóa checksum riêng: basic 30, paraphrase 20, edge 15, negative 10, follow-up 10, metamorphic 5; sáu domain logistics/hotel/energy/agriculture/library/maintenance. Maintenance là schema mới, 5 ca held-out chưa dùng tuning/model-live; labels do người viết fixture biết, không phải blind external benchmark. Gold SQL/expected gốc giữ nguyên; 75 gold checks không phải 75 câu model trả đúng. 15 tình huống không phải SQL dùng context/negative expectations. `semantic.json` có metric/filter/group/order/limit gold riêng; expected không đi vào prompt.
+
+So cấu trúc offline: schema nội bộ 17 properties/3804 bytes, schema provider 12 properties/3260 bytes; Gemini không còn nhận bản schema lặp trong prompt. Tám fixture cấu trúc cho A một lượt và B tách/ghép hai bước đều nhận 1 hợp lệ, chặn 7 không hợp lệ; đây là kiểm consistency, không phải thí nghiệm hai model calls hoặc so semantic accuracy. Chưa có bằng chứng chất lượng tốt hơn để biện minh chi phí/latency hai lượt, nên giữ A. Token/cost/model latency so trước–sau: NOT_RUN. Deadline 60 s giữ nguyên; fallback chỉ bắt đầu trong 20 s đầu để còn khoảng chờ provider/SQL dưới client/proxy 90 s.
+
+Vòng kiểm oracle phát hiện guard “giá trị không tồn tại thì luôn clarify” quá chặt với tập rỗng hợp lệ. Đã sửa tại executor/evidence: literal nguyên văn giữ nguyên điều kiện, source_match=no_match và cảnh báo; SQL SUM(empty) vẫn NULL. Mapping sai/xung đột exact value bị chặn khi confirm. Có HTTP regression kiểm NULL/cảnh báo và không tạo 0. Mapping ngày theo format owner đã xác nhận được đổi sang ISO có kiểm chứng; date_format/decimal_separator được đưa vào catalog cho provider.
+
+Prepare-only qua proxy web/PostgreSQL thật đã đối chiếu tất cả typed rows/NULL/TEXT zero đầu của hotel và maintenance; checksums CSV lần lượt `ea5702c6d69013434b897044b1a6f320de770876b214a71df25839b5d28e1311`, `1d3bcbb55df03218b8bc3549179f144d87a0a52fabc45e49b9b4ed0cc186d5b8`. Không gọi generation; dọn đúng test owner sau phép thử. Google users thật 2, workspace thật 1 vẫn còn, test users 0 sau cleanup. Migrations: foundation/identity/datasets/conversation/catalog. Langfuse Observations v2 HTTP 200, đọc lại trace metadata mới (ví dụ `fce78f8ba9cf853b2d3f6b13b58cba6d`); đó là trace từ HTTP tests, không phải provider model-live mới.
+
+Ledger vẫn **12 reservations: Gemini 7, Knowledge 5**. Chưa có quyền generation mới. Đã trình kế hoạch riêng tối đa 3 HTTP requests Gemini, reserve tổng <=0.06 USD: AI Setup hotel → hotel SUM 300.15 → maintenance SUM 2.50. Dừng khi setup/provider/answer sai, không retry/Knowledge; cap 10/Gemini và .env giữ nguyên. Nếu chưa được duyệt, cả ba model-live BLOCKED. Knowledge 403 lần cuối vẫn ngăn fallback tự động. Không đủ cơ sở tuyên bố khắc phục hotel timeout hoặc đạt >=95% semantic accuracy.
+
+Browser IAB đọc được trang login mới và nút Google; khi chọn phiên Cốc Cốc, tool dừng vì browser URL policy enforcement chưa hỗ trợ. Đã dừng UI automation, không dùng công cụ khác vượt chặn. Google live trước redesign có xác nhận thủ công + DB; 20 luồng E2E và kiểm tra visual responsive của UI mới chưa được nghiệm thu. Chủ dự án giữ quyền user acceptance.
+
+### Chủ dự án tự kiểm thử
+
+1. Mở `http://localhost:18181`, đăng nhập Google; tạo/chọn không gian ở sidebar.
+2. Mở Quản lý dữ liệu, tải CSV/XLSX; chọn sheet nếu workbook có nhiều sheet.
+3. Chọn Phân tích local, hoặc đồng ý metadata rồi Nhận đề xuất AI khi có quyền/hạn mức. Lỗi AI vẫn dùng được local review.
+4. Xem cột/ô trống; chỉnh đơn vị, mô tả hoặc ngày ở Chỉnh sửa chi tiết nếu cần. Đề xuất đã lưu có thể mở lại mà không gọi AI.
+5. Nếu hỏi nguồn private, cấp quyền metadata/giá trị giới hạn/câu hỏi cho đúng provider; không đổi dữ liệu thật thành synthetic.
+6. Xác nhận và sử dụng dữ liệu, đóng hộp thoại, chọn nguồn ở header rồi hỏi. Xem bảng, Nguồn và cách tính; nếu partial thì chưa phải danh sách đầy đủ.
+7. Đọc lịch sử, refresh, logout/login lại; thử tài khoản khác để kiểm isolation. Nếu timeout, cập nhật lịch sử trước khi gửi lại, không bấm lặp. Phê duyệt merge/User Acceptance là quyết định riêng của chủ dự án.
+
+## Lịch sử triển khai trước bản cải tiến
+
 Ngày 29/10/2026. Nhánh `feature/sql-foundation`; main nền `c05f26b1a301e91e8ea6ddaadedb0e1ed03b735d`.
 
 ## Quyền và ngoại lệ đã được chủ dự án xác nhận
