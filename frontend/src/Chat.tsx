@@ -37,6 +37,8 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onL
   const [history, setHistory] = useState<Message[]>([]);
   const [question, setQuestion] = useState('');
   const [provider, setProvider] = useState('gemini');
+  const [allowFallback, setAllowFallback] = useState(false);
+  const [fallbackAvailable, setFallbackAvailable] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -54,6 +56,11 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onL
 
   useEffect(() => { onList(list); }, [list, onList]);
   useEffect(() => { onBusy(busy); }, [busy, onBusy]);
+  useEffect(() => {
+    let active = true;
+    api('/providers').then((data) => { if (active) setFallbackAvailable(record(data) && data.knowledge_fallback_available === true); }).catch(() => {});
+    return () => { active = false; };
+  }, []);
 
   async function readHistory(id: string): Promise<Message[]> {
     const data = await api(`/conversations/${id}`);
@@ -89,7 +96,7 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onL
           body: JSON.stringify({ workspace_id: workspaceId, title: question.trim().slice(0, 120) }) }, csrf));
         id = created.id; setList((items) => [created, ...items]); setSelected(id);
       }
-      const body = JSON.stringify({ question: question.trim(), dataset_revision_id: scope.revision_id, provider });
+      const body = JSON.stringify({ question: question.trim(), dataset_revision_id: scope.revision_id, provider, allow_fallback: provider === 'gemini' && allowFallback });
       if (!pending.current || pending.current.body !== body || pending.current.conversationId !== id) {
         pending.current = { body, key: crypto.randomUUID(), conversationId: id };
       }
@@ -124,10 +131,11 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onL
         <label htmlFor="question" className="sr-only">Câu hỏi của bạn</label>
         <textarea id="question" value={question} maxLength={4000} required disabled={busy}
           placeholder={scope ? 'Hỏi một câu về dữ liệu của bạn…' : 'Chọn dữ liệu trước khi đặt câu hỏi'} onChange={(e) => setQuestion(e.target.value)} />
-        <div className="composer-actions"><label>Mô hình<select value={provider} disabled={busy} onChange={(e) => setProvider(e.target.value)}><option value="gemini">Gemini</option><option value="knowledge">Knowledge</option></select></label>
+        <div className="composer-actions"><label>Mô hình<select value={provider} disabled={busy} onChange={(e) => { setProvider(e.target.value); setAllowFallback(false); }}><option value="gemini">Gemini</option><option value="knowledge">Knowledge</option></select></label>
           {selected && <button type="button" className="quiet" disabled={busy || loading} onClick={async () => { setLoading(true); try { setHistory(await readHistory(selected)); } catch (e: unknown) { setError(message(e)); } finally { setLoading(false); } }}>Cập nhật lịch sử</button>}
           <button className="send-button" disabled={busy || loading || !scope || stale || !question.trim()}>{busy ? 'Đang xử lý…' : 'Gửi ↑'}</button></div>
       </form>
+      <label className="check fallback-choice"><input type="checkbox" checked={allowFallback} disabled={busy || !fallbackAvailable || provider !== 'gemini'} onChange={(e) => setAllowFallback(e.target.checked)} />Dùng Knowledge nếu Gemini tạm lỗi{!fallbackAvailable ? ' (chưa xác nhận kết nối Knowledge)' : ''}</label>
       <p className="composer-note">{!scope ? 'Chưa chọn dữ liệu. Mở Quản lý dữ liệu để chuẩn bị nguồn.' : 'Kết quả có nguồn đối chiếu. Hãy kiểm tra điều kiện khi câu hỏi có nhiều cách hiểu.'}</p>
     </div>
   </section>;

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from time import perf_counter
 from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
@@ -17,7 +18,7 @@ from app.auth import MutationDependency, Principal, PrincipalDependency
 from app.datasets import owned_revision
 from app.errors import AppError
 from app.observability import annotate, current_trace_id, observation
-from app.providers import generate_proposal
+from app.providers import can_fallback, generate_proposal
 from app.query import Contract, compile_query, execute_query, ground_catalog
 from app.schema import conversations, messages, results, revisions, workspaces
 from app.workspace import owned_workspace
@@ -34,6 +35,7 @@ class MessageInput(Contract):
     question: str = Field(min_length=1, max_length=4000)
     dataset_revision_id: str
     provider: Literal["gemini", "knowledge"] = "gemini"
+    allow_fallback: bool = False
 
 
 def owned_conversation(
@@ -225,6 +227,8 @@ def send_message(
             409, "REQUEST_PENDING", "Yêu cầu đã được tiếp nhận; vui lòng thử đọc lại."
         ) from None
     plan = None
+    started = perf_counter()
+    timings: dict[str, float] = {}
     with observation(
         "answer_question",
         request_id=request.state.request_id,
@@ -235,7 +239,14 @@ def send_message(
             # Quyền gửi metadata được provider kiểm lại trước reserve/network.
             with observation("ground_catalog"):
                 revision = ground_catalog(revision)
-            proposal = generate_proposal(body.question, revision, body.provider, context)
+            timings["catalog"] = (perf_counter() - started) * 1000
+            try:
+                proposal = generate_proposal(body.question, revision, body.provider, context)
+            except AppError as error:
+                if not can_fallback(error, revision, body.provider, body.allow_fallback):
+                    raise
+                proposal = generate_proposal(body.question, revision, "knowledge", context)
+            timings["provider"] = (perf_counter() - started) * 1000 - timings["catalog"]
             plan = proposal.plan
             if plan.task != "SQL" or plan.unresolved:
                 status = "unsupported" if plan.task == "UNSUPPORTED" else "clarify"
@@ -246,13 +257,17 @@ def send_message(
                 )
             else:
                 with observation("bind_and_compile") as validation:
+                    binding_started = perf_counter()
                     compiled = compile_query(
                         plan, revision, body.question, context["question"] if context else ""
                     )
                     annotate(validation, output={"validation_status": "passed"})
+                    timings["validation"] = (perf_counter() - binding_started) * 1000
                 with observation("execute_read_only") as execution:
                     rows, latency = execute_query(compiled)
                     annotate(execution, output={"row_count": len(rows), "latency_ms": latency})
+                    timings["execution"] = latency
+                composition_started = perf_counter()
                 if not rows:
                     text = "Không có dòng nào khớp điều kiện đã chọn."
                 elif len(rows) == 1 and len(rows[0]) == 1:
@@ -317,6 +332,7 @@ def send_message(
                     "request_id": request.state.request_id,
                     "result_id": str(result_id),
                 }
+                timings["composition"] = (perf_counter() - composition_started) * 1000
         except AppError as error:
             status = (
                 "clarify"
@@ -335,9 +351,14 @@ def send_message(
                 "Chưa thể lấy kết quả dữ liệu. Vui lòng thử lại.",
                 request.state.request_id,
             )
+        answer["timings_ms"] = {**timings, "server_processing": (perf_counter() - started) * 1000}
         annotate(
             span,
-            output={"answer_status": answer["status"], "row_count": len(answer["display_rows"])},
+            output={
+                "answer_status": answer["status"],
+                "row_count": len(answer["display_rows"]),
+                "timings_ms": answer["timings_ms"],
+            },
         )
         answer["trace_id"] = current_trace_id() if span is not None else None
     with db.get_engine().begin() as connection:

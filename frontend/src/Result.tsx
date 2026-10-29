@@ -15,6 +15,7 @@ export default function Result({ value }: { value: Answer }) {
       <p>Phiên bản dữ liệu: <code>{cell(scope.source_revision)}</code></p>
       <p>Mỗi dòng nguồn: {cell(scope.grain)} · Múi giờ: {cell(scope.timezone)}</p>
       <p>Phép tính: {columns.map((c) => cell(c.name)).join(', ')}</p>
+      {record(value.facts.provider) && <p>Mô hình đã sử dụng: {cell(value.facts.provider.name)}</p>}
       {filters.length > 0 && <p>Giá trị lọc đã đối chiếu: {filters.map((f) => cell(f.raw_phrase)).join(', ')}</p>}
       <p>Mã đối chiếu nguồn: <code>{cell(scope.checksum)}</code></p>
       <p>Kết quả lấy từ dữ liệu đã xác nhận. Cần kiểm tra điều kiện lọc khi câu hỏi có nhiều nghĩa.</p>

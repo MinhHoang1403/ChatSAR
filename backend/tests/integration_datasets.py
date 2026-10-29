@@ -34,6 +34,51 @@ from app.tabular import wire
 
 
 class DatasetIntegration(unittest.TestCase):
+    def test_provider_fallback_and_timing_do_not_bypass_semantic_refusals(self) -> None:
+        from app.errors import AppError
+
+        revision = self.published(b"code,amount\n0007,0.10\n0012,0.20\n")
+        amount = revision["columns"][1]["id"]
+        plan = self.plan(
+            revision,
+            "Tổng",
+            aggregations=[{"operator": "SUM", "column_id": amount, "output_id": "total"}],
+        )
+        for code, opt_in, expected_calls, status in [
+            ("PROVIDER_TEMPORARY", True, 2, "answered"),
+            ("PROVIDER_TEMPORARY", False, 1, "provider_unavailable"),
+            ("PROVIDER_TIMEOUT", True, 1, "provider_unavailable"),
+            ("PROVIDER_SCHEMA", True, 1, "provider_unavailable"),
+        ]:
+            chat = self.client.post(
+                "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+            ).json()["id"]
+
+            def generate(question, source, provider, context, failure_code=code):
+                if provider == "gemini":
+                    raise AppError(503, failure_code, "safe failure")
+                return Proposal(plan, "knowledge", "knowledge", None, None, 1, None)
+
+            with (
+                patch("app.conversation.generate_proposal", side_effect=generate) as calls,
+                patch("app.providers.knowledge_available", return_value=True),
+            ):
+                result = self.client.post(
+                    f"/api/conversations/{chat}/messages",
+                    json={
+                        "question": "Tổng",
+                        "dataset_revision_id": str(revision["id"]),
+                        "allow_fallback": opt_in,
+                    },
+                    headers={"Idempotency-Key": uuid4().hex},
+                ).json()
+            self.assertEqual(calls.call_count, expected_calls)
+            self.assertEqual(result["status"], status)
+            self.assertIn("server_processing", result["timings_ms"])
+            if status == "answered":
+                self.assertEqual(result["display_rows"], [["0.30"]])
+                self.assertEqual(result["facts"]["provider"]["name"], "knowledge")
+
     def test_setup_local_permission_owner_and_publish(self) -> None:
         uploaded = self.upload(b"code,amount\n0007,0.10\n0012,\n")
         url = f"/api/datasets/{uploaded['dataset_id']}/setup"

@@ -125,6 +125,43 @@ def test_schema_projection_preserves_runtime_caps() -> None:
     assert QueryPlan.model_json_schema()["properties"]["select_columns"]["maxItems"] == 30
 
 
+@pytest.mark.parametrize(
+    "code,enabled,allowed",
+    [
+        ("PROVIDER_TEMPORARY", True, True),
+        ("PROVIDER_RATE_LIMIT", True, True),
+        ("PROVIDER_TIMEOUT", True, False),
+        ("PROVIDER_SCHEMA", True, False),
+        ("QUERY_CLARIFY", True, False),
+        ("PROVIDER_TEMPORARY", False, False),
+    ],
+)
+def test_fallback_only_for_finished_transient_failure_with_opt_in_and_permission(
+    monkeypatch: pytest.MonkeyPatch, code: str, enabled: bool, allowed: bool
+) -> None:
+    reachable = Mock(return_value=True)
+    monkeypatch.setattr(providers, "knowledge_available", reachable)
+    revision = {"data_classification": "private", "sharing_providers": ["knowledge"]}
+    assert (
+        providers.can_fallback(AppError(503, code, "safe"), revision, "gemini", enabled) is allowed
+    )
+    revision["sharing_providers"] = []
+    assert not providers.can_fallback(AppError(503, code, "safe"), revision, "gemini", True)
+    assert not providers.can_fallback(AppError(503, code, "safe"), revision, "knowledge", True)
+
+
+def test_forbidden_or_unconfirmed_knowledge_never_triggers_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(providers, "knowledge_available", lambda: False)
+    assert not providers.can_fallback(
+        AppError(503, "PROVIDER_TEMPORARY", "safe"),
+        {"data_classification": "synthetic"},
+        "gemini",
+        True,
+    )
+
+
 def test_incomplete_sql_plan_is_rejected_and_usage_retained(
     adapter: tuple, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -10,12 +10,14 @@ from typing import Any, Generic, Literal, TypeVar
 from uuid import uuid4
 
 import httpx
+from fastapi import APIRouter
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import func, insert, select, update
 
 from app import database as db
+from app.auth import PrincipalDependency
 from app.config import get_settings
 from app.errors import AppError
 from app.observability import annotate, observation
@@ -27,6 +29,7 @@ INPUT_USD_PER_MILLION = Decimal("0.30")
 OUTPUT_USD_PER_MILLION = Decimal("2.50")
 MAX_OUTPUT_TOKENS = 4096
 REQUEST_TIMEOUT_SECONDS = 60
+router = APIRouter(prefix="/api")
 
 INSTRUCTIONS = """Bạn chỉ đề xuất QueryPlan cho câu hỏi dữ liệu một bảng. Không sinh SQL.
 Catalog, quyền, revision và kiểu là do server cấp. Không đổi table_id/revision_id.
@@ -72,25 +75,38 @@ class ModelReply(Generic[Output]):
 Proposal = ModelReply[QueryPlan]
 
 
+class ProviderError(AppError):
+    def __init__(self, code: str, message: str, upstream_status: int | None = None) -> None:
+        super().__init__(503, code, message)
+        self.upstream_status = upstream_status
+
+
 def provider_error(code: str, message: str) -> AppError:
-    return AppError(503, code, message)
+    return ProviderError(code, message)
 
 
 def request_client(transport: httpx.BaseTransport | None = None) -> httpx.Client:
     sent = False
+    last_status: int | None = None
+
+    def remember_response(response: httpx.Response) -> None:
+        nonlocal last_status
+        last_status = response.status_code
 
     def enforce_single_request(request: httpx.Request) -> None:
         nonlocal sent
         # SDK có thể đổi attempts=0 thành 1 rồi hiểu là một lần retry.
         # Chặn trước transport để một reservation chỉ phát tối đa một HTTP request.
         if sent:
-            raise provider_error("PROVIDER_RETRY_BLOCKED", "Đã chặn tự gọi lại mô hình.")
+            raise ProviderError(
+                "PROVIDER_RETRY_BLOCKED", "Đã chặn tự gọi lại mô hình.", last_status
+            )
         sent = True
 
     options: dict[str, Any] = {
         "timeout": REQUEST_TIMEOUT_SECONDS,
         "follow_redirects": False,
-        "event_hooks": {"request": [enforce_single_request]},
+        "event_hooks": {"request": [enforce_single_request], "response": [remember_response]},
     }
     if transport is not None:
         options["transport"] = transport
@@ -172,8 +188,9 @@ def integer_or_none(value: Any) -> int | None:
 
 def response_schema(contract: type[BaseModel] = QueryPlan) -> dict[str, Any]:
     schema = contract.model_json_schema()
-    for key in ("intent", "entities", "metric", "population", "coverage"):
-        schema["properties"].pop(key, None) if contract is QueryPlan else None
+    if contract is QueryPlan:
+        for key in ("intent", "entities", "metric", "population", "coverage"):
+            schema["properties"].pop(key, None)
 
     def simplify(node: Any) -> None:
         if isinstance(node, dict):
@@ -378,12 +395,18 @@ def generate_structured(
                 plan, provider, model, input_tokens, output_tokens, latency, request_id
             )
         except Exception as error:
-            status = getattr(error, "status_code", None) or getattr(error, "code", None)
+            status = (
+                getattr(error, "upstream_status", None)
+                or getattr(error, "status_code", None)
+                or getattr(error, "code", None)
+            )
             if isinstance(error, httpx.HTTPStatusError):
                 status = error.response.status_code
             code = (
                 error.code
-                if isinstance(error, AppError)
+                if isinstance(error, AppError) and error.code != "PROVIDER_RETRY_BLOCKED"
+                else "PROVIDER_TEMPORARY"
+                if status == 503
                 else "PROVIDER_FORBIDDEN"
                 if status == 403
                 else "PROVIDER_TIMEOUT"
@@ -459,6 +482,48 @@ def generate_structured(
                 "Mô hình chưa xử lý được yêu cầu. "
                 "Vui lòng kiểm tra trạng thái kết nối hoặc cấu hình.",
             ) from None
+
+
+def knowledge_available() -> bool:
+    """Không probe mạng: 403 hoặc chưa có bằng chứng truy cập thì không tự fallback."""
+    if not get_settings().knowledge_enabled:
+        return False
+    with db.get_engine().connect() as connection:
+        last = connection.execute(
+            select(provider_usage.c.status)
+            .where(provider_usage.c.provider == "knowledge")
+            .order_by(provider_usage.c.created_at.desc(), provider_usage.c.id.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+    return last == "success"
+
+
+def can_fallback(
+    error: AppError, revision: dict[str, Any], provider: Provider, opted_in: bool
+) -> bool:
+    return (
+        opted_in
+        and provider == "gemini"
+        and error.code in ("PROVIDER_RATE_LIMIT", "PROVIDER_TEMPORARY")
+        and (
+            revision["data_classification"] == "synthetic"
+            or "knowledge" in revision.get("sharing_providers", [])
+        )
+        and knowledge_available()
+    )
+
+
+@router.get("/providers")
+def provider_status(_principal: PrincipalDependency) -> dict[str, Any]:
+    settings = get_settings()
+    available = knowledge_available()
+    return {
+        "default": "gemini",
+        "gemini_enabled": settings.gemini_enabled,
+        "knowledge_enabled": settings.knowledge_enabled,
+        "knowledge_fallback_available": available,
+        "knowledge_status": "previously_reachable" if available else "not_confirmed_or_unavailable",
+    }
 
 
 def missing_sql_fields(text: Any) -> list[str]:
