@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     app_origin: str = "http://localhost:18181"
     app_env: str = "development"
+    storage_root: str = "/srv/chatsar/storage"
+    reader_database_url: SecretStr = SecretStr("")
 
     @property
     def generation_allowed(self) -> bool:

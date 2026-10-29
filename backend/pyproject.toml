@@ -12,6 +12,9 @@ dependencies = [
   "google-auth>=2.40,<3",
   "requests>=2.32,<3",
   "httpx>=0.28,<1",
+  "openpyxl>=3.1,<4",
+  "defusedxml>=0.7,<1",
+  "python-multipart>=0.0.20,<1",
 ]
 
 [dependency-groups]
@@ -38,5 +41,5 @@ files = ["app"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["google.*", "requests.*"]
+module = ["google.*", "requests.*", "openpyxl.*", "defusedxml.*"]
 ignore_missing_imports = true

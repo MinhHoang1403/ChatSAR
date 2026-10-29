@@ -22,6 +22,7 @@ Mỗi literal phải giữ `raw_phrase`, `value_type`, `candidate_value`, và sa
 | GET/POST `/api/workspaces` | POST `{name}` + CSRF | List owner-scoped; create 201 `{id,name}` |
 | GET `/api/workspaces/{id}` | Session cookie | Select workspace đã kiểm owner; ngoài quyền trả 404 |
 | POST `/api/workspaces/{id}/datasets` | Multipart `file`, optional `sheet_name`, idempotency key + CSRF | 202 `{dataset_id,revision_id,job_id,status}`; kiểm owner trước đọc bytes |
+| GET `/api/workspaces/{id}/datasets` | Session | List catalog của workspace sau owner check |
 | GET `/api/datasets/{id}/preview` | `revision_id`, `offset`, `limit` | Columns + candidate types/rows/warnings; owner + revision checked |
 | POST `/api/datasets/{id}/confirm` | `{revision_id,columns,grain,timezone,units}` + CSRF | Atomic publish; 200 `{revision_id,status:"ready",row_count,checksum}`; lỗi row-level không bỏ hàng |
 | GET `/api/jobs/{id}` | Session | Trạng thái durable + lỗi công khai đã lọc; 404 cho object không thuộc owner |
@@ -52,3 +53,5 @@ Status: answered/partial/insufficient/clarify/unsupported/provider_unavailable/e
 `verified_result` chỉ khi execution và kiểm tra bằng chứng cần thiết đạt; partial/error/unsupported không được nâng trust. Follow-up không lấy assistant prose làm fact. Source revision thay đổi phải báo stale hoặc re-run rõ ràng; không tự dùng revision mới thay số liệu cũ.
 
 Các ví dụ/hợp đồng trên là baseline thiết kế nội bộ. Khi hiện thực, xuất OpenAPI từ code và kiểm tra khớp các hợp đồng này; không âm thầm sửa contract để vừa implementation.
+
+Upload hiện dedupe bằng `(workspace_id, source checksum)`; một file có một revision đã chọn sheet trong phạm vi này. GET preview nhận `sheet_name` để xem trước mà không ghi DB; confirm chốt `sheet_name`, `columns`, `timezone`, `grain`, `data_classification`. Mỗi column có `id`, `name`, `data_type`, `nullable`, `primary_key`, `null_values`, `date_format`, `decimal_separator`, `unit`. `null_values=[]` giữ ô trống TEXT; chọn `['']` rõ ràng mới đổi ô trống thành NULL. Published revision bất biến; confirm lần nữa trả 409. Không hỗ trợ chỉnh sửa nguồn/công bố revision khác qua cùng endpoint ở mốc này.

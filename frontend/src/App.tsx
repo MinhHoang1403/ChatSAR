@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, identity, record, workspaceList } from './api';
 import type { Identity, Workspace } from './api';
+import Datasets from './Datasets';
 
 export default function App() {
   const [me, setMe] = useState<Identity | null>(null);
@@ -125,6 +126,7 @@ export default function App() {
             <button disabled={busy || !name.trim()}>Tạo mới</button></div>
         </form>
         {!workspaces.length && <p>Chưa có không gian làm việc. Hãy tạo không gian đầu tiên.</p>}
+        {selected && <Datasets key={selected.id} workspaceId={selected.id} csrf={me.csrf_token} />}
       </>}
       <footer>ChatSAR · Dữ liệu có nguồn, câu trả lời có căn cứ</footer>
     </main>

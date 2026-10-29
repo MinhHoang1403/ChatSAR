@@ -6,6 +6,7 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: postgresql+psycopg://chatsar_app:${POSTGRES_APP_PASSWORD:?Set local app password}@db:5432/chatsar
+      READER_DATABASE_URL: postgresql+psycopg://chatsar_reader:${POSTGRES_READER_PASSWORD:?Set local reader password}@db:5432/chatsar
       CLOUD_CALLS_ALLOWED: ${CLOUD_CALLS_ALLOWED:-false}
       CLOUD_MAX_REQUESTS: ${CLOUD_MAX_REQUESTS:-0}
       CLOUD_BUDGET_USD: ${CLOUD_BUDGET_USD:-0}
@@ -19,6 +20,8 @@ services:
       APP_ENV: ${APP_ENV:-development}
     ports:
       - "127.0.0.1:${API_PORT:-18081}:8000"
+    volumes:
+      - uploads:/srv/chatsar/storage
     depends_on:
       db:
         condition: service_healthy
@@ -68,3 +71,4 @@ services:
 
 volumes:
   database:
+  uploads:

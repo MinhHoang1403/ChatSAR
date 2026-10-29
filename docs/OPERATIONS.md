@@ -17,7 +17,10 @@ npm.cmd ci --ignore-scripts --prefix frontend
 
 # Khởi động DB duy nhất và áp dụng migration.
 docker compose up -d --wait db
-Get-Content backend/migrations/foundation.sql -Raw -Encoding UTF8 | docker compose exec -T db psql -X -q -U chatsar_admin -d chatsar -v ON_ERROR_STOP=1
+foreach ($name in @('foundation','identity','datasets')) {
+  Get-Content "backend/migrations/$name.sql" -Raw -Encoding UTF8 | docker compose exec -T db psql -X -q -U chatsar_admin -d chatsar -v ON_ERROR_STOP=1
+  if ($LASTEXITCODE -ne 0) { throw "Migration thất bại: $name" }
+}
 
 # Chỉ build khi source/dependency/Dockerfile thay đổi.
 docker compose build
@@ -28,6 +31,8 @@ $env:CHATSAR_POSTGRES_TESTS = '1'
 py -3.11 -m unittest discover -s evaluations/tests -v
 py -3.11 -m evaluations.oracle
 py -3.11 -m evaluations.runtime
+py -3.11 -m evaluations.integration
+py -3.11 -m evaluations.persistence
 
 # Kiểm tra code trong backend: uv run --frozen ruff check app tests
 # Format: uv run --frozen ruff format --check app tests

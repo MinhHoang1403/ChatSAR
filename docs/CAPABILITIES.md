@@ -15,4 +15,6 @@ Không triển khai RAG, document ingestion, embedding/reranking, Hybrid/policy 
 
 Giới hạn ứng viên để kiểm thử: 20 MiB/file, 50.000 rows/sheet, 100 rows mặc định/500 rows tối đa, statement timeout 5 giây, IN tối đa 100 giá trị, cây filter sâu tối đa 8/nhiều nhất 100 nodes. Đây là giới hạn kỹ thuật đề xuất; latency/accuracy thực phải đo và được chốt trước nghiệm thu chất lượng cuối.
 
+Ingestion hiện giới hạn thêm 100 cột, 250.000 ô, 20 sheets và 100 MiB nội dung ZIP giải nén. CSV hỗ trợ UTF-8/BOM và UTF-16 có BOM, các delimiter comma/semicolon/tab/pipe; encoding khác báo không hỗ trợ. XLSX không thực thi công thức: phải chuyển thành giá trị; số được đọc từ XML gốc bằng Decimal, không đi qua float. Ngày mơ hồ cần người dùng chọn format; numeric có giới hạn 38 chữ số/exponent để kiểm soát tài nguyên. NULL sentinel được xác nhận ở review; ô trống TEXT không tự biến thành NULL. Không có tự động suy/approve quan hệ.
+
 Không coi health HTTP 200, tests mock hoặc oracle trên typed plans là bằng chứng hiểu câu hỏi tự nhiên đúng. SQL correctness và false refusal chấm trên câu hỏi in-scope, với denominator theo §19; không loại câu khó khỏi denominator để tăng tỷ lệ.

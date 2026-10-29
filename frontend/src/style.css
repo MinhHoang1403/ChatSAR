@@ -39,4 +39,16 @@ input, select { border: 1px solid #c9dbe8; background: #fff; border-radius: 8px;
 .workspace-form input { flex: 1; }
 .account { margin-top: auto; display: grid; gap: 10px; font-size: 13px; }
 .error { color: #963b35; background: #fff0ed; border: 1px solid #edcec8; padding: 15px; border-radius: 9px; margin: 20px 0; }
+.dataset-panel { margin: 35px 0; padding: 24px; background: #fff; border: 1px solid #d9e5ee; border-radius: 12px; }
+.upload-form { display: flex; gap: 16px; align-items: end; flex-wrap: wrap; margin: 24px 0; }
+.upload-form label { display: grid; gap: 12px; font-size: 14px; }
+.dataset-list { display: flex; gap: 10px; flex-wrap: wrap; }
+.table-scroll { overflow: auto; max-height: 430px; margin: 22px 0; border: 1px solid #d9e5ee; border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; text-align: left; }
+th { background: #edf4f9; position: sticky; top: 0; }
+th, td { padding: 12px; border-bottom: 1px solid #e7eef4; white-space: nowrap; }
+td input:not([type=checkbox]) { width: 130px; }
+.publish-fields { display: grid; gap: 16px; font-size: 14px; }
+.publish-fields label { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.publish-fields button { justify-self: start; background: #215b88; color: #fff; }
 @media (max-width: 800px) { .shell { grid-template-columns: 1fr; } aside { padding: 22px; border-right: 0; border-bottom: 1px solid #e1eaf1; flex-direction: row; justify-content: space-between; align-items: center; } .aside-note { display: none; } .connection { margin: 0; } main { padding: 48px 24px 28px; } .principles { grid-template-columns: 1fr; gap: 22px; } }

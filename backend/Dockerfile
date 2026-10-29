@@ -4,7 +4,8 @@ WORKDIR /srv/chatsar
 COPY requirements.lock ./
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock \
     && groupadd --gid 10001 chatsar \
-    && useradd --uid 10001 --gid chatsar --no-create-home chatsar
+    && useradd --uid 10001 --gid chatsar --no-create-home chatsar \
+    && mkdir /srv/chatsar/storage && chown 10001:10001 /srv/chatsar/storage
 COPY app ./app
 USER 10001:10001
 EXPOSE 8000

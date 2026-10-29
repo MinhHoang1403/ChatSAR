@@ -13,6 +13,8 @@ from starlette.responses import Response
 from app.auth import router as auth_router
 from app.config import get_settings
 from app.database import database_ready
+from app.datasets import recover_ingestion
+from app.datasets import router as dataset_router
 from app.errors import AppError
 from app.workspace import router as workspace_router
 
@@ -20,13 +22,20 @@ from app.workspace import router as workspace_router
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     get_settings()
+    if application.state.recover_jobs:
+        try:
+            recover_ingestion()
+        except SQLAlchemyError:
+            pass
     yield
 
 
-def create_app() -> FastAPI:
+def create_app(*, recover_jobs: bool = True) -> FastAPI:
     application = FastAPI(title="ChatSAR", version="0.1.0", lifespan=lifespan)
+    application.state.recover_jobs = recover_jobs
     application.include_router(auth_router)
     application.include_router(workspace_router)
+    application.include_router(dataset_router)
 
     @application.exception_handler(AppError)
     async def application_error(request: Request, error: AppError) -> JSONResponse:

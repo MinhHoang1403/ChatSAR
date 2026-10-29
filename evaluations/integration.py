@@ -11,7 +11,9 @@ def main() -> None:
         print(f"Integration: {path.name}", flush=True)
         subprocess.run(
             ["docker", "compose", "exec", "-T", "api", "python", "-"],
-            input=path.read_text(encoding="utf-8"), encoding="utf-8", text=True,
+            input=("import atexit\nfrom app.database import get_engine\n"
+                   "atexit.register(lambda: get_engine().dispose())\n"
+                   + path.read_text(encoding="utf-8")), encoding="utf-8", text=True,
             cwd=ROOT, check=True, timeout=120,
         )
 

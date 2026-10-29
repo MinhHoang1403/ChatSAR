@@ -24,10 +24,10 @@ def get_engine() -> Engine:
 def database_ready() -> bool:
     try:
         with get_engine().connect() as connection:
-            version = connection.execute(
-                text("SELECT name FROM app.schema_migrations WHERE name = 'foundation'")
-            ).scalar_one_or_none()
-        return version == "foundation"
+            versions = set(
+                connection.execute(text("SELECT name FROM app.schema_migrations")).scalars()
+            )
+        return {"foundation", "identity", "datasets"} <= versions
     except SQLAlchemyError:
         # Không trả URL, credential hoặc thông báo DB ra endpoint công khai.
         return False

@@ -48,7 +48,7 @@ def test_unauthenticated_and_cross_origin_fail_before_database(
 ) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://unused:unused@localhost/unused")
     get_settings.cache_clear()
-    with TestClient(create_app()) as client:
+    with TestClient(create_app(recover_jobs=False)) as client:
         assert client.get("/api/me").status_code == 401
         assert (
             client.post(

@@ -13,7 +13,7 @@ from app.main import create_app
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://unused:unused@localhost/unused")
     get_settings.cache_clear()
-    return TestClient(create_app())
+    return TestClient(create_app(recover_jobs=False))
 
 
 def test_live_does_not_require_database(

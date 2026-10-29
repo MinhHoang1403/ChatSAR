@@ -40,7 +40,11 @@ Reader thật bị từ chối INSERT/UPDATE/DELETE/DDL/TEMP/đọc metadata; re
 
 F1 đã đạt các điều kiện nền tảng, browser kiểm tra thủ công do chủ dự án xác nhận; browser automation vẫn BLOCKED độc lập.
 
-F2: đã triển khai users/sessions/workspaces, Google ID-token interface + nonce/CSRF, cookie/session expiry/revoke/rotation và owner guards; frontend login/workspaces shell. 17 backend unit tests PASS; 7 integration tests API với PostgreSQL thật PASS (Google identity chỉ mock trong harness). Không có endpoint đăng nhập test trong runtime. Google live/browser E2E vẫn BLOCKED vì chưa có Client ID. F3/F4 được phép tiếp tục qua harness theo chỉ đạo mới; không gọi toàn bộ F2 PASS.
+F2: đã triển khai users/sessions/workspaces, Google ID-token interface + nonce/CSRF, cookie/session expiry/revoke/rotation và owner guards; frontend login/workspaces shell. 17 backend unit tests PASS; 7 integration tests API với PostgreSQL thật PASS (Google identity chỉ mock trong harness). Session/workspace qua HTTP thật giữ nguyên sau restart. CI PASS tại `8dbdee9f2aa1326d85c245859dc5213e82398841`: https://github.com/MinhHoang1403/ChatSAR/actions/runs/40852418438 . Không có endpoint đăng nhập test trong runtime. Google live/browser E2E vẫn BLOCKED vì chưa có Client ID. F3/F4 được phép tiếp tục qua harness theo chỉ đạo mới; không gọi toàn bộ F2 PASS.
+
+F3: upload CSV/XLSX local, preview/chọn sheet, review types/NULL/khóa/đơn vị/timezone/grain và publish atomic thành bảng `data.r_<revision UUID>`. Original file trong volume `chatsar_uploads`; checksum và catalog ở PostgreSQL. Nguồn private mặc định; chỉ khi user xác nhận synthetic mới đủ điều kiện gửi metadata cho smoke test AI. Quan hệ hiện chưa cấu hình; không suy JOIN.
+
+Kiểm tra F3 local: 23 unit tests tổng cộng, 13 integration tests (7 auth + 6 ingestion) PASS. Harness HTTP thật chạy upload → preview → confirm → ready; sau restart session/workspace/file/checksum/catalog/typed rows giữ nguyên, gồm Decimal 0.10/0.20, TEXT 0007 và NULL. Duplicate key/invalid date không publish; source corrupt/cap bị từ chối; upload cùng file trả revision cũ; interrupted job chuyển failed rồi retry cùng revision. CI của phần F3 sẽ được đối chiếu sau push. Browser automation/Google live vẫn chưa được thực hiện, không lấy tests API làm browser PASS.
 
 Gemini/Knowledge live chưa chạy; 8 negative semantic cases đã lưu nhưng chưa chạy qua app. Không dùng oracle-only hoặc mock để báo semantic PASS. Kết quả milestone và CI sẽ cập nhật tại chính file này.
 
