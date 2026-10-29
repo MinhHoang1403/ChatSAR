@@ -6,15 +6,18 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from typing import Annotated, Any, cast
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Request, Response
+from google.auth.exceptions import GoogleAuthError, TransportError
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,8 +31,10 @@ from app.errors import AppError
 from app.schema import sessions, users
 
 router = APIRouter(prefix="/api")
+logger = logging.getLogger(__name__)
 SESSION_COOKIE = "chatsar_session"
 CHALLENGE_COOKIE = "chatsar_login_challenge"
+GOOGLE_CLOCK_SKEW_SECONDS = 10
 
 
 @dataclass(frozen=True)
@@ -66,19 +71,52 @@ def verify_google_identity(credential: str, nonce: str) -> dict[str, Any]:
         raise AppError(503, "GOOGLE_NOT_CONFIGURED", "Đăng nhập Google đang chờ cấu hình.")
     try:
         verifier = cast(Callable[..., dict[str, Any]], id_token.verify_oauth2_token)
-        claims = verifier(credential, GoogleRequest(), client_id, clock_skew_in_seconds=0)
-        if (
-            claims.get("aud") != client_id
-            or claims.get("iss") not in ("https://accounts.google.com", "accounts.google.com")
-            or not isinstance(claims.get("sub"), str)
-            or not 1 <= len(claims["sub"]) <= 255
-            or not isinstance(claims.get("exp"), (int, float))
-            or claims["exp"] <= time.time()
-            or not hmac.compare_digest(str(claims.get("nonce", "")), nonce)
-        ):
-            raise ValueError("Invalid claims")
-    except (ValueError, TypeError, KeyError):
+        claims = verifier(
+            credential,
+            partial(GoogleRequest(), timeout=5),
+            client_id,
+            clock_skew_in_seconds=GOOGLE_CLOCK_SKEW_SECONDS,
+        )
+    except TransportError:
+        logger.warning("Google identity verification unavailable: transport")
+        raise AppError(
+            503, "GOOGLE_UNAVAILABLE", "Chưa kết nối được Google. Vui lòng thử lại."
+        ) from None
+    except (GoogleAuthError, ValueError, TypeError, KeyError) as error:
+        # Chỉ log mã phân loại cố định; exception gốc có thể chứa toàn bộ token.
+        text = str(error).lower()
+        reason = next(
+            (
+                name
+                for name, phrase in (
+                    ("clock_early", "too early"),
+                    ("expired", "expired"),
+                    ("audience", "audience"),
+                    ("certificate", "certificate"),
+                    ("signature", "signature"),
+                    ("algorithm", "algorithm"),
+                    ("malformed", "segments"),
+                )
+                if phrase in text
+            ),
+            "verification",
+        )
+        logger.warning("Google identity rejected: %s", reason)
         raise AppError(401, "INVALID_GOOGLE_TOKEN", "Thông tin đăng nhập không hợp lệ.") from None
+    subject, expiry, claim_nonce = claims.get("sub"), claims.get("exp"), claims.get("nonce")
+    checks = {
+        "audience": claims.get("aud") == client_id,
+        "issuer": claims.get("iss") in ("https://accounts.google.com", "accounts.google.com"),
+        "subject": isinstance(subject, str) and 1 <= len(subject) <= 255,
+        "expiry": isinstance(expiry, (int, float)) and expiry > time.time(),
+        "nonce": isinstance(claim_nonce, str)
+        and hmac.compare_digest(claim_nonce.encode(), nonce.encode()),
+    }
+    if not all(checks.values()):
+        logger.warning(
+            "Google identity rejected claims: %s", ",".join(k for k, v in checks.items() if not v)
+        )
+        raise AppError(401, "INVALID_GOOGLE_TOKEN", "Thông tin đăng nhập không hợp lệ.")
     return claims
 
 

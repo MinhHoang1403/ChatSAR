@@ -40,7 +40,7 @@ Reader thật bị từ chối INSERT/UPDATE/DELETE/DDL/TEMP/đọc metadata; re
 
 F1 đã đạt các điều kiện nền tảng, browser kiểm tra thủ công do chủ dự án xác nhận; browser automation vẫn BLOCKED độc lập.
 
-F2: đã triển khai users/sessions/workspaces, Google ID-token interface + nonce/CSRF, cookie/session expiry/revoke/rotation và owner guards; frontend login/workspaces shell. 17 backend unit tests PASS; 7 integration tests API với PostgreSQL thật PASS (Google identity chỉ mock trong harness). Session/workspace qua HTTP thật giữ nguyên sau restart. CI PASS tại `8dbdee9f2aa1326d85c245859dc5213e82398841`: https://github.com/MinhHoang1403/ChatSAR/actions/runs/40852418438 . Không có endpoint đăng nhập test trong runtime. Google live/browser E2E vẫn BLOCKED vì chưa có Client ID. F3/F4 được phép tiếp tục qua harness theo chỉ đạo mới; không gọi toàn bộ F2 PASS.
+F2 foundation: users/sessions/workspaces, Google ID-token + nonce/CSRF, expiry/revoke/rotation và owner guards; 17 unit + 7 API integration PASS tại `8dbdee9f2aa1326d85c245859dc5213e82398841`, CI https://github.com/MinhHoang1403/ChatSAR/actions/runs/40852418438 . Ban đầu Google live BLOCKED, F3/F4 được chủ dự án cho phép tiếp tục qua harness. Sau khi chủ dự án bổ sung Client ID và kiểm thử browser, đã sửa canonical origin/clock skew. **Google login/logout/relogin + workspace live hiện PASS thủ công và có dữ liệu DB thật:** 2 Google users, 1 active session, 2 revoked sessions, 1 workspace tại lần đối chiếu; không ghi sub/email/token. Session/workspace persistence vẫn được kiểm bằng HTTP/restart harness. Không có runtime endpoint đăng nhập test.
 
 F3: upload CSV/XLSX local, preview/chọn sheet, review types/NULL/khóa/đơn vị/timezone/grain và publish atomic thành bảng `data.r_<revision UUID>`. Original file trong volume `chatsar_uploads`; checksum và catalog ở PostgreSQL. Nguồn private mặc định; chỉ khi user xác nhận synthetic mới đủ điều kiện gửi metadata cho smoke test AI. Quan hệ hiện chưa cấu hình; không suy JOIN.
 
@@ -52,7 +52,7 @@ Một đường Question → proposal → catalog/literal binding → SQLAlchemy
 
 | Kiểm tra cuối phần độc lập | Kết quả | Bằng chứng |
 |---|---|---|
-| Backend unit | PASS 56 tests | `uv run --frozen pytest -q` trong backend; gồm contract/provider mock, canonical origin và transport SDK thật với mạng bị cấm |
+| Backend unit | PASS 61 tests | `uv run --frozen pytest -q` trong backend; gồm canonical origin, token RSA ký thật/clock window và transport SDK với mạng bị cấm |
 | Lint/format/mypy | PASS | `ruff check app tests`, `ruff format --check app tests`, `mypy` strict, 14 app modules |
 | PostgreSQL/API integration | PASS 18 tests | `python -m evaluations.integration`: 7 auth + 11 ingestion/query/chat; provider chỉ mock trong harness |
 | Independent oracle | PASS 25 cases | `python -m evaluations.oracle`; gold SQL không import compiler; manifest/checksums gốc không đổi |
@@ -62,8 +62,9 @@ Một đường Question → proposal → catalog/literal binding → SQLAlchemy
 | HTTP/Docker persistence | PASS | `python -m evaluations.persistence`; session/workspace/source/catalog/typed rows và lịch sử refusal còn sau restart; không gọi model |
 | Lịch sử answer model thật | PASS trên 2 ca đã trả đúng | `evaluations.model_live --restart` so sánh nguyên envelope/result refs/revision trước/sau restart, không gọi lại model |
 | Langfuse thật | PASS | Auth HTTP 200, Observations v2 HTTP 200, đọc lại các bước provider/binding/execution/answer cùng trace |
-| Google live + browser authenticated E2E | BLOCKED, đang kiểm tra | Client ID đã được cấu hình; đang xác minh lỗi ORIGIN_REJECTED khi đăng nhập; automation Cốc Cốc bị công cụ chặn URL policy |
-| CI F4 | Chờ đối chiếu sau push | Không suy từ CI của F3 sang F4 |
+| Google live + workspace browser | PASS thủ công + DB | Người dùng xác nhận, DB có users/session revoke/workspace thật sau sửa; không phải automated browser E2E |
+| Chat/result browser E2E | Chưa nghiệm thu | UI đã build; cần thao tác với nguồn synthetic và hạn mức model mới; automation Cốc Cốc vẫn bị chặn URL policy |
+| CI F4 core | PASS | `1a5692d69c797695c99f6d8e8d452e3656c5009e`, https://github.com/MinhHoang1403/ChatSAR/actions/runs/40900427055 ; phần sửa auth sau đó phải chạy CI riêng |
 
 Integration đã kiểm COUNT rows/non-null/distinct, SUM/AVG/MIN/MAX, NULL aggregate, Decimal, group/order/limit, AND/OR/IN, timestamp `[start,end)` theo timezone, literal chính xác, owner A/B, result ownership, idempotency/conflict, source chưa ready, stale context và raw SQL field bị chặn. Metamorphic test đảo thứ tự/thêm dòng ngoài filter giữ nguyên SUM. Chưa có JOIN, suy quan hệ, tự quy đổi đơn vị hoặc tự suy ngày đầu/cuối tháng từ ngôn ngữ.
 
@@ -96,8 +97,10 @@ Langfuse đọc lại trace `9b9246e1a14e141f903f27ed244afe10`: provider input/o
 
 ## Exit gate hiện tại
 
-**Phần triển khai F1–F4 đã có; chưa nghiệm thu toàn bộ Giai đoạn 1.** Google OAuth và browser E2E còn BLOCKED. Knowledge-live gặp 403. Chưa chạy toàn bộ development/regression/held-out/negative model benchmark; ba ca library held-out còn NOT_RUN, không tuning theo ca library_sum đã đo. Chưa có phép đo release accuracy/latency đầy đủ hoặc xác nhận số HTTP requests lịch sử của SDK. Giữ feature branch; không merge main, không sang Giai đoạn 2.
+**Phần triển khai F1–F4 đã có; chưa nghiệm thu toàn bộ Giai đoạn 1.** Google OAuth/workspace live đã xác minh; chat/result browser E2E chưa nghiệm thu. Knowledge-live gặp 403. Chưa chạy toàn bộ development/regression/held-out/negative model benchmark; ba ca library held-out còn NOT_RUN, không tuning theo ca library_sum đã đo. Chưa có phép đo release accuracy/latency đầy đủ hoặc xác nhận số HTTP requests lịch sử của SDK. Giữ feature branch; không merge main, không sang Giai đoạn 2.
 
 ## Google OAuth khi frontend/backend đã xác minh
 
 Frontend chính thức local: `http://localhost:18181`; backend trực tiếp: `http://127.0.0.1:18081`. Browser gọi API qua proxy cùng origin `http://localhost:18181/api`, nên không cần CORS đa origin. Google Identity Services dùng JS callback nhận ID token và POST cùng origin tới `/api/auth/google`, có CSRF cookie/token và nonce. Với chế độ popup callback này không dùng OAuth authorization-code redirect URI. Authorized JavaScript Origin cần khai báo đúng `http://localhost:18181`; không thêm đường dẫn `/api`. Không tạo/sửa OAuth client của ShopQuery.
+
+Live test đã phát hiện hai lỗi: mở frontend qua 127.0.0.1 khác APP_ORIGIN và token Google bị verifier báo clock_early với skew 0. Giao diện nay chuyển về origin chuẩn trước Google Login; backend vẫn từ chối origin khác. Verifier dùng dung sai iat/exp 10 giây của google-auth, sau đó app vẫn kiểm exp còn hiệu lực, aud/iss/sub/nonce. Unit test dùng chữ ký RSA thật, chỉ mock nguồn certificate: +5 giây chấp nhận, +60 giây/expired/tampered signature/wrong nonce từ chối. Certificate request timeout 5 giây; lỗi mạng trả 503 riêng; diagnostics chỉ log reason cố định, không log token/claims. Không thay đổi đồng hồ Windows.

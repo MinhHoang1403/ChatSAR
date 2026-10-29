@@ -35,6 +35,8 @@ Lỗi: `{error:{code,message},request_id}`. 400/422 malformed/validation, 401 un
 
 Cookie session: random opaque token ≥32 bytes, chỉ lưu hash trong DB, TTL ứng viên 24 giờ, revoke khi logout/rotation. `HttpOnly`, `SameSite=Lax`, `Secure` trên HTTPS; local HTTP chỉ localhost và được ghi rõ chế độ development. State-changing routes yêu cầu token CSRF gắn session và same-origin. Không dùng token tự tạo ở frontend thay Google login trong runtime; dependency override chỉ dành cho test.
 
+Google verifier cho phép clock skew tối đa 10 giây theo tham số chính thức google-auth để xử lý lệch đồng hồ nhỏ; không tắt chữ ký/iat/aud/iss/nonce. App tiếp tục kiểm expiry lớn hơn giờ hiện tại. Request certificate timeout 5 giây; transport failure trả 503 GOOGLE_UNAVAILABLE; token không hợp lệ trả 401. Log chỉ ghi mã reason đã lọc, không exception/token/claims gốc.
+
 ## Typed query và execution
 
 Model proposal: `task`, `table_id`, `source_revision_id`, `raw_user_spans`, `select_columns`, `aggregations`, `filters`, `group_by`, `order_by`, `limit`, `unresolved`. `task` có SQL/CLARIFY/UNSUPPORTED trong Phase 1. Strict enums, số lượng/depth caps; unknown fields/operators/tables bị từ chối.

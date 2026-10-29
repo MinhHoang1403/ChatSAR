@@ -47,6 +47,7 @@ F4 cụ thể hóa bằng một QueryPlan/binder/compiler, một adapter lựa c
 - SQLAlchemy Core SELECT: https://docs.sqlalchemy.org/en/20/core/selectable.html
 - Pydantic strict validation: https://docs.pydantic.dev/latest/concepts/strict_mode/
 - Google ID token/CSRF: https://developers.google.com/identity/gsi/web/guides/verify-google-id-token
+- Google-auth clock_skew_in_seconds (10 giây là lựa chọn nội bộ đã kiểm thử, không phải khuyến nghị mặc định của Google): https://google-auth.readthedocs.io/en/latest/reference/google.oauth2.id_token.html
 - Docker health dependencies: https://docs.docker.com/compose/how-tos/startup-order/
 - Gemini model (không chứng minh account access): https://ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite
 - Langfuse compatibility: https://langfuse.com/self-hosting/upgrade/versioning
