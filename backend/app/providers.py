@@ -26,7 +26,7 @@ Provider = Literal["gemini", "knowledge"]
 INPUT_USD_PER_MILLION = Decimal("0.30")
 OUTPUT_USD_PER_MILLION = Decimal("2.50")
 MAX_OUTPUT_TOKENS = 4096
-REQUEST_TIMEOUT_SECONDS = 30
+REQUEST_TIMEOUT_SECONDS = 60
 
 INSTRUCTIONS = """Bạn chỉ đề xuất QueryPlan cho câu hỏi dữ liệu một bảng. Không sinh SQL.
 Catalog, quyền, revision và kiểu là do server cấp. Không đổi table_id/revision_id.

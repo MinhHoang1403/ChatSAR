@@ -6,7 +6,7 @@ ChatSAR là MVP demo hỏi đáp dữ liệu bằng tiếng Việt, hướng đ�
 - **RAG:** tìm nội dung trong PDF/DOCX/TXT/Markdown rồi trả lời kèm trích dẫn nguồn.
 - **Hybrid:** kết hợp số liệu SQL với tài liệu giải thích hoặc đánh giá quy tắc ngưỡng đơn giản.
 
-**Trạng thái:** Phần triển khai F1–F4 nằm trên `feature/sql-foundation`: Google login/workspaces, upload/review/publish CSV/XLSX, typed SQL một bảng, chat/history/provenance và adapters Gemini/Knowledge. Google login/logout/workspace đã có xác nhận browser thủ công + DB thật. Có kết quả Gemini đúng oracle trên logistics và thư viện held-out, cùng tracing Langfuse thật; xem [bằng chứng, thất bại và gates](docs/PREFLIGHT.md). Chưa nghiệm thu toàn bộ Giai đoạn 1: chat/result browser E2E chưa đủ bằng chứng, Knowledge-live gặp 403 và benchmark đầy đủ chưa chạy. Các ngưỡng trong kế hoạch là đề xuất, không phải thành tích đã đạt. RAG/Hybrid dưới đây là mục tiêu các giai đoạn sau, chưa được triển khai.
+**Trạng thái:** Phần triển khai F1–F4 nằm trên `feature/sql-foundation`: Google login/workspaces, upload/review/publish CSV/XLSX, typed SQL một bảng, chat/history/provenance và adapters Gemini/Knowledge. Google login/logout/workspace đã có xác nhận browser thủ công + DB thật. Gemini có kết quả đúng oracle trên logistics và thư viện held-out; hai ca HTTP bổ sung có logistics PASS và hotel timeout. Tracing/persistence đã kiểm thật; xem [bằng chứng, thất bại và gates](docs/PREFLIGHT.md). Chưa nghiệm thu toàn bộ Giai đoạn 1: browser E2E chờ người dùng test sau, Knowledge bị 403 ở lần thử cuối, deadline mới và benchmark đầy đủ chưa nghiệm thu live. RAG/Hybrid là mục tiêu các giai đoạn sau, chưa được triển khai.
 
 ## Thiết kế dự kiến
 

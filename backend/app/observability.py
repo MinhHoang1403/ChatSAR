@@ -10,6 +10,7 @@ from urllib.parse import urlsplit, urlunsplit
 from langfuse import Langfuse
 
 from app.config import get_settings
+from app.errors import AppError
 
 
 @lru_cache
@@ -55,7 +56,13 @@ def observation(name: str, **metadata: Any) -> Iterator[Any]:
     except Exception as error:
         # Không giao exception gốc cho SDK vì có thể chứa SQL/giá trị riêng tư.
         annotate(
-            span, output={"status": "failed", "error_type": type(error).__name__}, level="ERROR"
+            span,
+            output={
+                "status": "failed",
+                "error_type": type(error).__name__,
+                "error_code": error.code if isinstance(error, AppError) else None,
+            },
+            level="ERROR",
         )
         raise
     finally:

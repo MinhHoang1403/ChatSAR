@@ -64,7 +64,7 @@ get_engine().dispose()
         req = urllib.request.Request(
             "http://127.0.0.1:18181/api" + path, data=data, headers=headers
         )
-        with urllib.request.urlopen(req, timeout=45) as response:
+        with urllib.request.urlopen(req, timeout=90) as response:
             return json.load(response)
 
     def publish(

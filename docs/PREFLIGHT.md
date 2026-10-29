@@ -52,7 +52,7 @@ Một đường Question → proposal → catalog/literal binding → SQLAlchemy
 
 | Kiểm tra cuối phần độc lập | Kết quả | Bằng chứng |
 |---|---|---|
-| Backend unit | PASS 63 tests | `uv run --frozen pytest -q` trong backend; gồm canonical origin, token RSA ký thật/clock window, hạn mức tổng/provider độc lập và transport SDK với mạng bị cấm |
+| Backend unit | PASS 65 tests | `uv run --frozen pytest -q` trong backend; gồm canonical origin, token RSA ký thật/clock window, hạn mức tổng/provider độc lập, transport SDK và tracing failure isolation |
 | Lint/format/mypy | PASS | `ruff check app tests`, `ruff format --check app tests`, `mypy` strict, 14 app modules |
 | PostgreSQL/API integration | PASS 18 tests | `python -m evaluations.integration`: 7 auth + 11 ingestion/query/chat; provider chỉ mock trong harness |
 | Independent oracle | PASS 25 cases | `python -m evaluations.oracle`; gold SQL không import compiler; manifest/checksums gốc không đổi |
@@ -63,8 +63,9 @@ Một đường Question → proposal → catalog/literal binding → SQLAlchemy
 | Lịch sử answer model thật | PASS trên 2 ca đã trả đúng | `evaluations.model_live --restart` so sánh nguyên envelope/result refs/revision trước/sau restart, không gọi lại model |
 | Langfuse thật | PASS | Auth HTTP 200, Observations v2 HTTP 200, đọc lại các bước provider/binding/execution/answer cùng trace |
 | Google live + workspace browser | PASS thủ công + DB | Người dùng xác nhận, DB có users/session revoke/workspace thật sau sửa; không phải automated browser E2E |
-| Chat/result browser E2E | Chưa nghiệm thu | UI đã build; cần thao tác với nguồn synthetic và hạn mức model mới; automation Cốc Cốc vẫn bị chặn URL policy |
+| Chat/result browser E2E | BLOCKED | Kiểm tra lại công cụ trả `The browser access host is unavailable`; người dùng yêu cầu tự test và sẽ test browser sau; HTTP không thay thế browser PASS |
 | CI F4 core | PASS | `1a5692d69c797695c99f6d8e8d452e3656c5009e`, https://github.com/MinhHoang1403/ChatSAR/actions/runs/40900427055 ; phần sửa auth sau đó phải chạy CI riêng |
+| CI auth + quota | PASS | `d94670e13a3fae94af25bf4f9e29d59a3a411555`: https://github.com/MinhHoang1403/ChatSAR/actions/runs/40902931948 ; `8f1d8951907364102036c61d6a02ecf0b386ae45`: https://github.com/MinhHoang1403/ChatSAR/actions/runs/40903381443 |
 
 Integration đã kiểm COUNT rows/non-null/distinct, SUM/AVG/MIN/MAX, NULL aggregate, Decimal, group/order/limit, AND/OR/IN, timestamp `[start,end)` theo timezone, literal chính xác, owner A/B, result ownership, idempotency/conflict, source chưa ready, stale context và raw SQL field bị chặn. Metamorphic test đảo thứ tự/thêm dòng ngoài filter giữ nguyên SUM. Chưa có JOIN, suy quan hệ, tự quy đổi đơn vị hoặc tự suy ngày đầu/cuối tháng từ ngôn ngữ.
 
@@ -74,9 +75,28 @@ Coverage guard đối chiếu các span và entity đã biết; không chứng m
 
 Cấu hình do chủ dự án cập nhật: cloud allowed, max 10 requests tổng, budget 10 USD; Gemini/Knowledge/Langfuse enabled tại lần chạy cuối. Không sửa `.env`, không dùng LlamaParse hay GPU BGE. Chủ dự án đã bổ sung Google Client ID; public config HTTP 200 xác nhận sự hiện diện và định dạng mà không in giá trị. Dependency thực: google-genai 2.34.0, langfuse 5.0.4; server Langfuse 4.70.1.
 
-Ledger có **10 reservations: Gemini 5, Knowledge 5**. Hai thử Gemini khi flag còn false bị chặn trước reserve/network, không tính là direct calls. Trình tự thử và failures được giữ trong `artifacts/model-live.json` local, không xóa/reset ledger.
+Tại mốc trước quyền bổ sung, ledger có **10 reservations: Gemini 5, Knowledge 5**. Hai thử Gemini khi flag còn false bị chặn trước reserve/network, không tính là direct calls. Trình tự thử và failures được giữ trong `artifacts/model-live.json` local, không xóa/reset ledger. Sau hai lượt bổ sung dưới đây, tổng là **12: Gemini 7, Knowledge 5**.
 
-Guard kiểm tổng reservations theo CLOUD_MAX_REQUESTS và từng provider theo cap 10 một cách độc lập; không chèn cap tổng 10 cứng khác cấu hình. Thay đổi này không tự cấp quyền chi tiêu: `.env` vẫn ở max 10, bộ đếm đã hết; mọi lượt bổ sung cần chủ dự án cấp rõ ràng. Tests với max 12 chỉ dùng DB giả lập để chứng minh không lẫn hai loại hạn mức.
+Guard kiểm tổng reservations theo CLOUD_MAX_REQUESTS và từng provider theo cap 10 một cách độc lập; không chèn cap tổng 10 cứng khác cấu hình. Thay đổi này không tự cấp quyền chi tiêu: tại mốc đó `.env` max 10 và bộ đếm đã hết; mọi lượt bổ sung cần chủ dự án cấp rõ ràng. Tests với max 12 dùng DB giả lập để chứng minh không lẫn hai loại hạn mức.
+
+**Quyền bổ sung sau báo cáo trên:** chủ dự án đã đồng ý cấp đúng 2 HTTP requests Gemini để nghiệm thu browser trên `logistics-browser.csv` và `hotel-browser.csv`, dự phòng dưới 0.04 USD. Người dùng tự đặt `.env` max requests 20/budget 20 USD; Codex giữ file đó và chỉ sử dụng hai lượt bổ sung được duyệt, không suy ra được quyền dùng hết 20. API đã nạp lại cấu hình; baseline ledger trước QA là 10 (Gemini 5, Knowledge 5). Kết quả browser phải đối chiếu DB/oracle trước khi cập nhật PASS, không chỉ dựa vào việc đã cấp hạn mức.
+
+### Hai lượt tự kiểm thử bổ sung — HTTP, không phải browser
+
+Người dùng yêu cầu Codex tự test và sẽ kiểm browser sau. Inventory công cụ trả browsers rỗng cùng lỗi `The browser access host is unavailable`; không dùng automation khác để vượt giới hạn URL policy của Cốc Cốc. Thực hiện qua proxy web chính thức và TestSession được kiểm soát, không impersonate Google user thật hoặc thêm endpoint test login. Hai lượt chạy trên phần app của commit `8f1d8951907364102036c61d6a02ecf0b386ae45` với timeout 30 giây; thay đổi deadline/tracing sau QA chỉ được kiểm thử offline trong vòng này.
+
+| CSV/câu hỏi | Kết quả thực tế | Bằng chứng |
+|---|---|---|
+| logistics-browser.csv — Tổng phí tại quận 3? | PASS `10.00`, numeric string; filter giữ nguyên `quận 3`; nguồn/rows/review khớp trước gọi model | revision `f12cec8a-fa7c-4c44-a650-b7ace245659f`, result `011a999c-784e-4430-bd7a-ddfd52f77203`, request `ec0480a6-5e25-41bc-bb7f-c1abacc68fd4`, trace `d084a77017adb6ae38aeb2577e2ea17f` |
+| hotel-browser.csv — Tổng tiền phòng? | FAIL ở provider: `PROVIDER_TIMEOUT` / APITimeoutError sau khoảng 30.25 s; không execute SQL, không tạo fact giả hoặc đổi timeout thành 0 | revision `95ce52d3-cdbb-4df0-ad13-6ee945e5cd14`, request `bae51264-b9be-481c-8809-54f454217c18`, trace `6a3cd664db8df92a9ba093875b9c300b` |
+
+Logistics: input/output 1911/444; provider latency 29.16 s, HTTP toàn luồng 29.49 s, SQL 22.36 ms. Hai checksums lần lượt `1571567605a122bd1e7eeb9883a2ee0e0f2563143a5326a2311f2590ef6aa006`, `60be8100bdc9e4285162366d0b4b5c5cafcc2e350d1cbaafd335184b7e163be5`. Expected Decimal độc lập là 10.00 và 300.15; không sửa expected theo response. GET result/history khớp envelope; sau restart nguyên stack, typed rows/source/checksum/history của cả hai lượt vẫn giữ nguyên, không gọi lại model. Harness đã dọn đúng test owner UUID và bảng/file của nó; dữ liệu Google user thật được giữ nguyên. Bằng chứng local đã lọc ở `artifacts/browser-qa.json`.
+
+Đã dùng đúng 2 reservations bổ sung, không gọi lại sau lỗi. Langfuse v2 trả HTTP 200 cho cả hai traces; ca logistics có provider → validation passed → execution → answered, ca hotel có APITimeoutError và answer provider_unavailable. Tổng hai vòng Gemini: 3/7 application attempts trả đúng, gồm logistics 2/4, hotel 0/2, library 1/1; cả 3 queries đã execute đều đúng gold. Đây là lịch sử có thay đổi contract/timeout giữa các vòng, không phải accuracy của một benchmark cố định hoặc 3 câu hỏi khác nhau. Knowledge vẫn 0 answered/5 attempts ở lần kiểm tra cuối; không retry Knowledge.
+
+Sau số đo sát trần 30 s, provider deadline đã đổi thành 60 s, nginx proxy_read_timeout và HTTP harness thành 90 s. Sửa này PASS offline/unit/integration/build; **chưa được xác nhận model-live khắc phục timeout**, vì hai lượt bổ sung đã dùng hết. Tracing error giữ mã AppError an toàn thay vì chỉ ghi tên exception; test bảo đảm lỗi tracing không thay kết quả nghiệp vụ hoặc ghi message riêng tư. Không sửa prompt, model, dữ liệu hoặc gold để che lỗi.
+
+Tổng chi phí ước tính từ mọi usage Gemini đã biết sau bổ sung khoảng **0.0055238 USD**; tổng reserve Gemini **0.0971122 USD**. Phần tăng có usage là 0.0016833 USD; lượt timeout không có usage nên chi phí thực chưa biết. Đây không phải hóa đơn và không coi thiếu usage là miễn phí. Agent dừng ở tổng 12 reservations dù cấu hình local là 20.
 
 | Ca model trả đúng | Oracle / actual | Revision nguồn / request |
 |---|---|---|
@@ -99,7 +119,7 @@ Langfuse đọc lại trace `9b9246e1a14e141f903f27ed244afe10`: provider input/o
 
 ## Exit gate hiện tại
 
-**Phần triển khai F1–F4 đã có; chưa nghiệm thu toàn bộ Giai đoạn 1.** Google OAuth/workspace live đã xác minh; chat/result browser E2E chưa nghiệm thu. Knowledge-live gặp 403. Chưa chạy toàn bộ development/regression/held-out/negative model benchmark; ba ca library held-out còn NOT_RUN, không tuning theo ca library_sum đã đo. Chưa có phép đo release accuracy/latency đầy đủ hoặc xác nhận số HTTP requests lịch sử của SDK. Giữ feature branch; không merge main, không sang Giai đoạn 2.
+**Phần triển khai F1–F4 đã có; chưa nghiệm thu toàn bộ Giai đoạn 1.** Google OAuth/workspace live đã xác minh; browser E2E BLOCKED bởi tool và để người dùng test sau. Hai ca HTTP bổ sung có 1 PASS, 1 provider timeout; deadline mới chưa được nghiệm thu live. Knowledge bị 403 ở lần thử cuối. Chưa chạy toàn bộ development/regression/held-out/negative model benchmark; ba ca library held-out còn NOT_RUN, không tuning theo ca library_sum đã đo. Chưa có phép đo release accuracy/latency đầy đủ hoặc xác nhận số HTTP requests lịch sử trước SDK guard. Đã dùng đủ 12 reservations trong quyền hiện tại, không tự gọi thêm. Giữ feature branch/PR nháp; không merge main, không sang Giai đoạn 2.
 
 ## Google OAuth khi frontend/backend đã xác minh
 
