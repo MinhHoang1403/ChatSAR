@@ -43,6 +43,24 @@ F4 cụ thể hóa bằng một QueryPlan/binder/compiler, một adapter lựa c
 
 ## Nguồn đã đối chiếu
 
+## Hoàn thiện Giai đoạn 1 — Workstream A, 30/10/2026
+
+Chủ dự án phê duyệt phạm vi trong yêu cầu “FINAL PHASE 1 IMPROVEMENT & ACCEPTANCE”: metadata nghiệp vụ đã xác nhận, value grounding, phát hiện cắt kết quả, AI Smart Data Setup và UI sáng xanh dương. Không sửa hai kế hoạch gốc. Giữ feature/sql-foundation và PR #1 nháp; không merge/sang Giai đoạn 2. Không có quyền generation mới: ledger lịch sử 12 reservations vẫn giữ nguyên.
+
+Baseline exact SHA `40be61a952eae81aba7a7bf02d09d5cb8e32cd0f`, local=remote, working tree sạch; CI push/PR SUCCESS; web/api/db healthy. Chạy lại: 65 unit, 18 integration (7 auth + 11 datasets/query/chat), 25 independent SQL oracle, 10 manifest/DB privilege tests PASS; mypy/ruff và frontend typecheck/build PASS.
+
+| Tầng | Bằng chứng và nguyên nhân | Thay đổi tối thiểu cần kiểm thử |
+|---|---|---|
+| Catalog/schema | ColumnReview chưa có description/aliases/role/mapping; prompt chỉ có name/type/unit | Bổ sung trong JSON columns hiện hữu; metadata bảng và quyền chia sẻ bằng migration additive, không sửa physical data |
+| Value grounding | Binder chỉ so typed raw phrase/candidate, chưa kiểm giá trị TEXT có trong nguồn | Tra cứu bounded bằng reader trên revision được cấp quyền; exact hoặc mapping đã xác nhận, không fuzzy |
+| Query planning/validation | coverage sao chép spans của cùng model; prose metric/population không ràng buộc phép tính | Bỏ trường trùng lặp khỏi schema provider; kiểm các tín hiệu cấu trúc hỗ trợ và giá trị đã phát hiện độc lập; không tuyên bố chứng minh mọi nghĩa tiếng Việt |
+| Execution/composition | compiler LIMIT trước fetch nên không biết có dòng thứ N+1; answer luôn answered | Probe N+1, cắt ở server và trả partial/truncated cho safety cap; phân biệt top N có chủ đích |
+| Provider | Hotel timeout 30 s; logistics provider 29.16 s, SQL 22.36 ms; deadline 60 s chưa live | Giảm schema/prompt lặp, giữ 60 s và một dispatch; không thêm lượt LLM hay tự retry |
+| Setup/UX | Người dùng đang phải review cấu hình kỹ thuật từng cột; chưa có AI setup | Local profile → đề xuất có quyền → validate toàn bảng → user confirm → publish hiện hữu; lỗi provider vẫn cho local review |
+
+Một lượt model là lựa chọn mặc định; so sánh hai cấu trúc bằng fixture offline chỉ đo được tính nhất quán/độ lớn schema, không suy ra accuracy, tokens hoặc latency model thật. Hai lượt cần bằng chứng live tốt hơn và ngân sách riêng nên chưa được chọn. Mục tiêu 90 semantic scenarios là bộ đánh giá, không phải quyền gọi cloud 90 lần. Case đã dùng phát triển không được gọi held-out.
+
+
 - PostgreSQL privileges: https://www.postgresql.org/docs/17/ddl-priv.html
 - SQLAlchemy Core SELECT: https://docs.sqlalchemy.org/en/20/core/selectable.html
 - Pydantic strict validation: https://docs.pydantic.dev/latest/concepts/strict_mode/
