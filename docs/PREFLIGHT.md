@@ -52,7 +52,7 @@ Một đường Question → proposal → catalog/literal binding → SQLAlchemy
 
 | Kiểm tra cuối phần độc lập | Kết quả | Bằng chứng |
 |---|---|---|
-| Backend unit | PASS 61 tests | `uv run --frozen pytest -q` trong backend; gồm canonical origin, token RSA ký thật/clock window và transport SDK với mạng bị cấm |
+| Backend unit | PASS 63 tests | `uv run --frozen pytest -q` trong backend; gồm canonical origin, token RSA ký thật/clock window, hạn mức tổng/provider độc lập và transport SDK với mạng bị cấm |
 | Lint/format/mypy | PASS | `ruff check app tests`, `ruff format --check app tests`, `mypy` strict, 14 app modules |
 | PostgreSQL/API integration | PASS 18 tests | `python -m evaluations.integration`: 7 auth + 11 ingestion/query/chat; provider chỉ mock trong harness |
 | Independent oracle | PASS 25 cases | `python -m evaluations.oracle`; gold SQL không import compiler; manifest/checksums gốc không đổi |
@@ -75,6 +75,8 @@ Coverage guard đối chiếu các span và entity đã biết; không chứng m
 Cấu hình do chủ dự án cập nhật: cloud allowed, max 10 requests tổng, budget 10 USD; Gemini/Knowledge/Langfuse enabled tại lần chạy cuối. Không sửa `.env`, không dùng LlamaParse hay GPU BGE. Chủ dự án đã bổ sung Google Client ID; public config HTTP 200 xác nhận sự hiện diện và định dạng mà không in giá trị. Dependency thực: google-genai 2.34.0, langfuse 5.0.4; server Langfuse 4.70.1.
 
 Ledger có **10 reservations: Gemini 5, Knowledge 5**. Hai thử Gemini khi flag còn false bị chặn trước reserve/network, không tính là direct calls. Trình tự thử và failures được giữ trong `artifacts/model-live.json` local, không xóa/reset ledger.
+
+Guard kiểm tổng reservations theo CLOUD_MAX_REQUESTS và từng provider theo cap 10 một cách độc lập; không chèn cap tổng 10 cứng khác cấu hình. Thay đổi này không tự cấp quyền chi tiêu: `.env` vẫn ở max 10, bộ đếm đã hết; mọi lượt bổ sung cần chủ dự án cấp rõ ràng. Tests với max 12 chỉ dùng DB giả lập để chứng minh không lẫn hai loại hạn mức.
 
 | Ca model trả đúng | Oracle / actual | Revision nguồn / request |
 |---|---|---|

@@ -181,6 +181,39 @@ def test_durable_budget_guard_denies_before_reserving(
     assert connection.execute.call_count <= 4
 
 
+@pytest.mark.parametrize("provider_count,accepted", [(5, True), (10, False)])
+def test_total_and_provider_limits_are_separate(
+    monkeypatch: pytest.MonkeyPatch, provider_count: int, accepted: bool
+) -> None:
+    settings = Settings(
+        database_url=SecretStr("postgresql://unused"),
+        cloud_calls_allowed=True,
+        cloud_max_requests=12,
+        cloud_budget_usd=Decimal("10"),
+    )
+    connection = MagicMock()
+    connection.execute.side_effect = [
+        Mock(),
+        Mock(scalar_one=lambda: 10),
+        Mock(scalar_one=lambda: provider_count),
+        Mock(scalar_one=lambda: Decimal(0)),
+        Mock(),
+    ]
+    engine = MagicMock()
+    engine.begin.return_value.__enter__.return_value = connection
+    monkeypatch.setattr(providers, "get_settings", lambda: settings)
+    monkeypatch.setattr(providers.db, "get_engine", lambda: engine)
+    if accepted:
+        assert (
+            providers.reserve_call("gemini", "gemini-3.5-flash-lite", Decimal("0.02")) is not None
+        )
+        assert connection.execute.call_count == 5
+    else:
+        with pytest.raises(AppError) as error:
+            providers.reserve_call("gemini", "gemini-3.5-flash-lite", Decimal("0.02"))
+        assert error.value.code == "CALL_LIMIT_REACHED"
+
+
 @pytest.mark.parametrize("failure", [503, 429, "timeout"])
 def test_real_sdk_transport_does_not_retry(
     monkeypatch: pytest.MonkeyPatch, failure: int | str

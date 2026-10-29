@@ -99,7 +99,7 @@ def reserve_call(provider: Provider, model: str, reserve: Decimal) -> Any:
             .select_from(provider_usage)
             .where(provider_usage.c.provider == provider)
         ).scalar_one()
-        if total >= min(10, settings.cloud_max_requests) or count >= 10:
+        if total >= settings.cloud_max_requests or count >= 10:
             raise provider_error("CALL_LIMIT_REACHED", "Đã đạt hạn mức kiểm thử mô hình được cấp.")
         spent = connection.execute(
             select(
