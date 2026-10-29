@@ -12,6 +12,8 @@ result_mode=bounded/all/top. SELECT đọc thêm một dòng (N+1); chỉ trả 
 
 Nguồn private giữ nguyên classification; owner có thể cấp sharing_providers cụ thể cho metadata/giá trị giới hạn và câu hỏi qua confirm. Synthetic giữ chính sách cũ. Không gửi toàn file/raw rows, không tự cấp quyền sang provider khác.
 
+POST `/api/datasets/{id}/setup`: body `{revision_id,sheet_name,use_ai:false,consent_metadata:false,provider:"gemini"}`; auth/CSRF/owner/needs_review bắt buộc. Local không network. AI cần consent_metadata=true và Idempotency-Key; chỉ gửi tên cột, kiểu và thống kê, không samples/raw rows. Response `{proposal:{description,grain,columns,notes},mode,error_code,validation_errors,row_count,checksum,sheet_name,metadata_status:"requires_owner_confirmation"}`. Proposal sai ID/type/key/mapping hoặc ngày mơ hồ bị loại, dùng local review. Provider timeout/schema/unavailable không chặn nhập liệu. Cùng key/body đọc lại response đã lưu; khác body 409; pending không gọi lại; restart đánh interrupted, yêu cầu mới có chủ đích. Không tự publish; user xem/chỉnh rồi gọi confirm hiện hữu. Quyền consent một lượt setup không tự trở thành quyền gửi câu hỏi/dữ liệu private tới provider.
+
 Baseline theo Implementation Plan §3, §5–7, §12, §16. Chỉ các endpoint thuộc milestone đã triển khai mới được công bố hoạt động. JSON dùng UTF-8; UUID được server kiểm tra; datetime ISO 8601 kèm timezone; giá trị NUMERIC trên wire là chuỗi thập phân, NULL là `null`, TEXT ID giữ zero đầu.
 
 ## Ranh giới tin cậy

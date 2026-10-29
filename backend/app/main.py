@@ -19,6 +19,7 @@ from app.datasets import recover_ingestion
 from app.datasets import router as dataset_router
 from app.errors import AppError
 from app.observability import flush_observations
+from app.setup import router as setup_router
 from app.workspace import router as workspace_router
 
 
@@ -41,6 +42,7 @@ def create_app(*, recover_jobs: bool = True) -> FastAPI:
     application.include_router(auth_router)
     application.include_router(workspace_router)
     application.include_router(dataset_router)
+    application.include_router(setup_router)
     application.include_router(conversation_router)
 
     @application.exception_handler(AppError)

@@ -269,6 +269,49 @@ def json_key(value: Any) -> tuple[str, str]:
     return type(value).__name__, str(value)
 
 
+def validate_rows(
+    parsed: ParsedTable, columns: list[ColumnReview], timezone: str
+) -> list[dict[str, Any]]:
+    """Dùng chung cho AI review và publish; không cho đề xuất vượt kiểm tra toàn bảng."""
+    rows: list[dict[str, Any]] = []
+    for index, raw in enumerate(parsed.rows, start=2):
+        row: dict[str, Any] = {"_source_row": index}
+        for column, value in zip(columns, raw, strict=True):
+            try:
+                if (
+                    column.data_type != "text"
+                    and isinstance(value, str)
+                    and re.fullmatch(r"[+-]?0\d+", value)
+                ):
+                    raise ValueError("Leading-zero identifier would change")
+                converted = typed_value(value, column, timezone)
+                if column.primary_key and converted is None:
+                    raise ValueError("NULL primary key")
+                row[column.id] = converted
+            except (ValueError, TypeError, ArithmeticError):
+                raise invalid(
+                    f"Dòng {index}: dữ liệu không khớp kiểu đã chọn ở cột {column.name}."
+                ) from None
+        rows.append(row)
+    primary = [c.id for c in columns if c.primary_key]
+    if primary and len({tuple(row[c] for c in primary) for row in rows}) != len(rows):
+        raise invalid("Khóa đã chọn có giá trị trùng lặp. Chưa công bố dữ liệu.")
+    for column in columns:
+        values = {row[column.id] for row in rows}
+        phrases: set[str] = set()
+        for mapping in column.value_mappings:
+            if mapping.phrase in phrases:
+                raise invalid("Mapping có tên gọi trùng lặp; cần xác nhận lại.")
+            phrases.add(mapping.phrase)
+            try:
+                target = typed_value(mapping.value, column, timezone)
+            except (ValueError, TypeError, ArithmeticError):
+                raise invalid("Mapping không khớp kiểu cột đã chọn.") from None
+            if target is None or target not in values:
+                raise invalid("Mapping phải trỏ tới một giá trị thật trong dữ liệu.")
+    return rows
+
+
 def typed_value(value: Any, review: ColumnReview, timezone: str) -> Any:
     if value is None or (isinstance(value, str) and value in review.null_values):
         if not review.nullable:

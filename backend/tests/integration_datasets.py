@@ -34,6 +34,108 @@ from app.tabular import wire
 
 
 class DatasetIntegration(unittest.TestCase):
+    def test_setup_local_permission_owner_and_publish(self) -> None:
+        uploaded = self.upload(b"code,amount\n0007,0.10\n0012,\n")
+        url = f"/api/datasets/{uploaded['dataset_id']}/setup"
+        body = {"revision_id": uploaded["revision_id"]}
+        with patch("app.setup.generate_structured") as generate:
+            local = self.client.post(url, json=body).json()
+            self.assertEqual(local["mode"], "local")
+            self.assertEqual(self.client.post(url, json={**body, "use_ai": True}).status_code, 422)
+            generate.assert_not_called()
+            self.as_user(self.token_b)
+            self.assertEqual(self.client.post(url, json=body).status_code, 404)
+            generate.assert_not_called()
+        self.as_user(self.token_a)
+        confirm = {**self.publish_input(self.preview(uploaded["dataset_id"])), **local["proposal"]}
+        confirm.pop("notes")
+        self.assertEqual(
+            self.client.post(
+                f"/api/datasets/{uploaded['dataset_id']}/confirm", json=confirm
+            ).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.preview(uploaded["dataset_id"])["rows"], [["0007", "0.10"], ["0012", None]]
+        )
+
+    def test_setup_ai_idempotency_no_raw_rows_and_provider_failure(self) -> None:
+        from app.errors import AppError
+
+        uploaded = self.upload(b"code,amount\n0007,0.10\n0012,0.20\n")
+        url = f"/api/datasets/{uploaded['dataset_id']}/setup"
+        body = {"revision_id": uploaded["revision_id"], "use_ai": True, "consent_metadata": True}
+        headers = {"Idempotency-Key": uuid4().hex}
+        with patch(
+            "app.setup.generate_structured",
+            side_effect=AppError(503, "PROVIDER_TIMEOUT", "unavailable"),
+        ) as generate:
+            first = self.client.post(url, json=body, headers=headers).json()
+            self.assertEqual(first["error_code"], "PROVIDER_TIMEOUT")
+            self.assertEqual(first["mode"], "local")
+            self.assertEqual(self.client.post(url, json=body, headers=headers).json(), first)
+            self.assertEqual(generate.call_count, 1)
+            payload = generate.call_args.args[0]
+            import json
+
+            self.assertNotIn("0007", json.dumps(payload))
+            self.assertNotIn("rows", payload)
+            self.assertEqual(
+                self.client.post(
+                    url, json={**body, "provider": "knowledge"}, headers=headers
+                ).status_code,
+                409,
+            )
+        self.assertEqual(self.preview(uploaded["dataset_id"])["status"], "needs_review")
+        self.assertEqual(
+            self.preview(uploaded["dataset_id"])["setup_proposal"]["status"], "complete"
+        )
+
+    def test_setup_invalid_proposal_falls_back_and_restart_is_explicit(self) -> None:
+        from app.setup import local_proposal
+        from app.tabular import read_table
+
+        content = b"code,amount\n0007,0.10\n0007,0.20\n"
+        uploaded = self.upload(content)
+        proposal = local_proposal(read_table(content, ".csv"), UUID(uploaded["revision_id"]))
+        proposal.columns[0].primary_key = True
+        url = f"/api/datasets/{uploaded['dataset_id']}/setup"
+        body = {"revision_id": uploaded["revision_id"], "use_ai": True, "consent_metadata": True}
+        with patch(
+            "app.setup.generate_structured",
+            return_value=Proposal(proposal, "gemini", "offline", None, None, 0, None),
+        ):
+            result = self.client.post(
+                url, json=body, headers={"Idempotency-Key": uuid4().hex}
+            ).json()
+        self.assertEqual(result["error_code"], "SETUP_PROPOSAL_REJECTED")
+        self.assertFalse(result["proposal"]["columns"][0]["primary_key"])
+        proposal.columns[0].primary_key = False
+        proposal.description = "Metadata do AI đề xuất, chờ người dùng xác nhận"
+        with patch(
+            "app.setup.generate_structured",
+            return_value=Proposal(proposal, "gemini", "offline", None, None, 0, None),
+        ):
+            accepted = self.client.post(
+                url, json=body, headers={"Idempotency-Key": uuid4().hex}
+            ).json()
+        self.assertEqual(accepted["mode"], "ai_proposal")
+        self.assertEqual(accepted["validation_errors"], [])
+        self.assertEqual(self.preview(uploaded["dataset_id"])["status"], "needs_review")
+        key = uuid4().hex
+        with db.get_engine().begin() as connection:
+            connection.execute(
+                update(revisions)
+                .where(revisions.c.id == UUID(uploaded["revision_id"]))
+                .values(setup_proposal={"status": "pending", "request_key": key})
+            )
+        recover_ingestion()
+        with patch("app.setup.generate_structured") as generate:
+            self.assertEqual(
+                self.client.post(url, json=body, headers={"Idempotency-Key": key}).status_code, 409
+            )
+            generate.assert_not_called()
+
     def test_limit_probe_partial_and_exact_values(self) -> None:
         uploaded = self.upload(b"code,amount\n0007,0.10\n0008,0.20\n0009,0.30\n")
         preview = self.preview(uploaded["dataset_id"])

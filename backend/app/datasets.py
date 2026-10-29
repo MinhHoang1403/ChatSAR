@@ -39,7 +39,16 @@ from app.auth import MutationDependency, Principal, PrincipalDependency
 from app.config import get_settings
 from app.errors import AppError
 from app.schema import datasets, jobs, revisions, workspaces
-from app.tabular import MAX_BYTES, ColumnReview, invalid, profile, read_table, typed_value, wire
+from app.tabular import (
+    MAX_BYTES,
+    ColumnReview,
+    invalid,
+    profile,
+    read_table,
+    typed_value,
+    validate_rows,
+    wire,
+)
 from app.workspace import owned_workspace
 
 router = APIRouter(prefix="/api")
@@ -122,6 +131,18 @@ def recover_ingestion() -> None:
         )
         for revision_id in ids:
             job_state(connection, revision_id, "failed", "INTERRUPTED")
+        pending = connection.execute(
+            select(revisions.c.id, revisions.c.setup_proposal).where(
+                revisions.c.setup_proposal.is_not(None)
+            )
+        ).all()
+        for revision_id, proposal in pending:
+            if proposal.get("status") == "pending":
+                connection.execute(
+                    update(revisions)
+                    .where(revisions.c.id == revision_id)
+                    .values(setup_proposal={**proposal, "status": "interrupted"})
+                )
 
 
 @router.get("/workspaces/{workspace_id}/datasets")
@@ -320,36 +341,7 @@ def publish_dataset(
             or len({c.name.strip().casefold() for c in body.columns}) != len(body.columns)
         ):
             raise invalid("Danh sách cột hoặc tên cột không khớp; cần kiểm tra lại preview.")
-        rows = []
-        for index, raw in enumerate(parsed.rows, start=2):
-            row: dict[str, Any] = {"_source_row": index}
-            for column, value in zip(body.columns, raw, strict=True):
-                try:
-                    converted = typed_value(value, column, body.timezone)
-                    if column.primary_key and converted is None:
-                        raise ValueError("NULL primary key")
-                    row[column.id] = converted
-                except (ValueError, TypeError, ArithmeticError):
-                    raise invalid(
-                        f"Dòng {index}: dữ liệu không khớp kiểu đã chọn ở cột {column.name}."
-                    ) from None
-            rows.append(row)
-        primary = [c.id for c in body.columns if c.primary_key]
-        if primary and len({tuple(row[c] for c in primary) for row in rows}) != len(rows):
-            raise invalid("Khóa đã chọn có giá trị trùng lặp. Chưa công bố dữ liệu.")
-        for column in body.columns:
-            values = {row[column.id] for row in rows}
-            phrases: set[str] = set()
-            for mapping in column.value_mappings:
-                if mapping.phrase in phrases:
-                    raise invalid("Mapping có tên gọi trùng lặp; cần xác nhận lại.")
-                phrases.add(mapping.phrase)
-                try:
-                    target = typed_value(mapping.value, column, body.timezone)
-                except (ValueError, TypeError, ArithmeticError):
-                    raise invalid("Mapping không khớp kiểu cột đã chọn.") from None
-                if target is None or target not in values:
-                    raise invalid("Mapping phải trỏ tới một giá trị thật trong dữ liệu.")
+        rows = validate_rows(parsed, body.columns, body.timezone)
         physical_name = "r_" + revision_id.hex
         types: dict[str, TypeEngine[Any]] = {
             "text": Text(),
