@@ -6,13 +6,15 @@ ChatSAR là MVP demo hỏi đáp dữ liệu bằng tiếng Việt, hướng đ�
 - **RAG:** tìm nội dung trong PDF/DOCX/TXT/Markdown rồi trả lời kèm trích dẫn nguồn.
 - **Hybrid:** kết hợp số liệu SQL với tài liệu giải thích hoặc đánh giá quy tắc ngưỡng đơn giản.
 
-**Trạng thái:** Đang lập kế hoạch, chưa có mã nguồn ứng dụng hoặc hệ thống để chạy. Thiết lập repository không phải phê duyệt bắt đầu triển khai. Các thông số và ngưỡng trong kế hoạch là đề xuất, chưa phải kết quả kiểm thử.
+**Trạng thái:** Đang triển khai Giai đoạn 1 trên `feature/sql-foundation`. Nền tảng React/FastAPI/PostgreSQL đã chạy qua Docker, oracle PostgreSQL độc lập đã được kiểm tra; xem [bằng chứng và gates](docs/PREFLIGHT.md). Chưa nghiệm thu ứng dụng hoàn chỉnh; Google Login live đang chờ Client ID. Các ngưỡng trong kế hoạch là đề xuất, không phải thành tích đã đạt.
 
 ## Thiết kế dự kiến
 
 Kiến trúc một ứng dụng chia module: React/TypeScript/Vite, FastAPI/Pydantic, PostgreSQL/pgvector, SQLAlchemy Core và Docker Compose. Kế hoạch có Google Login, Gemini/Knowledge, BGE reranker chạy local, LlamaParse có điều kiện và Langfuse project riêng. Tính tương thích và phiên bản phải được xác minh khi được giao triển khai.
 
-Ưu tiên giải pháp đơn giản nhất đáp ứng MVP; không tự mở rộng công nghệ. Cloud trả phí mặc định tắt, ngân sách bằng 0 đến khi được người dùng phê duyệt. ChatSAR độc lập với ShopQuery AI; không sửa source, dữ liệu hay dịch vụ của dự án khác.
+Ưu tiên giải pháp đơn giản nhất đáp ứng MVP; không tự mở rộng công nghệ. Cấu hình provider local được giữ nguyên; quyền gọi và hạn mức được kiểm tra riêng. Chủ dự án cho phép smoke tests Gemini/Knowledge có giới hạn, luôn áp dụng giới hạn cấu hình thấp hơn. ChatSAR độc lập với ShopQuery AI; không sửa source, dữ liệu hay dịch vụ của dự án khác.
+
+Web local: `http://localhost:18181`; hướng dẫn chạy và kiểm thử tại [OPERATIONS.md](docs/OPERATIONS.md). Chỉ có một Compose project `chatsar`, không cần bản sao source/test stack.
 
 ## Tài liệu và cách làm việc
 

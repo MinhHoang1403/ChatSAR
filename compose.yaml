@@ -1,0 +1,66 @@
+name: chatsar
+
+services:
+  api:
+    image: chatsar-api:local
+    build: ./backend
+    environment:
+      DATABASE_URL: postgresql+psycopg://chatsar_app:${POSTGRES_APP_PASSWORD:?Set local app password}@db:5432/chatsar
+      CLOUD_CALLS_ALLOWED: ${CLOUD_CALLS_ALLOWED:-false}
+      CLOUD_MAX_REQUESTS: ${CLOUD_MAX_REQUESTS:-0}
+      CLOUD_BUDGET_USD: ${CLOUD_BUDGET_USD:-0}
+      GEMINI_ENABLED: ${GEMINI_ENABLED:-false}
+      KNOWLEDGE_ENABLED: ${KNOWLEDGE_ENABLED:-false}
+      LLAMAPARSE_ENABLED: ${LLAMAPARSE_ENABLED:-false}
+      LANGFUSE_ENABLED: ${LANGFUSE_ENABLED:-false}
+    ports:
+      - "127.0.0.1:${API_PORT:-18081}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=4)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    mem_limit: 384m
+    cpus: 1.0
+    restart: unless-stopped
+  web:
+    image: chatsar-web:local
+    build: ./frontend
+    ports:
+      - "127.0.0.1:${WEB_PORT:-18181}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD-SHELL, "wget -q -O /dev/null http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
+    mem_limit: 128m
+    cpus: 0.5
+    restart: unless-stopped
+  db:
+    image: pgvector/pgvector:0.8.1-pg17-trixie@sha256:137f044b0efe3d57f39b972b9b53641b1f2045b99d879e298bbf514a25787dcf
+    environment:
+      POSTGRES_USER: chatsar_admin
+      POSTGRES_DB: chatsar
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set local admin password}
+      CHATSAR_APP_PASSWORD: ${POSTGRES_APP_PASSWORD:?Set local app password}
+      CHATSAR_READER_PASSWORD: ${POSTGRES_READER_PASSWORD:?Set local reader password}
+    volumes:
+      - database:/var/lib/postgresql/data
+      - ./infra/bootstrap.sh:/docker-entrypoint-initdb.d/010-chatsar.sh:ro
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U chatsar_admin -d chatsar]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    mem_limit: 512m
+    cpus: 1.0
+    restart: unless-stopped
+
+volumes:
+  database:

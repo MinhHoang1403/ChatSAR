@@ -1,0 +1,68 @@
+name: Verify ChatSAR
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.19.0'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install locked dependencies
+        run: |
+          python -m pip install uv==0.12.15
+          uv sync --project backend --frozen
+          npm ci --ignore-scripts --prefix frontend
+      - name: Lint, types and unit tests
+        working-directory: backend
+        run: |
+          uv run --frozen ruff check app tests
+          uv run --frozen ruff format --check app tests
+          uv run --frozen mypy
+          uv run --frozen pytest -q
+      - name: Frontend types and production build
+        working-directory: frontend
+        run: |
+          npm run typecheck
+          npm run build
+      - name: Create isolated local configuration
+        run: |
+          python - <<'PY'
+          import re
+          import secrets
+          from pathlib import Path
+          text = Path('.env.example').read_text()
+          for key in ['POSTGRES_ADMIN_PASSWORD', 'POSTGRES_APP_PASSWORD', 'POSTGRES_READER_PASSWORD', 'SESSION_SECRET']:
+              text = re.sub(rf'(?m)^{key}=.*$', f'{key}={secrets.token_hex(32)}', text)
+          Path('.env').write_text(text)
+          PY
+      - name: PostgreSQL migration and independent oracle
+        run: |
+          docker compose up -d --wait db
+          docker compose exec -T db psql -X -q -U chatsar_admin -d chatsar -v ON_ERROR_STOP=1 < backend/migrations/foundation.sql
+          CHATSAR_POSTGRES_TESTS=1 python -m unittest discover -s evaluations/tests -v
+          python -m evaluations.oracle
+      - name: Build and check exact containers
+        run: |
+          docker compose build
+          docker compose up -d --wait
+          python -m evaluations.runtime
+          docker compose restart
+          docker compose up -d --wait
+          python -m evaluations.runtime
+      - name: Stop only this runner's ChatSAR containers
+        if: always()
+        run: docker compose down

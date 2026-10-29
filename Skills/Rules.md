@@ -2,7 +2,7 @@
 
 Áp dụng cho toàn bộ dự án tại `C:\Work\ChatSAR`, trong mọi phiên Codex. Đây là nguồn quy tắc chính; `AGENTS.md` chỉ dẫn đến file này, không nhân bản toàn bộ nội dung.
 
-**Trạng thái hiện tại:** Chỉ được thiết lập quy tắc, tài liệu và Git/GitHub. Chưa được lập trình ứng dụng, tạo Docker container, triển khai hệ thống hoặc gọi API trả phí. Chỉ bắt đầu milestone tiếp theo khi người dùng giao rõ phạm vi và phê duyệt các điều kiện liên quan.
+**Trạng thái hiện tại:** Chủ dự án đã cho phép kiểm tra tiền triển khai và Giai đoạn 1 (F1 → F4) ngày 29/10/2026, theo kế hoạch và nghiệm thu từng mốc. Giữ Giai đoạn 1 trên feature branch đến khi được duyệt merge. Điều kiện bên ngoài thiếu phải ghi BLOCKED và chỉ tiếp tục phần độc lập an toàn; xem `docs/DECISIONS.md`, `docs/PREFLIGHT.md`. Được smoke test tối đa 10 calls Gemini và 10 Knowledge, hoặc hạn mức cấu hình thấp hơn; không sửa .env/flags enabled, không gọi LlamaParse trong Phase 1. Được tiếp tục F3/F4 qua test harness an toàn khi Google live BLOCKED; không tự sang Giai đoạn 2 hoặc tác động dự án khác.
 
 **Tài liệu thực tế trong repository:** [Implementation Plan](../docs/IMPLIMENT_PLAN.md) và [Master Plan](../docs/ChatSAR_MASTER_PLAN.md). Giữ nguyên tên file hiện có; các tên kế hoạch cũ được nhắc trong nội dung không phải yêu cầu tạo bản sao. Trước lần sửa mã nguồn đầu tiên, đọc toàn bộ Implementation Plan theo mục 0.1 của tài liệu; các nhiệm vụ sau đọc lại phần liên quan.
 

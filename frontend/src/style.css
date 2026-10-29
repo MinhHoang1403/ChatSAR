@@ -1,0 +1,28 @@
+:root { font-family: 'Segoe UI', system-ui, sans-serif; color: #16344b; background: #f5f8fb; font-synthesis: none; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: inherit; text-decoration: none; }
+.shell { min-height: 100vh; display: grid; grid-template-columns: 260px 1fr; }
+aside { padding: 42px 28px; background: #fff; border-right: 1px solid #e1eaf1; display: flex; flex-direction: column; }
+.brand { display: flex; gap: 12px; align-items: center; font-size: 25px; font-weight: 750; letter-spacing: -1px; }
+.brand-mark { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; background: #215b88; color: #fff; font-size: 24px; }
+.aside-note { font-size: 14px; color: #748593; line-height: 1.8; margin-top: 35px; }
+.connection { margin-top: auto; display: flex; gap: 8px; align-items: center; font-size: 12px; color: #637888; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: #b3bdc6; flex-shrink: 0; }
+.dot.available { background: #36977d; }
+.dot.unavailable { background: #c78440; }
+main { width: min(100%, 1090px); padding: 92px 8% 35px; }
+.eyebrow { font-size: 11px; letter-spacing: 2px; color: #5f7e94; font-weight: 700; }
+h1 { margin: 25px 0 22px; font-size: clamp(40px, 4.6vw, 68px); font-weight: 650; line-height: 1.12; letter-spacing: -2px; }
+h1 span { color: #327cb4; }
+.intro { font-size: 17px; line-height: 1.85; color: #607789; max-width: 650px; }
+.notice { display: flex; gap: 20px; background: #e8f1f8; border: 1px solid #d4e4f0; padding: 26px; border-radius: 14px; margin-top: 38px; }
+.notice-icon { font-size: 27px; color: #327cb4; }
+h2 { margin: 0 0 9px; font-size: 17px; font-weight: 650; }
+.notice p { margin: 0; color: #607789; font-size: 14px; line-height: 1.8; }
+.principles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; margin: 48px 0 55px; }
+.principles span { font-size: 12px; color: #8ba7bb; }
+h3 { font-size: 15px; margin: 14px 0 9px; }
+.principles p { font-size: 13px; color: #718595; line-height: 1.7; margin: 0; }
+footer { font-size: 11px; color: #95a6b3; border-top: 1px solid #e0e9f0; padding-top: 22px; }
+@media (max-width: 800px) { .shell { grid-template-columns: 1fr; } aside { padding: 22px; border-right: 0; border-bottom: 1px solid #e1eaf1; flex-direction: row; justify-content: space-between; align-items: center; } .aside-note { display: none; } .connection { margin: 0; } main { padding: 48px 24px 28px; } .principles { grid-template-columns: 1fr; gap: 22px; } }
