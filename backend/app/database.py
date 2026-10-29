@@ -40,7 +40,7 @@ def database_ready() -> bool:
             versions = set(
                 connection.execute(text("SELECT name FROM app.schema_migrations")).scalars()
             )
-        return {"foundation", "identity", "datasets", "conversation"} <= versions
+        return {"foundation", "identity", "datasets", "conversation", "catalog"} <= versions
     except SQLAlchemyError:
         # Không trả URL, credential hoặc thông báo DB ra endpoint công khai.
         return False

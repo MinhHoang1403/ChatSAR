@@ -38,9 +38,13 @@ Giữ nguyên TEXT ID/zero đầu, raw phrase, literal, NULL/zero; không đổi
 value_type phải đúng kiểu cột. candidate_value là chuỗi canonical: số thập phân dấu chấm,
 ngày ISO, timestamp ISO có timezone, boolean true/false, text đúng nguyên văn.
 raw_phrase phải có thật trong question hoặc verified_context.question; không bịa.
-Ghi intent/entities/metric/population và raw_user_spans/coverage có căn cứ từ câu hỏi.
-raw_user_spans phải bao phủ toàn bộ câu hỏi; coverage liệt kê đúng các span đã biểu diễn.
-entities chỉ gồm các raw_phrase dùng làm giá trị lọc; mọi entity phải có filter tương ứng.
+raw_user_spans là các đoạn nguyên văn bao phủ câu hỏi.
+Đây chỉ là đề xuất, không chứng minh đúng nghĩa.
+Metric được biểu diễn bằng aggregations và column_id; không lặp lại bằng mô tả văn xuôi.
+Đối chiếu tên, description, aliases, role, unit và grain; cột mơ hồ phải CLARIFY.
+Giá trị chỉ exact hoặc value_mappings đã được chủ dữ liệu xác nhận; không fuzzy hoặc đoán.
+result_mode=top khi xếp hạng và phải có order_by/limit.
+Dùng all cho danh sách đầy đủ; bounded cho xem một phần.
 Chỉ chuyển ngày ISO hoặc format cột đã duyệt; khoảng tháng chưa có ngày cụ thể dùng CLARIFY.
 COUNT_ROWS không có column_id. COUNT_NON_NULL khác COUNT_DISTINCT và COUNT_ROWS.
 Các select_columns khi có aggregate phải trùng group_by. output_id là tên chức năng đơn giản.
@@ -162,6 +166,8 @@ def integer_or_none(value: Any) -> int | None:
 
 def response_schema() -> dict[str, Any]:
     schema = QueryPlan.model_json_schema()
+    for key in ("intent", "entities", "metric", "population", "coverage"):
+        schema["properties"].pop(key, None)
 
     def simplify(node: Any) -> None:
         if isinstance(node, dict):
@@ -188,7 +194,9 @@ def generate_proposal(
     context: dict[str, Any] | None = None,
 ) -> Proposal:
     settings = get_settings()
-    if revision["data_classification"] != "synthetic":
+    if revision["data_classification"] != "synthetic" and provider not in revision.get(
+        "sharing_providers", []
+    ):
         raise provider_error(
             "DATA_PERMISSION_REQUIRED", "Dữ liệu riêng tư chưa được phép gửi tới mô hình."
         )
@@ -207,8 +215,25 @@ def generate_proposal(
         "source_revision_id": str(revision["id"]),
         "timezone": revision["timezone"],
         "grain": revision["grain"],
+        "description": revision.get("description", ""),
+        "grounding_values": revision.get("grounding_values", {}),
         "columns": [
-            {k: c.get(k) for k in ("id", "name", "data_type", "nullable", "unit")}
+            {
+                k: c.get(k)
+                for k in (
+                    "id",
+                    "name",
+                    "data_type",
+                    "nullable",
+                    "unit",
+                    "description",
+                    "aliases",
+                    "role",
+                    "value_mappings",
+                    "aggregation_policy",
+                    "primary_key",
+                )
+            }
             for c in revision["columns"]
         ],
     }
@@ -219,7 +244,7 @@ def generate_proposal(
             "catalog": catalog,
             "question": question,
             "verified_context": context,
-            "response_contract": schema,
+            **({"response_contract": schema} if provider == "knowledge" else {}),
         },
         ensure_ascii=False,
     )
@@ -305,7 +330,11 @@ def generate_proposal(
                 request_id = body.get("id")
             if not isinstance(text, str) or len(text.encode()) > 65536:
                 raise ValueError("Invalid provider output")
-            plan = QueryPlan.model_validate_json(text)
+            payload = json.loads(text)
+            if isinstance(payload, dict) and "coverage" not in payload:
+                # Tương thích lịch sử nội bộ; không coi sao chép này là kiểm chứng ngữ nghĩa.
+                payload["coverage"] = payload.get("raw_user_spans", [])
+            plan = QueryPlan.model_validate(payload)
             latency = (perf_counter() - started) * 1000
             cost = None
             if provider == "gemini" and input_tokens is not None and output_tokens is not None:

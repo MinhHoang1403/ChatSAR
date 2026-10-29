@@ -1,5 +1,17 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## Bổ sung được phê duyệt 30/10/2026
+
+Catalog columns giữ trong JSON hiện hữu, bổ sung description/aliases/role/value_mappings và aggregation_policy. Chỉ sau owner confirm/publish mới là metadata tin cậy; mapping phải đúng kiểu, có giá trị trong toàn bảng. Migration `catalog` chỉ thêm description, sharing_providers và setup_proposal; giá trị mặc định giữ nguyên metadata/rows/permissions cũ. Rollback ứng dụng không cần DROP cột; không downgrade/xóa dữ liệu. Preview trả lại metadata và quyền chia sẻ để review.
+
+Schema provider bỏ intent/entities/metric/population/coverage dạng prose trùng lặp; metric liên kết trực tiếp operator/column_id. QueryPlan nội bộ vẫn đọc lịch sử cũ, không coi coverage là semantic proof. Gemini không nhận JSON Schema hai lần (schema chỉ trong response_format); Knowledge vẫn nhận contract trong prompt vì constrained decoding chưa nghiệm thu. Một request/model, không thêm vòng tự phản biện.
+
+Backend đọc tối đa 21 giá trị TEXT/cột từ revision được cấp quyền; chỉ danh sách <=20 mới đưa vào grounding_values. Không coi danh sách bị giới hạn là toàn bộ dữ liệu. Exact mentions được đối chiếu với filter; top N phải có order/limit/mode khớp. Đây là tín hiệu cấu trúc hữu hạn, không phải parser tiếng Việt tổng quát. Unsupported time/unit inference vẫn cần clarify. Trong đường hỏi model chính thức, TEXT EQ/NE/IN phải có giá trị thật (hoặc mapping owner đã xác nhận); không tìm thấy thì clarify. Compiler SQL thuần vẫn giữ empty-set/NULL semantics để kiểm oracle, không đổi SQL SUM(empty) thành zero.
+
+result_mode=bounded/all/top. SELECT đọc thêm một dòng (N+1); chỉ trả tối đa N<=500. Khi safety cap cắt dữ liệu, envelope partial, facts.truncated=true, trust=reference_only; không làm premise follow-up. Top N có chủ đích giữ answered, facts ghi mode/limit. Không tuyên bố đã trả toàn bộ khi bị cắt.
+
+Nguồn private giữ nguyên classification; owner có thể cấp sharing_providers cụ thể cho metadata/giá trị giới hạn và câu hỏi qua confirm. Synthetic giữ chính sách cũ. Không gửi toàn file/raw rows, không tự cấp quyền sang provider khác.
+
 Baseline theo Implementation Plan §3, §5–7, §12, §16. Chỉ các endpoint thuộc milestone đã triển khai mới được công bố hoạt động. JSON dùng UTF-8; UUID được server kiểm tra; datetime ISO 8601 kèm timezone; giá trị NUMERIC trên wire là chuỗi thập phân, NULL là `null`, TEXT ID giữ zero đầu.
 
 ## Ranh giới tin cậy

@@ -47,6 +47,20 @@ class ColumnReview(BaseModel):
     date_format: Literal["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"] = "%Y-%m-%d"
     decimal_separator: Literal[".", ","] = "."
     unit: str | None = Field(default=None, max_length=80)
+    description: str = Field(default="", max_length=500)
+    aliases: list[str] = Field(default_factory=list, max_length=12)
+    role: Literal["identifier", "status", "time", "amount", "quantity", "name", "other"] = "other"
+    value_mappings: list[ValueMapping] = Field(default_factory=list, max_length=50)
+    aggregation_policy: Literal["unspecified", "additive", "non_additive"] = "unspecified"
+
+
+class ValueMapping(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
+    phrase: str = Field(min_length=1, max_length=120)
+    value: str = Field(max_length=500)
+
+
+ColumnReview.model_rebuild()
 
 
 def invalid(message: str) -> AppError:
@@ -239,7 +253,8 @@ def profile(parsed: ParsedTable, revision_id: UUID) -> list[dict[str, Any]]:
                 "null_count": sum(v is None for v in values),
                 "empty_count": sum(v == "" for v in values),
                 "duplicate_count": len(nonnull) - len(distinct),
-                "candidate_key": len(nonnull) == len(values) == len(distinct),
+                "candidate_key": len(nonnull) == len(values) == len(distinct)
+                and all(v != "" for v in values),
                 "primary_key": False,
                 "null_values": [],
                 "unit": None,

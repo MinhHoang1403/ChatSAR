@@ -34,6 +34,92 @@ from app.tabular import wire
 
 
 class DatasetIntegration(unittest.TestCase):
+    def test_limit_probe_partial_and_exact_values(self) -> None:
+        uploaded = self.upload(b"code,amount\n0007,0.10\n0008,0.20\n0009,0.30\n")
+        preview = self.preview(uploaded["dataset_id"])
+        body = self.publish_input(preview)
+        self.assertEqual(
+            self.client.post(
+                f"/api/datasets/{uploaded['dataset_id']}/confirm", json=body
+            ).status_code,
+            200,
+        )
+        with db.get_engine().connect() as connection:
+            revision = dict(
+                connection.execute(
+                    select(revisions).where(revisions.c.id == UUID(uploaded["revision_id"]))
+                )
+                .mappings()
+                .one()
+            )
+        code = body["columns"][0]["id"]
+        payload = {
+            "task": "SQL",
+            "table_id": uploaded["dataset_id"],
+            "source_revision_id": uploaded["revision_id"],
+            "raw_user_spans": ["Danh sách"],
+            "coverage": ["Danh sách"],
+            "select_columns": [code],
+            "limit": 2,
+            "result_mode": "all",
+        }
+        compiled = compile_query(QueryPlan.model_validate(payload), revision, "Danh sách")
+        rows, _ = execute_query(compiled)
+        self.assertTrue(compiled.truncated)
+        self.assertEqual(len(rows), 2)
+        chat = self.client.post(
+            "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+        ).json()["id"]
+        with patch(
+            "app.conversation.generate_proposal",
+            return_value=Proposal(
+                QueryPlan.model_validate(payload), "gemini", "offline", None, None, 0, None
+            ),
+        ):
+            answer = self.client.post(
+                f"/api/conversations/{chat}/messages",
+                json={"question": "Danh sách", "dataset_revision_id": uploaded["revision_id"]},
+                headers={"Idempotency-Key": uuid4().hex},
+            ).json()
+        self.assertEqual(answer["status"], "partial")
+        self.assertEqual(answer["facts"]["trust"], "reference_only")
+        self.assertTrue(answer["facts"]["truncated"])
+        payload["filters"] = {
+            "operator": "EQ",
+            "column_id": code,
+            "literal": {"raw_phrase": "9999", "candidate_value": "9999", "value_type": "text"},
+        }
+        payload["raw_user_spans"] = payload["coverage"] = ["9999"]
+        from app.errors import AppError
+        from app.query import ground_catalog
+
+        with self.assertRaises(AppError) as error:
+            execute_query(
+                compile_query(QueryPlan.model_validate(payload), ground_catalog(revision), "9999")
+            )
+        self.assertEqual(error.exception.code, "QUERY_CLARIFY")
+
+    def test_catalog_mappings_must_exist_and_metadata_persists(self) -> None:
+        uploaded = self.upload(b"code,amount\n0007,0.10\n0008,0.20\n")
+        body = self.publish_input(self.preview(uploaded["dataset_id"]))
+        body["description"] = "Bảng kiểm thử metadata"
+        body["columns"][0].update(
+            {
+                "description": "Mã đối tượng",
+                "role": "identifier",
+                "aliases": ["mã"],
+                "value_mappings": [{"phrase": "đầu tiên", "value": "missing"}],
+            }
+        )
+        url = f"/api/datasets/{uploaded['dataset_id']}/confirm"
+        self.assertEqual(self.client.post(url, json=body).status_code, 422)
+        self.assertEqual(self.preview(uploaded["dataset_id"])["status"], "needs_review")
+        body["columns"][0]["value_mappings"][0]["value"] = "0007"
+        self.assertEqual(self.client.post(url, json=body).status_code, 200)
+        preview = self.preview(uploaded["dataset_id"])
+        self.assertEqual(preview["description"], body["description"])
+        self.assertEqual(preview["columns"][0]["value_mappings"][0]["value"], "0007")
+
     def setUp(self) -> None:
         self.owner_a, self.owner_b = uuid4(), uuid4()
         self.client = TestClient(create_app())

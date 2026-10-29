@@ -119,6 +119,10 @@ Langfuse đọc lại trace `9b9246e1a14e141f903f27ed244afe10`: provider input/o
 
 ## Exit gate hiện tại
 
+### Workstream B — 30/10/2026
+
+74 unit + 20 integration (7 auth, 13 datasets/query) PASS; ruff/format/mypy PASS. Ca regression mới kiểm mapping có thật, từ chối mapping sai, metadata tồn tại sau publish, qualifier tìm từ DB bị bỏ sót dù model tự khai coverage, top N thiếu order/limit, metric không cộng được và LIMIT N+1. HTTP integration xác nhận safety truncation trả partial/reference_only; SQL oracle thuần giữ SUM(empty)=NULL. Migration catalog đã chạy trên project chatsar, chỉ thêm cột và bảo toàn dữ liệu cũ. Không generation call mới. Model accuracy/token/latency của schema rút gọn chưa đo live; không coi offline PASS là nghiệm thu model.
+
 **Phần triển khai F1–F4 đã có; chưa nghiệm thu toàn bộ Giai đoạn 1.** Google OAuth/workspace live đã xác minh; browser E2E BLOCKED bởi tool và để người dùng test sau. Hai ca HTTP bổ sung có 1 PASS, 1 provider timeout; deadline mới chưa được nghiệm thu live. Knowledge bị 403 ở lần thử cuối. Chưa chạy toàn bộ development/regression/held-out/negative model benchmark; ba ca library held-out còn NOT_RUN, không tuning theo ca library_sum đã đo. Chưa có phép đo release accuracy/latency đầy đủ hoặc xác nhận số HTTP requests lịch sử trước SDK guard. Đã dùng đủ 12 reservations trong quyền hiện tại, không tự gọi thêm. Giữ feature branch/PR nháp; không merge main, không sang Giai đoạn 2.
 
 ## Google OAuth khi frontend/backend đã xác minh

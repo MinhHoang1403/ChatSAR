@@ -140,3 +140,50 @@ def test_boolean_tree_depth_and_null_literal_are_bounded(revision: dict) -> None
 def test_large_integer_wire_preserves_javascript_precision() -> None:
     assert wire(2**63 - 1) == "9223372036854775807"
     assert wire(42) == 42
+
+
+def test_approved_mapping_keeps_original_and_canonical(revision: dict) -> None:
+    revision["columns"][0]["value_mappings"] = [{"phrase": "đã giao", "value": "DELIVERED"}]
+    plan = proposal(revision, "đã giao", filters=leaf("đã giao", "DELIVERED"))
+    compiled = compile_query(plan, revision, "đã giao")
+    assert compiled.filters[0]["mapping_source"] == "owner_confirmed_mapping"
+    assert compiled.filters[0]["canonical_value"] == "DELIVERED"
+    with pytest.raises(AppError):
+        compile_query(
+            proposal(revision, "đã giao", filters=leaf("đã giao", "OTHER")), revision, "đã giao"
+        )
+
+
+@pytest.mark.parametrize(
+    "question", ["Tổng tại quận 3", "Phí quận 3 là bao nhiêu?", "Cho xem dữ liệu quận 3"]
+)
+def test_qualifier_found_from_data_cannot_be_covered_by_model_claim(
+    revision: dict, question: str
+) -> None:
+    revision["grounding_values"] = {CODE: ["quận 3", "3"]}
+    with pytest.raises(AppError) as error:
+        compile_query(proposal(revision, question), revision, question)
+    assert error.value.code == "QUERY_CLARIFY"
+    compile_query(
+        proposal(revision, question, filters=leaf("quận 3", "quận 3")), revision, question
+    )
+
+
+@pytest.mark.parametrize(
+    "fields", [{}, {"order_by": [{"field_id": "total"}]}, {"limit": 3, "result_mode": "top"}]
+)
+def test_top_requires_matching_order_limit_and_mode(revision: dict, fields: dict) -> None:
+    with pytest.raises(AppError):
+        compile_query(proposal(revision, "top 3", **fields), revision, "top 3")
+
+
+def test_non_additive_metric_cannot_be_summed(revision: dict) -> None:
+    revision["columns"][1]["aggregation_policy"] = "non_additive"
+    with pytest.raises(AppError):
+        compile_query(proposal(revision), revision, "Tổng")
+
+
+def test_all_rows_uses_extra_row_probe(revision: dict) -> None:
+    compiled = compile_query(proposal(revision, result_mode="all", limit=5), revision, "Tổng")
+    assert compiled.statement.compile().params["param_1"] == 6
+    assert compiled.limit == 5

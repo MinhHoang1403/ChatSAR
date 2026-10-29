@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from time import perf_counter
@@ -90,6 +91,7 @@ class QueryPlan(Contract):
     group_by: list[str] = Field(default_factory=list, max_length=10)
     order_by: list[Ordering] = Field(default_factory=list, max_length=10)
     limit: int = Field(default=100, ge=1, le=500)
+    result_mode: Literal["bounded", "all", "top"] = "bounded"
     unresolved: list[str] = Field(default_factory=list, max_length=30)
 
     @model_validator(mode="after")
@@ -110,6 +112,10 @@ class CompiledQuery:
     statement: Select[Any]
     columns: list[dict[str, Any]]
     filters: list[dict[str, Any]]
+    limit: int = 100
+    result_mode: str = "bounded"
+    truncated: bool = False
+    grounding_required: bool = False
 
 
 def fail(message: str, code: str = "QUERY_UNSUPPORTED") -> AppError:
@@ -188,8 +194,17 @@ def compile_query(
             # Chỉ chấp nhận chuyển kiểu chính xác theo format đã duyệt hoặc ISO.
             # Mốc tháng/thiếu năm chưa có mapping đã duyệt thì hỏi lại, không đoán.
             original_review = review.model_copy(update={"null_values": []})
+            mapped = [m for m in review.value_mappings if m.phrase == value.raw_phrase]
+            if mapped:
+                if len(mapped) != 1:
+                    raise ValueError("Ambiguous mapping")
+                original = typed_value(mapped[0].value, query_review, revision["timezone"])
+                origin = "owner_confirmed_mapping"
+            else:
+                original = None
             try:
-                original = typed_value(value.raw_phrase, original_review, revision["timezone"])
+                if not mapped:
+                    original = typed_value(value.raw_phrase, original_review, revision["timezone"])
             except ValueError:
                 if review.data_type != "date":
                     raise
@@ -207,10 +222,11 @@ def compile_query(
                 "candidate_value": value.candidate_value,
                 "canonical_value": wire(bound),
                 "mapping_source": origin,
+                "operator": current_operator,
                 "question_span": {
-                    "start": (question if origin == "user_phrase" else previous_question).index(
-                        value.raw_phrase
-                    ),
+                    "start": (
+                        question if value.raw_phrase in question else previous_question
+                    ).index(value.raw_phrase),
                     "length": len(value.raw_phrase),
                     "source": origin,
                 },
@@ -219,9 +235,10 @@ def compile_query(
         return bound
 
     nodes = 0
+    current_operator = "EQ"
 
     def predicate(node: Predicate, depth: int = 0) -> ColumnElement[bool]:
-        nonlocal nodes
+        nonlocal nodes, current_operator
         nodes += 1
         if nodes > 100 or depth > 8:
             raise fail("Điều kiện truy vấn vượt giới hạn cho phép.")
@@ -234,6 +251,7 @@ def compile_query(
         if node.children:
             raise fail("Điều kiện đơn không được chứa nhóm con.")
         column_id = str(node.column_id)
+        current_operator = node.operator
         if node.operator in ("IS_NULL", "IS_NOT_NULL"):
             if node.literal or node.values:
                 raise fail("Kiểm tra NULL không nhận giá trị thay thế.")
@@ -293,6 +311,15 @@ def compile_query(
             raise fail("Tên kết quả bị lặp.")
         aliases.add(aggregate.output_id)
         aggregate_review = catalog.get(aggregate.column_id or "")
+        if (
+            aggregate.operator in ("SUM", "AVG")
+            and aggregate_review
+            and aggregate_review.aggregation_policy == "non_additive"
+        ):
+            raise fail(
+                "Cột này không cho phép cộng hoặc lấy trung bình theo metadata đã xác nhận.",
+                "QUERY_CLARIFY",
+            )
         expression: ColumnElement[Any]
         if aggregate.operator == "COUNT_ROWS":
             if aggregate.column_id is not None:
@@ -362,7 +389,88 @@ def compile_query(
             if order.direction == "asc"
             else desc(expression).nulls_last()
         )
-    return CompiledQuery(statement.limit(plan.limit), output, literal_evidence)
+    validate_structure(plan, revision, question, literal_evidence)
+    return CompiledQuery(
+        statement.limit(plan.limit + 1),
+        output,
+        literal_evidence,
+        plan.limit,
+        plan.result_mode,
+        grounding_required="grounding_values" in revision,
+    )
+
+
+def contains_phrase(question: str, phrase: str) -> bool:
+    # Ranh giới từ Unicode, không bỏ dấu hoặc fuzzy match để tự đổi nghĩa.
+    return (
+        bool(phrase)
+        and re.search(r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", question, re.IGNORECASE)
+        is not None
+    )
+
+
+def validate_structure(
+    plan: QueryPlan, revision: dict[str, Any], question: str, evidence: list[dict[str, Any]]
+) -> None:
+    ranking = re.search(r"\btop\s+(\d+)\b", question, re.IGNORECASE)
+    if ranking and (
+        not plan.order_by or plan.limit != int(ranking[1]) or plan.result_mode != "top"
+    ):
+        raise fail("Yêu cầu xếp hạng cần thứ tự và số lượng kết quả khớp câu hỏi.", "QUERY_CLARIFY")
+    if plan.result_mode == "top" and not plan.order_by:
+        raise fail("Cần chọn tiêu chí xếp hạng.", "QUERY_CLARIFY")
+    if (
+        any(
+            contains_phrase(question, phrase)
+            for phrase in ("toàn bộ danh sách", "tất cả các dòng", "đầy đủ danh sách")
+        )
+        and plan.result_mode != "all"
+    ):
+        raise fail("Yêu cầu danh sách đầy đủ chưa được biểu diễn.", "QUERY_CLARIFY")
+    # Giá trị lấy từ DB, không phải danh sách qualifier do model tự khai.
+    for column_id, values in revision.get("grounding_values", {}).items():
+        for value in values:
+            if (
+                len(value) >= 2
+                and contains_phrase(question, value)
+                and not any(
+                    e["column_id"] == column_id and e["canonical_value"] == value for e in evidence
+                )
+            ):
+                raise fail(
+                    "Một giá trị được nhắc trong câu hỏi chưa có điều kiện lọc tương ứng.",
+                    "QUERY_CLARIFY",
+                )
+
+
+def ground_catalog(revision: dict[str, Any]) -> dict[str, Any]:
+    """Chỉ đọc tối đa 21 giá trị/cột TEXT; bảng nhiều giá trị không giả là enum đầy đủ."""
+    if (
+        revision["status"] != "ready"
+        or revision["physical_table"] != "r_" + UUID(str(revision["id"])).hex
+    ):
+        raise fail("Nguồn dữ liệu chưa sẵn sàng.")
+    values: dict[str, list[str]] = {}
+    with db.get_reader_engine().connect().execution_options(postgresql_readonly=True) as connection:
+        with connection.begin():
+            connection.exec_driver_sql("SET LOCAL statement_timeout = '5s'")
+            for item in revision["columns"]:
+                column = ColumnReview.model_validate(item)
+                if column.data_type != "text":
+                    continue
+                table = Table(
+                    revision["physical_table"], MetaData(), Column(column.id, Text()), schema="data"
+                )
+                found = (
+                    connection.execute(select(table.c[column.id]).distinct().limit(21))
+                    .scalars()
+                    .all()
+                )
+                if len(found) <= 20:
+                    values[column.id] = [
+                        v for v in found if isinstance(v, str) and 0 < len(v) <= 120
+                    ]
+    return {**revision, "grounding_values": values}
 
 
 def execute_query(compiled: CompiledQuery) -> tuple[list[list[Any]], float]:
@@ -370,7 +478,28 @@ def execute_query(compiled: CompiledQuery) -> tuple[list[list[Any]], float]:
     with db.get_reader_engine().connect().execution_options(postgresql_readonly=True) as connection:
         with connection.begin():
             connection.exec_driver_sql("SET LOCAL statement_timeout = '5s'")
+            for item in compiled.filters:
+                if isinstance(item["canonical_value"], str) and item["operator"] in (
+                    "EQ",
+                    "NE",
+                    "IN",
+                ):
+                    table = next(iter(compiled.statement.get_final_froms()))
+                    target = table.c[item["column_id"]]
+                    if (
+                        compiled.grounding_required
+                        and isinstance(target.type, Text)
+                        and connection.execute(
+                            select(target).where(target == item["canonical_value"]).limit(1)
+                        ).first()
+                        is None
+                    ):
+                        raise fail(
+                            "Không tìm thấy giá trị lọc trong dữ liệu. Vui lòng xác nhận lại.",
+                            "QUERY_CLARIFY",
+                        )
             rows = connection.execute(compiled.statement).fetchmany(501)
-            if len(rows) > 500:
-                raise fail("Kết quả vượt giới hạn cho phép.")
-    return [[wire(value) for value in row] for row in rows], (perf_counter() - started) * 1000
+    compiled.truncated = len(rows) > compiled.limit
+    return [[wire(value) for value in row] for row in rows[: compiled.limit]], (
+        perf_counter() - started
+    ) * 1000

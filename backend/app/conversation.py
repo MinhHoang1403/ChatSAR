@@ -18,7 +18,7 @@ from app.datasets import owned_revision
 from app.errors import AppError
 from app.observability import annotate, current_trace_id, observation
 from app.providers import generate_proposal
-from app.query import Contract, compile_query, execute_query
+from app.query import Contract, compile_query, execute_query, ground_catalog
 from app.schema import conversations, messages, results, revisions, workspaces
 from app.workspace import owned_workspace
 
@@ -232,6 +232,9 @@ def send_message(
         question_length=len(body.question),
     ) as span:
         try:
+            # Quyền gửi metadata được provider kiểm lại trước reserve/network.
+            with observation("ground_catalog"):
+                revision = ground_catalog(revision)
             proposal = generate_proposal(body.question, revision, body.provider, context)
             plan = proposal.plan
             if plan.task != "SQL" or plan.unresolved:
@@ -263,8 +266,11 @@ def send_message(
                     )
                 else:
                     text = f"Tìm thấy {len(rows)} dòng kết quả theo dữ liệu đã chọn."
+                partial = compiled.truncated and compiled.result_mode != "top"
+                if partial:
+                    text = f"Đang hiển thị {len(rows)} dòng đầu; vẫn còn kết quả chưa hiển thị."
                 answer = {
-                    "status": "answered",
+                    "status": "partial" if partial else "answered",
                     "facts": {
                         "columns": compiled.columns,
                         "rows": rows,
@@ -279,6 +285,9 @@ def send_message(
                         },
                         "execution_id": str(result_id),
                         "execution_latency_ms": latency,
+                        "truncated": compiled.truncated,
+                        "limit": compiled.limit,
+                        "result_mode": compiled.result_mode,
                         "provider": {
                             "name": proposal.provider,
                             "model": proposal.model,
@@ -287,7 +296,7 @@ def send_message(
                             "latency_ms": proposal.latency_ms,
                             "request_id": proposal.request_id,
                         },
-                        "trust": "verified_result",
+                        "trust": "reference_only" if partial else "verified_result",
                     },
                     "display_rows": rows,
                     "citations": [
@@ -299,7 +308,11 @@ def send_message(
                             "result_id": str(result_id),
                         }
                     ],
-                    "limitations": [f"Kết quả được giới hạn tối đa {plan.limit} dòng."],
+                    "limitations": [
+                        f"Chỉ hiển thị {plan.limit} dòng; hãy thu hẹp điều kiện để xem thêm."
+                    ]
+                    if partial
+                    else [],
                     "display_text": text,
                     "request_id": request.state.request_id,
                     "result_id": str(result_id),

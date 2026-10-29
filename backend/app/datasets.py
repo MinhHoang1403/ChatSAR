@@ -53,6 +53,10 @@ class PublishInput(BaseModel):
     timezone: str = "Asia/Ho_Chi_Minh"
     grain: str = Field(min_length=1, max_length=300)
     data_classification: Literal["private", "synthetic"] = "private"
+    description: str = Field(default="", max_length=1000)
+    sharing_providers: list[Literal["gemini", "knowledge"]] = Field(
+        default_factory=list, max_length=2
+    )
 
 
 def owned_revision(
@@ -282,6 +286,11 @@ def preview_dataset(
         "checksum": revision["checksum"],
         "data_classification": revision["data_classification"],
         "relationships": [],
+        "description": revision["description"],
+        "grain": revision["grain"],
+        "timezone": revision["timezone"],
+        "sharing_providers": revision["sharing_providers"],
+        "setup_proposal": revision["setup_proposal"],
         "relationship_status": "not_configured_single_table",
     }
 
@@ -328,6 +337,19 @@ def publish_dataset(
         primary = [c.id for c in body.columns if c.primary_key]
         if primary and len({tuple(row[c] for c in primary) for row in rows}) != len(rows):
             raise invalid("Khóa đã chọn có giá trị trùng lặp. Chưa công bố dữ liệu.")
+        for column in body.columns:
+            values = {row[column.id] for row in rows}
+            phrases: set[str] = set()
+            for mapping in column.value_mappings:
+                if mapping.phrase in phrases:
+                    raise invalid("Mapping có tên gọi trùng lặp; cần xác nhận lại.")
+                phrases.add(mapping.phrase)
+                try:
+                    target = typed_value(mapping.value, column, body.timezone)
+                except (ValueError, TypeError, ArithmeticError):
+                    raise invalid("Mapping không khớp kiểu cột đã chọn.") from None
+                if target is None or target not in values:
+                    raise invalid("Mapping phải trỏ tới một giá trị thật trong dữ liệu.")
         physical_name = "r_" + revision_id.hex
         types: dict[str, TypeEngine[Any]] = {
             "text": Text(),
@@ -369,6 +391,8 @@ def publish_dataset(
                     grain=body.grain,
                     sheet_name=parsed.sheet_name or None,
                     data_classification=body.data_classification,
+                    description=body.description,
+                    sharing_providers=list(set(body.sharing_providers)),
                 )
             )
             job_state(connection, revision_id, "ready")

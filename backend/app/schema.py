@@ -53,6 +53,9 @@ revisions = Table(
     Column("timezone", String),
     Column("grain", String),
     Column("data_classification", String),
+    Column("description", String),
+    Column("sharing_providers", JSONB),
+    Column("setup_proposal", JSONB),
     Column("created_at", DateTime(timezone=True)),
 )
 jobs = Table(
