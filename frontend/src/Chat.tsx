@@ -45,6 +45,12 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onR
   const historyRequest = useRef(0);
   const serverPending = history.some((m) => m.envelope === null || m.envelope.status === 'pending');
   const blocked = busy || serverPending;
+  function reportError(error: unknown) {
+    if (error instanceof ApiError && error.diagnostics) {
+      setRequestFailure({status:'execution_error',display_text:error.message,facts:{},
+        display_rows:[],limitations:[],processing:error.diagnostics});
+    } else setError(message(error));
+  }
   useEffect(() => { onBusy(blocked); }, [blocked, onBusy]);
   useEffect(() => {
     const field = textarea.current;
@@ -65,7 +71,7 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onR
     if (!selected) { setLoading(false); return; }
     setLoading(true);
     readHistory(selected).then((data) => { if (active && version === historyRequest.current) setHistory(data); })
-      .catch((e: unknown) => { if (active) setError(message(e)); })
+      .catch((e: unknown) => { if (active) reportError(e); })
       .finally(() => { if (active && version === historyRequest.current) setLoading(false); });
     return () => { active = false; };
   }, [selected]);
@@ -75,7 +81,7 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onR
     // Chỉ đọc trạng thái đã lưu; không tự gửi lại câu hỏi hoặc gọi provider.
     const timer = window.setInterval(() => { void readHistory(selected).then((rows) => {
       if (active) setHistory(rows);
-    }).catch((e: unknown) => { if (active) setError(message(e)); }); }, 3000);
+    }).catch((e: unknown) => { if (active) reportError(e); }); }, 3000);
     return () => { active = false; window.clearInterval(timer); };
   }, [serverPending, busy, selected]);
   async function send(event: FormEvent) {
@@ -93,14 +99,12 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onR
       await api(`/conversations/${id}/messages`, { method: 'POST', body, headers: { 'Idempotency-Key': pending.current.key } }, csrf).then(answer);
       pending.current = null; setQuestion('');
     } catch (e: unknown) {
-      if (e instanceof ApiError && e.diagnostics) setRequestFailure({status:'execution_error',
-        display_text:e.message,facts:{},display_rows:[],limitations:[],processing:e.diagnostics});
-      else setError(message(e));
+      reportError(e);
     }
     finally {
       if (id) {
         ++historyRequest.current;
-        try { setHistory(await readHistory(id)); await onRefresh(); } catch (e: unknown) { setError(message(e)); }
+        try { setHistory(await readHistory(id)); await onRefresh(); } catch (e: unknown) { reportError(e); }
       }
       setLoading(false); sending.current = false; setBusy(false);
     }

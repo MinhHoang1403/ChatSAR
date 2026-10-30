@@ -41,7 +41,7 @@ Hai nút answer: Nguồn & xử lý / Xem SQL; lỗi: Chi tiết lỗi / SQL-sta
 
 Model latency từ reply/error thật; SQL duration chỉ execute+fetch; backend sau kiểm quyền/trước final persistence, không phải browser latency. Thiếu số liệu không giả0. Stages authorization/catalog/provider_preparation/provider_call/proposal_parse/semantic_validation/sql_compilation/execution/composition/persistence/retrieval. Validation/build Select còn chung bước semantic, không bịa số đo riêng.
 
-Checkpoint trước execute giữ SQL khi final persist lỗi; final transaction atomic. Pending chặn trùng/xóa, poll chỉ đọc. Restart chuyển SQL in_progress thành unknown, không replay/giả failed. Checkpoint không lưu được thì không execute. Composition lỗi sau SQL giữ SQL succeeded, không bịa answer. Lỗi trước message trả diagnostics an toàn, không tạo lịch sử giả.
+Checkpoint trước execute giữ SQL khi final persist lỗi; final transaction atomic. Pending chặn trùng/xóa, poll chỉ đọc. Restart chuyển SQL in_progress thành unknown, không replay/giả failed. Checkpoint không lưu được thì không execute. Composition lỗi sau SQL giữ SQL succeeded, không bịa answer. Lỗi trước message trả diagnostics an toàn, không tạo lịch sử giả. Chat dùng cùng trình xử lý diagnostics cho send/load history/poll/final GET, giữ stage retrieval từ API thay vì chỉ banner; kiểm types/build/SSR đạt, chưa fault-injection browser cho nhánh retrieval.
 
 ### E. Frontend và browser
 
