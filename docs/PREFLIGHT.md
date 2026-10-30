@@ -1,5 +1,106 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Natural Answers, SQL Transparency & Final UX — 30/10/2026
+
+### A. Tổng quan
+
+**NOT_ACCEPTED.** Phần độc lập đã triển khai và kiểm thử, chưa đủ điều kiện READY_FOR_USER_ACCEPTANCE. Baseline `32ffde9`, working tree sạch. Không generation mới hoặc sửa .env/quota/ledger. Báo cáo này là trạng thái hiện hành; các mục bên dưới giữ làm lịch sử.
+
+Đã sửa prose còn kỹ thuật, thiếu SQL theo message, lỗi thiếu stage, pending checkpoint bị hiểu nhầm hoàn tất, sidebar/composer và hai nút chi tiết. Bổ sung regression internal column ID: kiểm trước khi thay gạch dưới, ưu tiên alias xác nhận. Lỗi model lịch sử/canary candidate chưa được xác minh sửa live.
+
+### B. Text-to-SQL
+
+Một đường production: question → catalog xác nhận → QueryPlan → binder/compiler SQLAlchemy Core → PostgreSQL reader → facts → composer tất định. QueryRequest chỉ candidate offline. AST `INSTRUCTIONS`, `generate_proposal`, `request_client`, `reserve_call`, `finish_call`, `compile_query` khớp baseline. Parser/setup/publish/tracing không đổi. Chỉ thêm thời gian SQL và checkpoint trước execute, không thêm engine/grammar/dependency.
+
+Canary **BLOCKED**; semantic mới **0/90 đã đo,90 BLOCKED**. Không có accuracy/false refusal/held-out/latency model mới. Baseline lịch sử22/26: in-scope16/19=84.21%, negative6/7=85.71%, false refusal2/19=10.53%;64/90 chưa đo, chưa đạt95%. Một answered output thiếu projection dù số trùng vẫn FAIL. Lookup→SUM/mất mã, MIN→top, timestamp/Boolean condition, FX status còn cần canary và đo lại; chưa chứng minh hết silent critical wrong answers. Composer không sửa được plan hiểu sai câu hỏi.
+
+Latency lịch sử19 attempts HTTP p50/p95=2170.08/5856.69ms, provider2108.47/5783.25ms; SQL17 samples3.72/51.51ms. Không phải SLA browser/bản mới. Maintenance MIN đã dùng phát triển, không còn blind held-out. Printing thay thế6 scenarios (5SQL/1clarify) giữ khóa;5 gold SQL PASS, model BLOCKED. Không gọi fixtures tự viết là benchmark mù bên thứ ba.
+
+### C. Natural Answers
+
+Không LLM viết lại. Decimal thành chuỗi exact/dấu phẩy thập phân, không float/rounding; typed rows/TEXT zero đầu/NULL/0 giữ nguyên. Chỉ lấy alias/tên/unit xác nhận, không suy filename/description/grain. COUNT_ROWS nói bản ghi, không tự gọi vận đơn/phòng/thiết bị; MIN/MAX không bịa người thắng. Prose lookup tối đa4 cột, bảng giữ đủ projection.
+
+Ví dụ fixtures offline, không phải model-live mới:
+
+| Dạng | Trước | Sau |
+|---|---|---|
+| SUM | Nhãn kỹ thuật:10.10 | Tổng phí trong dữ liệu đã chọn là10,10VND |
+| COUNT_ROWS | Nhãn phép đếm | Có0 bản ghi trong dữ liệu đã chọn; không suy entity |
+| MIN | Nhãn phép tính | Giá trị nhỏ nhất của phí … là10,10VND |
+| Lookup | Chỉ bảng | Bản ghi phù hợp … có Mã vận đơn:0007; phí:10,10VND; bảng đủ cột |
+| Grouping | Nhãn khó đọc | Dưới đây là tổng phí theo từng nhóm Mã vận đơn …; số ở bảng |
+| NULL/empty/partial | Dễ nhầm zero/đủ dữ liệu | NULL không phải0; empty khác aggregate NULL; partial báo chưa đầy đủ |
+
+20 unit cases đối chiếu ý nghĩa/exact values, số vượt JS safe integer, âm/scale/mã/internal ID; expected không do composer sinh. Thiếu alias thì tên nguồn có thể vẫn tiếng Anh, không tự dịch/bịa metadata.
+
+### D. SQL & Source UI
+
+Processing additive owner-scoped lưu dataset/revision/checksum/timezone/grain, actual provider/model khi có bằng chứng dispatch, stage/error code và parameterized SQL từ chính Select dùng execute. Không literal_binds/raw bind values; không gửi SQL/rows/secrets vào public trace. Mỗi message/result có evidence riêng; ownerB đọc404. GET/reload/panel không gọi model/compile/execute lại.
+
+Hai nút answer: Nguồn & xử lý / Xem SQL; lỗi: Chi tiết lỗi / SQL-status phù hợp. Đóng mặc định, một panel/message; Escape đóng/trả focus. SQL format chỉ thêm whitespace, giữ quoted identifiers/literals/placeholders; monospace/cuộn ngang. Lịch sử cũ thiếu SQL báo “Câu lệnh SQL của lượt trả lời này chưa được lưu.”, không dựng lại. SQL mới có API/PG/SSR/restart proof; positive browser model→SQL mới **BLOCKED**, không nâng mock thành E2E PASS.
+
+Model latency từ reply/error thật; SQL duration chỉ execute+fetch; backend sau kiểm quyền/trước final persistence, không phải browser latency. Thiếu số liệu không giả0. Stages authorization/catalog/provider_preparation/provider_call/proposal_parse/semantic_validation/sql_compilation/execution/composition/persistence/retrieval. Validation/build Select còn chung bước semantic, không bịa số đo riêng.
+
+Checkpoint trước execute giữ SQL khi final persist lỗi; final transaction atomic. Pending chặn trùng/xóa, poll chỉ đọc. Restart chuyển SQL in_progress thành unknown, không replay/giả failed. Checkpoint không lưu được thì không execute. Composition lỗi sau SQL giữ SQL succeeded, không bịa answer. Lỗi trước message trả diagnostics an toàn, không tạo lịch sử giả.
+
+### E. Frontend và browser
+
+Tinh chỉnh UI hiện hữu: new chat+··· chung nhóm, workspace selector duy nhất trên search; plusmenu3icons/3tác vụ thật; model selector gọn, giữ pill. Không đổi core/profile/history/CRUD/Setup/Google.
+
+Browser đợt này **24/27 PASS,3 BLOCKED**, không tái dùng26/28 cũ. PASS: (1) nhóm newchat/menu; (2) selector trên search; (3) workspace/history switch; (4) hotel lịch sử300.15; (5) hai nút đóng mặc định; (6) actual model metadata cũ; (7) SQL cũ chưa lưu; (8) một panel; (9) Escape/focus; (10) tạo chat private/error HTTP thật; (11) controls pending; (12) source/stage/no-provider đúng; (13) SQL chưa tạo; (14) switch/Escape panel mới; (15) reload evidence; (16) plusmenu3icons; (17) Data Manager mở/đóng; (18) history menu Escape; (19) profile mở/hủy; (20–23) widths1440/1280/768/390 không tràn ngang; (24) console không error. BLOCKED: fresh Google login, hai tài khoản browser độc lập, model thật mới→natural answer+compiled SQL panel. Existing session/API ownership không thay hai flow Google thật.
+
+Giữ chat demo “Kiểm tra nguồn và SQL — tổng amount?” trong “Kiểm thử lịch sử 30-10”: source private từ chối trước generation, provider_preparation/DATA_PERMISSION_REQUIRED, SQL chưa tạo, nguồn không đổi. Không xóa dữ liệu khác. Ảnh natural-menu.jpg/natural-mobile-error.jpg/natural-final-error.jpg local ignored; reset viewport, giữ tab localhost.
+
+### F. Tests
+
+| Nhóm | Tổng | PASS | FAIL | BLOCKED | NOT_RUN |
+|---|---:|---:|---:|---:|---:|
+| Backend unit |143|143|0|0|0|
+| Integration API/PG, provider mock |33|33|0|0|0|
+| SQL oracle |25|25|0|0|0|
+| Semantic gold SQL |75|75|0|0|0|
+| Gold thay thế |5|5|0|0|0|
+| Evaluation/reader/quota/scorer |21|21|0|0|0|
+| Semantic model-live mới |90|0|0|90|0|
+| Negative/context, nhóm con90 |15|0|0|15|0|
+| Gemini candidate canary |1|0|0|1|0|
+| Natural answers, nhóm con unit |20|20|0|0|0|
+| SQL provenance, nhóm con integration |3|3|0|0|0|
+| Error diagnostics, nhóm con integration |4|4|0|0|0|
+| Frontend SSR/DTO |12|12|0|0|0|
+| Browser |27|24|0|3|0|
+| Security, nhóm con12unit+8integration+6reader |26|26|0|0|0|
+| Secret scan tracked/served bundle |1 audit|1|0|0|0|
+| Persistence HTTP/PG/restart |1 luồng|1|0|0|0|
+
+Không cộng trùng nhóm con; provenance/error có overlap. Diagnostics gồm11 biến thể trong1test và execution/clarify/persistence ở3test khác. Persistence dùng UUID harness riêng, patch provider chỉ trong process test trả typed plan; compile/reader/PG/HTTP/result/restart thật, SUM0.30→prose0,30 và SQL/history khớp trước/sau. Không inject browser cookie, không gọi đó model-live.
+
+Ruff/format/mypy18modules, TypeScript/build, runtime, prepare-only fidelity đạt. Starlette/httpx có1 deprecation warning, không skip. Bằng chứng: CI/tests; artifacts/natural-final-audit.json, natural-usage-audit.json, natural-acceptance-prepare.json local ignored.18 app modules source/container hash khớp, hai plan và gold/manifest/checksums giữ byte baseline.
+
+### G. Usage
+
+Ledger đầu/cuối63=Gemini58/Knowledge5; mới0/0, LlamaParse/BGE0. Baseline quyền13=8/5, đã dùng50 Gemini bổ sung. Known tokens68810input/15050output/0thought; estimate0.0582680USD, tổng reserve0.6671498USD. HTTP400 `d10d5f23-d15d-4c9e-8e21-37e67b510b1c`: dispatch1, usage/costNULL, reserve0.0137353USD, PROVIDER_SCHEMA. Không suy unknown thành miễn phí.
+
+Đọc PG/Langfuse trace `974e3f15543b1b415e25f9fb3c8e5837` chỉ xác nhận400/BadRequestError/schema_complexity=false, thuộc tính schema lỗi cụ thể UNKNOWN. Không interaction ID/billing account access; store=false không chứng minh charge0. Guard thật trả USAGE_UNKNOWN trước insert/network, count không đổi. Không tạo reconciliation record/quota exception thiếu chứng cứ/quyền riêng. Còn trần45Codex/50tổng, giữ5 cho chủ dự án, **không dispatch được hiện tại**. Không sửa .env/keys/flags/global budget/grant/ledger.
+
+### H. GitHub/Docker
+
+feature/sql-foundation, PR1 Draft/open; không merge/main/Phase2. Milestones `3cf87697acd3ca200063b0fc0783ee34aa0a5ad8`, `7009bd44097454cb594b8a3aac3bcc55ddcd1ac6` đã push; CI push+PR PASS: [7009 push](https://github.com/MinhHoang1403/ChatSAR/actions/runs/41012923751), [7009 PR](https://github.com/MinhHoang1403/ChatSAR/actions/runs/41012932688). Commit chốt nhãn/báo cáo kiểm CI exact HEAD và local/remote SHA trong bàn giao cuối. [PR1](https://github.com/MinhHoang1403/ChatSAR/pull/1). Main giữ c05f26b1a301e91e8ea6ddaadedb0e1ed03b735d.
+
+Một Compose chatsar, web/api/db healthy; volumes chatsar_database/chatsar_uploads giữ nguyên;7 migrations foundation/identity/datasets/conversation/catalog/provider_grants/chat_management, không migration mới. Không stack/dọn dự án khác. Secret scan103 tracked files và served JS/CSS không trùng keys/passwords local; .env/artifacts ignored, ảnh/PII không public. Không force/prune volumes.
+
+### I. Kết luận và checklist UI
+
+**NOT_ACCEPTED.** GateA BLOCKED; B deterministic PASS nhưng model E2E thiếu; C backend/persistence/SSR PASS nhưng positive browser mới BLOCKED; D đạt phần đã kiểm; E offline/infrastructure PASS, fresh Google/two-account proof thiếu; F chờ chủ dự án. Không Giai đoạn2.
+
+1. Mở http://localhost:18181, Google login/logout/login thủ công. Hai phiên Google độc lập không thấy workspace/chat/source/profile/result của nhau.
+2. “Nghiệm thu giao diện 30-10”→“Tổng tiền phòng?” vẫn300.15; hai nút đóng mặc định, SQL cũ báo chưa lưu, không dựng/gọi model lại.
+3. “Kiểm thử lịch sử 30-10”→chat demo nguồn/SQL: đúng tên file/thiếu quyền/stage; SQL chưa tạo; một panel, Escape đóng; reload vẫn còn, nguồn không đổi.
+4. Dấu+ mở upload/tạo workspace/Data Manager; local review/publish kiểm TEXT zero đầu/Decimal/NULL; hồ sơ/hủy/rename/history hoạt động. Chỉ xóa chat test tự chọn, giữ lịch sử thật.
+5. Chưa gửi thêm AI Setup/chat cloud khi USAGE_UNKNOWN. Sau đối soát/quyền hợp lệ cần canary, benchmark và positive browser mới để nghiệm thu natural prose/source/model/timings/SQL. Không cần scripts/DB/raw JSON cho nghiệm thu UI.
+
+---
+
 ## Hoàn thiện chất lượng và giao diện — 30/10/2026
 
 ### A. Tổng quan

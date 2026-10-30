@@ -1,5 +1,11 @@
 # Vận hành nền tảng ChatSAR
 
+## Natural Answers/SQL evidence — 30/10/2026
+
+Không migration mới, giữ7 migration/volumes hiện hữu. API lưu processing additive trong envelope: SQL placeholders/tên bind, không raw values; source snapshot, actual provider, durations và failed_stage. Owner kiểm ở conversation/result, không thêm API SQL tự do. Panel chỉ đọc history, không generate/compile/execute. Legacy thiếu SQL không backfill từ plan. Checkpoint trước execute có thể còn pending khi crash/final persist lỗi; recovery giữ SQL và chuyển in_progress→unknown, không replay. Không đổi unknown thành succeeded vì chỉ đọc thấy statement.
+
+Composer tất định không thêm model calls. Live vẫn USAGE_UNKNOWN/ledger63=58Gemini+5Knowledge, không gọi để kiểm health/UI; quota còn không cấp quyền bypass. Runtime143unit/33integration/12frontend PASS, SQL provenance/persistence qua restart có provider mock trong process harness, không model E2E. Fresh Google/two-account/positive model SQL browser chưa nghiệm thu. Ảnh/evidence local ở artifacts, không đưa lên public. Trạng thái hiện hành và checklist đầu PREFLIGHT; các phần dưới là lịch sử vận hành.
+
 ## Bổ sung quản lý chat/hồ sơ 30/10/2026
 
 Migration `chat_management` chạy sau provider_grants: thêm phone/interests và conversation.revision_id, backfill chỉ lịch sử có một revision. Không DROP hay thay bảng vật lý; rollback code giữ cột mới. API xóa chỉ chat/messages/results trong workspace được chọn, giữ nguồn/workspace/ledger. Chặn pending tại server; không dùng delete trên lịch sử thật để nghiệm thu. Hồ sơ chỉ principal hiện tại, không thay Google và không đưa vào prompt/trace. Composer dấu+ mở upload/tạo workspace/quản lý dữ liệu; model mặc định Gemini, Knowledge chọn tay, fallback UI đã bỏ. Không tự gọi model để kiểm giao diện khi USAGE_UNKNOWN.

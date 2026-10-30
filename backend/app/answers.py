@@ -21,9 +21,9 @@ def display_value(value: Any, kind: str) -> str:
 
 def column_label(column: dict[str, Any]) -> str:
     aliases = column.get("aliases") or []
-    label = str(aliases[0] if aliases else column["name"]).replace("_", " ")
+    label = str(aliases[0] if aliases else column["name"])
     # Không đưa internal ID vào prose khi tên nguồn cũng mang dạng ID kỹ thuật.
-    return "giá trị đã chọn" if re.fullmatch(r"c_[a-f0-9]{32}", label) else label
+    return "giá trị đã chọn" if re.fullmatch(r"c_[a-f0-9]{32}", label) else label.replace("_", " ")
 
 
 def compose_answer(

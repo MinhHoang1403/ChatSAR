@@ -119,6 +119,20 @@ def test_lookup_keeps_code_zeroes_and_multicolumn_output() -> None:
     assert "SUM" not in text
 
 
+def test_internal_column_name_is_hidden_but_confirmed_alias_is_used() -> None:
+    plan, compiled, rows = result()
+    revision = source()
+    internal_name = "c_" + "a" * 32
+    revision["columns"][1].update(name=internal_name, aliases=[])
+    text, columns = compose_answer(plan, compiled, revision, rows)
+    assert "Tổng giá trị đã chọn" in text
+    assert internal_name not in text and "a" * 32 not in text
+    assert columns[0]["id"] == "metric" and rows == [["10.10"]]
+    revision["columns"][1]["aliases"] = ["phí"]
+    aliased, _ = compose_answer(plan, compiled, revision, rows)
+    assert "Tổng phí" in aliased
+
+
 def test_partial_group_ranking_are_not_a_full_result_or_invented_winner() -> None:
     plan, compiled, rows = result()
     compiled.truncated = True
