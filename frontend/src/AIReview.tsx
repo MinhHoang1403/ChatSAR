@@ -8,6 +8,7 @@ type Props = { preview: Preview; csrf: string; onBusy: (busy: boolean) => void;
 
 export default function AIReview({ preview, csrf, onBusy, onProposal }: Props) {
   const [consent, setConsent] = useState(false);
+  const [consentValues, setConsentValues] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [notes, setNotes] = useState<string[]>([]);
@@ -38,7 +39,7 @@ export default function AIReview({ preview, csrf, onBusy, onProposal }: Props) {
     setBusy(true); onBusy(true); setNotice('');
     try {
       const body = JSON.stringify({ revision_id: preview.revision_id, sheet_name: preview.sheet_name || null,
-        use_ai: useAI, consent_metadata: useAI && consent, provider });
+        use_ai: useAI, consent_metadata: useAI && consent, consent_values: useAI && consent && consentValues, provider });
       if (!pending.current || pending.current.body !== body) pending.current = { body, key: crypto.randomUUID() };
       const data = await api(`/datasets/${preview.dataset_id}/setup`, { method: 'POST', body,
         headers: { 'Idempotency-Key': pending.current.key } }, csrf);
@@ -56,6 +57,7 @@ export default function AIReview({ preview, csrf, onBusy, onProposal }: Props) {
     {saved && <button className="secondary" disabled={busy} onClick={() => { try { applyProposal(saved); setNotice('Đã mở đề xuất đã lưu. Không gọi lại AI; hãy xem lại trước khi xác nhận.'); } catch (e: unknown) { setNotice(e instanceof Error ? e.message : 'Chưa mở được đề xuất.'); } }}>Mở đề xuất đã lưu</button>}
     <details className="setup-model"><summary>Mô hình đề xuất: {provider === 'gemini' ? 'Gemini' : 'Knowledge'}</summary><label>Chọn mô hình<select value={provider} disabled={busy} onChange={(e) => setProvider(e.target.value)}><option value="gemini">Gemini</option><option value="knowledge">Knowledge</option></select></label></details>
     <label className="check"><input type="checkbox" checked={consent} disabled={busy} onChange={(e) => setConsent(e.target.checked)} />Cho phép gửi tên cột và thống kê tới {provider === 'gemini' ? 'Gemini' : 'Knowledge'} cho lượt phân tích này; không gửi dòng dữ liệu.</label>
+    <label className="check"><input type="checkbox" checked={consentValues} disabled={busy || !consent} onChange={(e) => setConsentValues(e.target.checked)} />Cho phép thêm tối đa 20 giá trị phân biệt mỗi cột văn bản/đúng-sai để AI đề xuất cách gọi tiếng Việt. Bạn sẽ xem lại trước khi sử dụng.</label>
     <button disabled={busy || !consent} onClick={() => void analyze(true)}>{busy ? 'Đang phân tích dữ liệu…' : 'Nhận đề xuất AI'}</button>
     {busy && <p role="status">Đang xử lý yêu cầu. Có thể mất tối đa khoảng một phút.</p>}
     {notice && <p role="status">{notice}</p>}{notes.map((note, i) => <p className="review-note" key={i}>{note}</p>)}

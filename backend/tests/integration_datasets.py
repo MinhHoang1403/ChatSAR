@@ -797,6 +797,34 @@ class DatasetIntegration(unittest.TestCase):
             )
             generate.assert_not_called()
 
+    def test_setup_value_consent_is_separate_and_never_auto_publishes_mappings(self) -> None:
+        from app.setup import SetupSuggestion
+
+        uploaded = self.upload(b"code,state\n0007,ready\n0012,pending\n")
+        url = f"/api/datasets/{uploaded['dataset_id']}/setup"
+        body = {"revision_id": uploaded["revision_id"], "use_ai": True, "consent_values": True}
+        with patch(
+            "app.setup.generate_structured",
+            return_value=Proposal(SetupSuggestion(), "gemini", "offline", None, None, 0, None),
+        ) as generate:
+            self.assertEqual(
+                self.client.post(
+                    url, json=body, headers={"Idempotency-Key": uuid4().hex}
+                ).status_code,
+                422,
+            )
+            generate.assert_not_called()
+            response = self.client.post(
+                url,
+                json={**body, "consent_metadata": True},
+                headers={"Idempotency-Key": uuid4().hex},
+            )
+            self.assertEqual(response.status_code, 200)
+            payload = generate.call_args.args[0]
+            self.assertEqual(payload["profile"][1]["observed_values"], ["pending", "ready"])
+            self.assertNotIn("rows", payload)
+        self.assertEqual(self.preview(uploaded["dataset_id"])["status"], "needs_review")
+
     def test_limit_probe_partial_and_exact_values(self) -> None:
         uploaded = self.upload(b"code,amount\n0007,0.10\n0008,0.20\n0009,0.30\n")
         preview = self.preview(uploaded["dataset_id"])
@@ -1429,6 +1457,7 @@ class DatasetIntegration(unittest.TestCase):
         self.assertEqual(
             execute_query(compile_query(plan, revision, question))[0], [["0002", "0.20"]]
         )
+
         plan = plan.model_copy(
             update={
                 "filters": Predicate.model_validate(
@@ -1446,6 +1475,38 @@ class DatasetIntegration(unittest.TestCase):
         self.assertEqual(
             execute_query(compile_query(plan, revision, question))[0], [["0002", "0.20"]]
         )
+
+    def test_calendar_month_uses_confirmed_timezone_and_keeps_boundaries(self) -> None:
+        revision = self.published(
+            b"code,amount,at\n0001,100,2026-08-31T23:59:59+07:00\n0002,0.10,2026-09-01T00:00:00+07:00\n0003,0.20,2026-09-30T23:59:59+07:00\n0004,100,2026-10-01T00:00:00+07:00\n",
+            {"code": "text", "amount": "numeric", "at": "timestamp"},
+        )
+        code, amount, at = [c["id"] for c in revision["columns"]]
+        phrase = "tháng 9 năm 2026"
+        plan = self.plan(
+            revision,
+            phrase,
+            aggregations=[{"operator": "SUM", "column_id": amount, "output_id": "total"}],
+            filters={
+                "operator": "AND",
+                "children": [
+                    {
+                        "operator": operator,
+                        "column_id": at,
+                        "literal": {
+                            "raw_phrase": phrase,
+                            "candidate_value": value,
+                            "value_type": "timestamp",
+                        },
+                    }
+                    for operator, value in (
+                        ("GTE", "2026-09-01T00:00:00+07:00"),
+                        ("LT", "2026-10-01T00:00:00+07:00"),
+                    )
+                ],
+            },
+        )
+        self.assertEqual(execute_query(compile_query(plan, revision, phrase))[0], [["0.30"]])
 
     def test_row_reordering_and_irrelevant_records_preserve_filtered_sum(self) -> None:
         for content in [

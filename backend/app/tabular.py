@@ -237,6 +237,8 @@ def suggested_type(values: list[Any]) -> KINDS:
             else "date"
         )
     strings = [str(v) for v in nonempty]
+    if all(v.casefold() in ("true", "false") for v in strings):
+        return "boolean"
     if any(re.fullmatch(r"[+-]?0\d+", v) for v in strings):
         return "text"
     if all(re.fullmatch(r"[+-]?\d+", v) for v in strings):
@@ -322,13 +324,13 @@ def validate_rows(
         values = {row[column.id] for row in rows}
         phrases: set[str] = set()
         for mapping in column.value_mappings:
-            if mapping.phrase in phrases:
+            if mapping.phrase.casefold() in phrases:
                 raise TableValidationError(
                     "Mapping có tên gọi trùng lặp; cần xác nhận lại.",
                     "mapping_phrase_unique",
                     column,
                 )
-            phrases.add(mapping.phrase)
+            phrases.add(mapping.phrase.casefold())
             try:
                 target = typed_value(mapping.value, column, timezone)
             except (ValueError, TypeError, ArithmeticError):

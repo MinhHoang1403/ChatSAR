@@ -156,6 +156,37 @@ def test_approved_mapping_keeps_original_and_canonical(revision: dict) -> None:
         )
 
 
+def test_longer_approved_phrase_does_not_require_its_nested_opposite(revision: dict) -> None:
+    revision["columns"][0]["value_mappings"] = [
+        {"phrase": "còn hàng", "value": "AVAILABLE"},
+        {"phrase": "không còn hàng", "value": "EMPTY"},
+    ]
+    question = "Tổng không còn hàng"
+    compiled = compile_query(
+        proposal(revision, question, filters=leaf("không còn hàng", "EMPTY")), revision, question
+    )
+    assert compiled.filters[0]["canonical_value"] == "EMPTY"
+    with pytest.raises(AppError):
+        compile_query(
+            proposal(revision, question, filters=leaf("còn hàng", "AVAILABLE")), revision, question
+        )
+    with pytest.raises(AppError):
+        question = "Tổng còn hàng và không còn hàng"
+        compile_query(
+            proposal(revision, question, filters=leaf("không còn hàng", "EMPTY")),
+            revision,
+            question,
+        )
+
+
+def test_mapping_case_preserves_exact_canonical_value(revision: dict) -> None:
+    revision["columns"][0]["value_mappings"] = [{"phrase": "sẵn sàng", "value": "Ready"}]
+    compiled = compile_query(
+        proposal(revision, "SẴN SÀNG", filters=leaf("SẴN SÀNG", "Ready")), revision, "SẴN SÀNG"
+    )
+    assert compiled.filters[0]["canonical_value"] == "Ready"
+
+
 @pytest.mark.parametrize(
     "question", ["Tổng tại quận 3", "Phí quận 3 là bao nhiêu?", "Cho xem dữ liệu quận 3"]
 )
@@ -203,3 +234,47 @@ def test_mapping_uses_reviewed_date_format_before_iso_binding(revision: dict) ->
     )
     compiled = compile_query(plan, revision, "ngày kiểm tra")
     assert compiled.filters[0]["canonical_value"] == "2026-02-01"
+
+
+@pytest.mark.parametrize(
+    "kind,phrase,start,end",
+    [
+        ("date", "tháng 2 năm 2024", "2024-02-01", "2024-03-01"),
+        (
+            "timestamp",
+            "tháng 12 năm 2026",
+            "2026-12-01T00:00:00+07:00",
+            "2027-01-01T00:00:00+07:00",
+        ),
+    ],
+)
+def test_explicit_calendar_month_requires_exact_half_open_pair(
+    revision: dict, kind: str, phrase: str, start: str, end: str
+) -> None:
+    revision["columns"][2]["data_type"] = kind
+    first = {**leaf(phrase, start, DAY, kind), "operator": "GTE"}
+    last = {**leaf(phrase, end, DAY, kind), "operator": "LT"}
+    plan = proposal(revision, phrase, filters={"operator": "AND", "children": [first, last]})
+    compiled = compile_query(plan, revision, phrase)
+    assert all(item["mapping_source"] == "explicit_calendar_period" for item in compiled.filters)
+    for filters in (
+        first,
+        {"operator": "OR", "children": [first, last]},
+        {
+            "operator": "AND",
+            "children": [first, {**last, "literal": {**last["literal"], "candidate_value": start}}],
+        },
+    ):
+        with pytest.raises(AppError):
+            compile_query(proposal(revision, phrase, filters=filters), revision, phrase)
+
+
+def test_calendar_month_never_guesses_year_and_checks_dst() -> None:
+    from app.query import calendar_month
+
+    assert calendar_month("tháng 9", "timestamp", "UTC") is None
+    start, end = calendar_month("month 3 year 2026", "timestamp", "Europe/Berlin")
+    assert start.isoformat() == "2026-03-01T00:00:00+01:00"
+    assert end.isoformat() == "2026-04-01T00:00:00+02:00"
+    with pytest.raises(AppError):
+        calendar_month("tháng 13 năm 2026", "date", "UTC")

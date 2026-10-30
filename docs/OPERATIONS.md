@@ -1,5 +1,13 @@
 # Vận hành ChatSAR
 
+## Vận hành hiện hành sau đợt sửa — 30/10/2026
+
+Live đang dừngUSAGE_UNKNOWN doHTTP503 mới a4755acf-0039-4928-890e-0f57b6b4322d, khôngphảilỗiconfigsource. Khônggọihealthmodel/retry/chuyểngrant hoặc thêmreviewHTTP400cho503. Giữtokens/costNULLvàreserve0.0141532USD. Quyềnmới thêm100calls/1.50USD,grant riêng69d37b9b-fd6d-4296-9189-9fb5303b46a1,max95Codex;đãdùng23,reserve0.3117407USD. Ledger127=122/5. Còn77mới và9cũmanual nhưng usagegate vẫn dừng; .env chỉđổi total/provider cap vàactivegranttheoquyềnmới,keys/flags/budgetglobalgiữnguyên. Không dùngquota còn đểtựbỏchặn.
+
+AI Setup có thêmcheckbox gửi tốiđa20giátrịphânbiệt/cột để đềxuất cáchgọi; mặcđịnhtắt, cầnmetadataopt-in,khônggửidòng. Chủnguồnreview/confirmmappingtrướcpublish,quyềnhỏiGemini riêng. Không sửa nguồnGoogle thật đểbenchmark; bảngquality-ui.csv tổnghợp2rowsởkhônggian nghiệmthu củaaccountBgiữprivate/sharing[]. AccountA/historySQLgiữnguyên. BrowserhaiGoogleđãuserloginvàkiểm chuyểnidentity;chưaphải haiindependentprofilesđồngthời.
+
+157unit/42integration/28evaluation/14frontend+types/build đãkiểm. Chạyquota/integration/acceptance tuần tự vìfixturesquotacórows tạmtácđộnggloballedgerassertion. Hai plan/goldgiữnguyên. Phase1NOT_ACCEPTED; xemđầuPREFLIGHT.
+
 ## Bổ sung hiện hành: phiên khách — 30/10/2026
 
 Áp dụng migration guest_sessions sau usage_review trước build/start; readiness yêu cầu đủ9migrations. Trang chủ không còn yêu cầu login trước. Đăng xuất chỉ thu hồi session tài khoản, không xóa dữ liệu Google. Login từ khách mở dữ liệu tài khoản, không nhập guest. Guest token không được lưu bền phía trình duyệt; refresh tạo phiên sạch. Frontend pagehide/login gửi DELETE keepalive; server giới hạn token2giờ và reaper60giây dọn guest hết phiên, không chạm provider ledger hoặc Google. Pending setup/ingestion/model trì hoãn cleanup đến khi xong/recovery, không hủy hoặc replay HTTP đang bay. Nếu trình duyệt không gửi cleanup, dữ liệu tạm còn server đến TTL/reaper; không coi việc UI mất dữ liệu là chứng minh xóa vật lý ngay mọi tình huống.

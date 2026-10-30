@@ -1,5 +1,11 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+## Tiếp tục khắc phục và nghiệm thu — quyền mới 30/10/2026
+
+Chủ dự án yêu cầu sửa hết lỗi còn lại, xác nhận thêm tối đa100HTTP Gemini/trần dự phòng bổ sung1.50USD. Đây là quyền mới sau checkpoint2669ea4, không sử dụng9lượt cũ đã bàn giao thủ công. Baseline PostgreSQL104rows(Gemini99/Knowledge5), grant cũ91used/reserve1.2290194USD. Giữ ledger/reviews/keys/flags, Knowledge/LlamaParse/BGE mới0; tối đa95lượt Codex trong phần bổ sung, giữ5lượt mới và9lượt cũ cho chủ dự án. Chỉ điều chỉnh cap local có kiểm soát trước live; dừng nhóm khi lỗi hệ thống/unknown usage, không retry tự động.
+
+Chẩn đoán: profile AI Setup chỉ có thống kê, không có vocabulary nên không thể đề xuất ánh xạ ngôn ngữ có căn cứ; query guard đúng khi từ chối dịch chưa được xác nhận. Bổ sung consent riêng để gửi vocabulary giới hạn20giá trị/cột TEXT/boolean, không gửi dòng; AI chỉ đề xuất alias/mapping từ đó, vẫn review/validate toàn bảng và owner confirm trước publish. Không nới literal guard hoặc tự thêm mapping sau khi model query. Ranking dùng projection tối thiểu(identifier+tiêu chí+đầu ra được hỏi), order phụ identifier ổn định; câu hỏi hiện tại thay điều kiện cùng cột của context, không tự mở rộng literal. Sửa tổng quát trước canary, không chèn tên dataset/câu benchmark vào production. Gold/hai plan giữ nguyên; lần kiểm với catalog đã review phải ghi rõ điều kiện khác baseline, không sửa4FAIL lịch sử thànhPASS.
+
 ## Trang chủ khách và header — quyền mở rộng 30/10/2026
 
 Chủ dự án yêu cầu lần đầu truy cập/sau logout mở trang chủ, ô account có Đăng nhập dẫn sang trang login; xác nhận khách được upload CSV/XLSX và hỏi AI đầy đủ nhưng reload mất dữ liệu/chat. Đây là ngoại lệ mới cho gate Google bắt buộc trước mọi thao tác; không tắt auth/owner hoặc dùng token Google giả. Hai plan gốc giữ nguyên, không Phase2. Chi phí không cấp thêm:9lượt còn lại đã bàn giao cho chủ dự án, Codex chỉ kiểm mock/offline/browser không generation.

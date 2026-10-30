@@ -74,6 +74,7 @@ get_engine().dispose()
         kinds: dict[str, str],
         null_sentinel: str | None = None,
         nullable_columns: set[str] | None = None,
+        reviewed_metadata: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         boundary = uuid4().hex
         multipart = (
@@ -113,6 +114,13 @@ get_engine().dispose()
                 if column["data_type"] != "text"
                 else []
             )
+            if reviewed_metadata and column["name"] in reviewed_metadata:
+                # Metadata đã review riêng từ nguồn, không lấy từ expected answer/gold SQL.
+                patch = reviewed_metadata[column["name"]]
+                allowed_metadata = {"description", "aliases", "role", "primary_key", "unit", "aggregation_policy", "value_mappings"}
+                if not set(patch) <= allowed_metadata:
+                    raise ValueError("Catalog review cannot change source values/types/identity")
+                column.update(patch)
         published = self.request(
             f"/datasets/{uploaded['dataset_id']}/confirm",
             {

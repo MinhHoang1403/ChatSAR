@@ -5,9 +5,11 @@ from __future__ import annotations
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date, datetime
 from time import perf_counter
 from typing import Any, Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import (
@@ -175,7 +177,9 @@ def compile_query(
 
     literal_evidence: list[dict[str, Any]] = []
 
-    def literal(value: QueryLiteral, column_id: str) -> Any:
+    def literal(
+        value: QueryLiteral, column_id: str, period_bound: date | datetime | None = None
+    ) -> Any:
         review = catalog[column_id]
         if value.value_type != review.data_type:
             raise fail("Kiểu giá trị không khớp cột đã xác nhận.", "QUERY_CLARIFY")
@@ -193,18 +197,26 @@ def compile_query(
             )
             bound = typed_value(value.candidate_value, query_review, revision["timezone"])
             # Chỉ chấp nhận chuyển kiểu chính xác theo format đã duyệt hoặc ISO.
-            # Mốc tháng/thiếu năm chưa có mapping đã duyệt thì hỏi lại, không đoán.
+            # Tháng có đủ năm chỉ nhận cặp [đầu tháng, đầu tháng sau) đã đối chiếu.
+            # Không lấy năm hiện tại, năm từ dữ liệu hoặc một mốc model tự chọn.
             original_review = review.model_copy(update={"null_values": []})
-            mapped = [m for m in review.value_mappings if m.phrase == value.raw_phrase]
+            mapped = [
+                m
+                for m in review.value_mappings
+                if m.phrase.casefold() == value.raw_phrase.casefold()
+            ]
             if mapped:
                 if len(mapped) != 1:
                     raise ValueError("Ambiguous mapping")
                 original = typed_value(mapped[0].value, original_review, revision["timezone"])
                 origin = "owner_confirmed_mapping"
+            elif period_bound is not None:
+                original = period_bound
+                origin = "explicit_calendar_period"
             else:
                 original = None
             try:
-                if not mapped:
+                if not mapped and period_bound is None:
                     original = typed_value(value.raw_phrase, original_review, revision["timezone"])
             except ValueError:
                 if review.data_type != "date":
@@ -238,7 +250,9 @@ def compile_query(
     nodes = 0
     current_operator = "EQ"
 
-    def predicate(node: Predicate, depth: int = 0) -> ColumnElement[bool]:
+    def predicate(
+        node: Predicate, depth: int = 0, period_bound: date | datetime | None = None
+    ) -> ColumnElement[bool]:
         nonlocal nodes, current_operator
         nodes += 1
         if nodes > 100 or depth > 8:
@@ -246,7 +260,30 @@ def compile_query(
         if node.operator in ("AND", "OR"):
             if not node.children or node.column_id or node.literal or node.values:
                 raise fail("Cấu trúc nhóm điều kiện không hợp lệ.")
-            expressions = [predicate(child, depth + 1) for child in node.children]
+            bounds: dict[int, date | datetime] = {}
+            if node.operator == "AND":
+                pairs: dict[tuple[str, str], list[tuple[int, Predicate]]] = {}
+                for index, child in enumerate(node.children):
+                    if child.column_id and child.literal:
+                        pairs.setdefault((child.column_id, child.literal.raw_phrase), []).append(
+                            (index, child)
+                        )
+                for (column_id, phrase), items in pairs.items():
+                    review = catalog.get(column_id)
+                    if (
+                        len(items) != 2
+                        or {c.operator for _, c in items} != {"GTE", "LT"}
+                        or review is None
+                    ):
+                        continue
+                    period = calendar_month(phrase, review.data_type, revision["timezone"])
+                    if period is not None:
+                        for index, child in items:
+                            bounds[index] = period[0 if child.operator == "GTE" else 1]
+            expressions = [
+                predicate(child, depth + 1, bounds.get(index))
+                for index, child in enumerate(node.children)
+            ]
             return and_(*expressions) if node.operator == "AND" else or_(*expressions)
         target = column(node.column_id)
         if node.children:
@@ -268,7 +305,7 @@ def compile_query(
             "NE",
         ):
             raise fail("Phép so sánh chưa được hỗ trợ cho kiểu này.")
-        value = literal(node.literal, column_id)
+        value = literal(node.literal, column_id, period_bound)
         operations = {
             "EQ": target.__eq__,
             "NE": target.__ne__,
@@ -401,6 +438,27 @@ def compile_query(
     )
 
 
+def calendar_month(
+    phrase: str, kind: str, timezone: str
+) -> tuple[date | datetime, date | datetime] | None:
+    """Chỉ ngữ pháp tháng/năm tường minh; không đoán phần ngày/năm thiếu."""
+    matched = re.fullmatch(
+        r"(?:tháng|month)\s+(\d{1,2})\s+(?:năm|year)\s+(\d{4})", phrase, re.IGNORECASE
+    )
+    if matched is None or kind not in ("date", "timestamp"):
+        return None
+    month, year = map(int, matched.groups())
+    try:
+        start = date(year, month, 1)
+        end = date(year + (month == 12), 1 if month == 12 else month + 1, 1)
+        if kind == "date":
+            return start, end
+        zone = ZoneInfo(timezone)
+        return datetime(year, month, 1, tzinfo=zone), datetime(end.year, end.month, 1, tzinfo=zone)
+    except ValueError:
+        raise fail("Tháng hoặc năm chưa hợp lệ; vui lòng làm rõ.", "QUERY_CLARIFY") from None
+
+
 def contains_phrase(question: str, phrase: str) -> bool:
     # Ranh giới từ Unicode, không bỏ dấu hoặc fuzzy match để tự đổi nghĩa.
     return (
@@ -410,14 +468,32 @@ def contains_phrase(question: str, phrase: str) -> bool:
     )
 
 
+def mentioned_phrases(question: str, phrases: list[str]) -> set[str]:
+    """Cùng một vị trí dùng tên gọi đầy đủ, tránh bắt cả phần khẳng định trong phủ định."""
+    matches = [
+        (match.start(), match.end(), phrase)
+        for phrase in phrases
+        if phrase
+        for match in re.finditer(
+            r"(?<!\w)" + re.escape(phrase) + r"(?!\w)", question, re.IGNORECASE
+        )
+    ]
+    return {
+        phrase
+        for start, end, phrase in matches
+        if not any(a <= start and end <= b and b - a > end - start for a, b, _ in matches)
+    }
+
+
 def validate_structure(
     plan: QueryPlan, revision: dict[str, Any], question: str, evidence: list[dict[str, Any]]
 ) -> None:
     for item in revision["columns"]:
         review = ColumnReview.model_validate(item)
-        for mapping in review.value_mappings:
-            if contains_phrase(question, mapping.phrase) and not any(
-                e["column_id"] == review.id and e["raw_phrase"] == mapping.phrase for e in evidence
+        for phrase in mentioned_phrases(question, [m.phrase for m in review.value_mappings]):
+            if not any(
+                e["column_id"] == review.id and e["raw_phrase"].casefold() == phrase.casefold()
+                for e in evidence
             ):
                 raise fail(
                     "Một tên gọi đã xác nhận chưa được đưa vào điều kiện lọc.", "QUERY_CLARIFY"
@@ -439,13 +515,9 @@ def validate_structure(
         raise fail("Yêu cầu danh sách đầy đủ chưa được biểu diễn.", "QUERY_CLARIFY")
     # Giá trị lấy từ DB, không phải danh sách qualifier do model tự khai.
     for column_id, values in revision.get("grounding_values", {}).items():
-        for value in values:
-            if (
-                len(value) >= 2
-                and contains_phrase(question, value)
-                and not any(
-                    e["column_id"] == column_id and e["canonical_value"] == value for e in evidence
-                )
+        for value in mentioned_phrases(question, values):
+            if len(value) >= 2 and not any(
+                e["column_id"] == column_id and e["canonical_value"] == value for e in evidence
             ):
                 raise fail(
                     "Một giá trị được nhắc trong câu hỏi chưa có điều kiện lọc tương ứng.",

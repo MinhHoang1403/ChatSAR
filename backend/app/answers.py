@@ -104,6 +104,11 @@ def failure_text(status: str, code: str | None = None, safe_message: str = "") -
         return (
             "Nguồn chưa được cấp quyền gửi tới mô hình. Bạn có thể xem lại trong Quản lý dữ liệu."
         )
+    if code == "PROVIDER_TEMPORARY":
+        return (
+            "Nhà cung cấp mô hình đang tạm thời không sẵn sàng. "
+            "Lượt hỏi chưa có kết quả; hệ thống không tự gửi lại."
+        )
     if status == "clarify":
         return safe_message or "Cần làm rõ cột, điều kiện hoặc đơn vị trước khi lấy kết quả."
     if status == "unsupported":

@@ -17,6 +17,9 @@ list/list_all: chi tiết nhiều dòng/danh sách đầy đủ, direct projecti
 scalar: tổng/đếm/trung bình/MIN/MAX của tập đã lọc; không select/group/order.
 group: aggregate theo từng nhóm được hỏi; select_columns phải đúng group_by.
 ranking: các bản ghi/nhóm đứng đầu hoặc cuối; cần order_by và limit đúng yêu cầu.
+Ranking bản ghi chỉ project mã định danh, tiêu chí xếp hạng và cột được hỏi thêm;
+không lấy toàn bảng khi chỉ hỏi bản ghi cao/thấp nhất. Sau tiêu chí chính, order tăng
+dần theo mã định danh để thứ tự bằng điểm ổn định. Không thêm aggregate vào ranking bản ghi.
 Cực trị MIN/MAX dạng giá trị scalar khác yêu cầu tìm bản ghi đứng đầu/cuối.
 required_columns ghi mọi cột phải hiển thị trực tiếp, không gồm input của aggregate.
 Không bỏ projection hoặc tự thêm phép tính. COUNT_ROWS đếm dòng, không nhận column_id;
@@ -31,7 +34,12 @@ Literal raw_phrase có nguyên văn trong question hoặc verified_context.quest
 candidate_value có kiểu đúng cột: text giữ zero đầu/dấu; decimal dấu chấm;
 date ISO hoặc format đã xác nhận; timestamp ISO có timezone; boolean true/false.
 Không tự đổi giá trị/đơn vị/năm, không fuzzy. Dùng mapping owner xác nhận nếu có.
-Thời gian chính xác dùng GTE start, LT end; tháng thiếu ngày cụ thể cần CLARIFY.
+Trong câu hỏi tiếp, điều kiện mới trên cùng cột thay điều kiện cũ, không AND với cũ.
+Literal hiện tại giữ đúng nguyên văn và kiểu kể cả chuỗi chỉ có chữ số; không lấy
+giá trị dài hơn từ context để thay nó. Chỉ kế thừa metric/điều kiện không bị thay đổi.
+Thời gian chính xác dùng GTE start, LT end. Tháng có đủ năm là khoảng lịch tường minh:
+dùng cùng raw_phrase của tháng/năm cho GTE đầu tháng và LT đầu tháng kế tiếp theo timezone.
+Tháng thiếu năm cần CLARIFY; không lấy năm hiện tại hoặc suy từ dữ liệu.
 Thiếu thông tin để tính/chuyển đơn vị (ví dụ tỷ giá) cần CLARIFY, unresolved nói phần thiếu.
 UNSUPPORTED chỉ cho yêu cầu ngoài khả năng một bảng; không dùng để né câu mơ hồ.
 Không JOIN, DDL/DML, tools, tự đoán metadata hoặc dữ liệu. Giữ NULL khác zero.

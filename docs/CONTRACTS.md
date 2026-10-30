@@ -1,5 +1,13 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## Bổ sung hiện hành: vocabulary opt-in và lịch tháng — 30/10/2026
+
+POSTsetup thêm consent_values:boolean=false; chỉ gửi observed_values khi use_ai+consent_metadata+consent_values. Vocabulary riêngTEXT/BOOLEAN tốiđa20giátrị/120kýtự; cột vượtgiớihạn bỏvocabulary hoàn toàn. Khôngrawrows, không coi mappingAI làapproved trướcconfirm, khôngtựcấp querypermission. CSVtrue/false candidateboolean,0/1giữinteger. Mappingphrasecasefold/duplicatecasefold đượckiểm, canonicalTEXTkhôngđổichữhoa/thường; cụm dài ởcùngvịtrí che cụm con nhưng khôngche lầnxuấthiện độc lập.
+
+Binder hỗtrợ lịch tháng có đủnăm bằng hai leafGTE/LT cùngrawphrase trongAND, so đúngđầutháng/đầuthángsau theo timezone. Không đoán năm/tựsửacandidate hoặc chấpnhậnOR/thiếucặp. Grammar genericmonth/year, khônghardcodecâu/ngành hoặc thêmCOUNTngầmtừbenchmark. Production vẫnmộtQueryRequest→QueryPlan→compilerSQLAlchemy. Khôngcó migration/dependency mới.
+
+Quyền mới100Gemini/1.50USD cógrant riêngbaseline104;23HTTP đãdùng,127ledger. HTTP503 cuốiusageNULL làmUSAGE_UNKNOWN,khôngtựreview503. Hiệuquảmodel/retesttoànbộchưađạtgate; chi tiếtđầuPREFLIGHT.
+
 ## Bổ sung hiện hành: principal khách tạm — 30/10/2026
 
 Yêu cầu chủ dự án mở rộng truy cập ẩn danh, giữ Google verify/nonce/CSRF nguyên vẹn. POST `/api/auth/guest` body{} tạo principal provider=guest, workspace tạm và token2giờ; trả no-store, không cookie. Header X-Guest-Session chỉ nhận token guest; cookie chỉ nhận Google. Google cookie hợp lệ ưu tiên khi login. Mutations giữ Origin+CSRF+owner; profile yêu cầu Google. Không nhận owner/token qua query/body. Không localStorage/sessionStorage hoặc tự nhập dữ liệu khách vào tài khoản khi login.

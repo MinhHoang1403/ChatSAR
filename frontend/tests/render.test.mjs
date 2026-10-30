@@ -103,6 +103,8 @@ test('SQL formatting changes only whitespace and preserves quoted identifiers an
 test('private AI setup starts with explicit consent and disabled cloud action', async () => {
   const html = await render('AIReview', { preview, csrf: 'never-render-token', onBusy: noop, onProposal: noop });
   assert.match(html, /Cho phép gửi tên cột và thống kê/);
+  assert.match(html, /Cho phép thêm tối đa 20 giá trị phân biệt/);
+  assert.match(html, /<input type="checkbox" disabled=""/);
   assert.match(html, /<button disabled="">Nhận đề xuất AI/);
   assert.match(html, /Phân tích local/); assert.doesNotMatch(html, /never-render-token/);
 });

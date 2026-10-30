@@ -167,6 +167,7 @@ def test_decimal_format_never_rounds_or_uses_float(value, expected: str) -> None
         ("clarify", None, "làm rõ"),
         ("unsupported", None, "vượt phạm vi"),
         ("provider_unavailable", "USAGE_UNKNOWN", "đối soát"),
+        ("provider_unavailable", "PROVIDER_TEMPORARY", "không tự gửi lại"),
         ("execution_error", None, "chưa có kết quả"),
         ("insufficient", "DATA_PERMISSION_REQUIRED", "cấp quyền"),
     ],

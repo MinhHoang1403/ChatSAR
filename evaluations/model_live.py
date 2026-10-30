@@ -84,10 +84,23 @@ SOURCES.update(
 def semantic_shape(plan: dict, columns: list[dict]) -> dict:
     """Đọc plan đã lưu, không import binder/compiler hoặc dùng chúng tạo expected."""
     names = {c["id"]: c["name"] for c in columns}
+    types = {c["id"]: c.get("data_type") for c in columns}
     outputs = {
         a["output_id"]: a["operator"] + ":" + str(names.get(a.get("column_id")))
         for a in plan.get("aggregations", [])
     }
+
+    def literal_value(value, column_id):
+        candidate = value["candidate_value"]
+        # Cột BOOLEAN được PostgreSQL bind theo kiểu; khác hoa/thường ở biểu diễn
+        # không đổi nghĩa. TEXT luôn so nguyên văn, kể cả chữ True/False/0/1.
+        if types.get(column_id) == "boolean" and value.get("value_type") == "boolean":
+            canonical = str(candidate).casefold()
+            if canonical in ("true", "1"):
+                return "true"
+            if canonical in ("false", "0"):
+                return "false"
+        return candidate
 
     def predicate(node):
         if not node:
@@ -103,9 +116,9 @@ def semantic_shape(plan: dict, columns: list[dict]) -> dict:
                 node.get("column_id"), "UNBOUND:" + str(node.get("column_id"))
             )
             if node.get("literal"):
-                result["value"] = node["literal"]["candidate_value"]
+                result["value"] = literal_value(node["literal"], node.get("column_id"))
             if node.get("values"):
-                result["values"] = sorted(v["candidate_value"] for v in node["values"])
+                result["values"] = sorted(literal_value(v, node.get("column_id")) for v in node["values"])
         return result
 
     return {
@@ -132,6 +145,24 @@ def semantic_shape(plan: dict, columns: list[dict]) -> dict:
 
 
 def semantics_match(actual: dict, expected: dict) -> bool:
+    def scalar_nonnull_count(shape):
+        shape = dict(shape)
+        predicate = shape.get("filters")
+        if (
+            shape.get("metrics") == [{"operator": "COUNT_ROWS", "column": None}]
+            and not shape.get("selection") and not shape.get("group_by")
+            and isinstance(predicate, dict) and predicate.get("operator") == "IS_NOT_NULL"
+            and set(predicate) == {"operator", "column"}
+        ):
+            # COUNT(*) WHERE c IS NOT NULL = COUNT(c) cho một scalar duy nhất.
+            # Không áp dụng GROUP BY (có thể làm mất nhóm chỉ NULL), OR, nhiều metric
+            # hoặc filter cột khác. Gold không đổi; đối chiếu PG độc lập có regression.
+            shape["metrics"] = [{"operator": "COUNT_NON_NULL", "column": predicate["column"]}]
+            shape["filters"] = None
+        return shape
+
+    actual, expected = scalar_nonnull_count(actual), scalar_nonnull_count(expected)
+
     def remove_redundant_null_filter(shape):
         shape = dict(shape)
         metrics = shape.get("metrics", [])
@@ -213,6 +244,14 @@ def semantics_match(actual: dict, expected: dict) -> bool:
 
 def run_semantic(args) -> None:
     manifest = load_scenarios()
+    catalog_review = None
+    if args.catalog_review:
+        review_path = (ROOT / args.catalog_review).resolve()
+        if not review_path.is_relative_to((ROOT / "artifacts").resolve()):
+            raise ValueError("Catalog review must stay in local artifacts")
+        catalog_review = json.loads(review_path.read_text(encoding="utf-8"))
+        if catalog_review.get("status") != "reviewed":
+            raise ValueError("Catalog review has not been confirmed")
     if args.replacement:
         # Chỉ dùng cho chấm held-out sau khi candidate đã khóa; không đưa gold
         # vào payload model hoặc đổi fixture/checksum khi nhận kết quả.
@@ -292,6 +331,7 @@ def run_semantic(args) -> None:
         "sources": {},
         "stop_reason": None,
         "max_requests": args.max_requests,
+        "catalog_review": args.catalog_review,
     }
     used = 0
     try:
@@ -310,9 +350,13 @@ def run_semantic(args) -> None:
                     for row in fixtures[domain]
                 ]
             )
+            content = out.getvalue().encode()
+            reviewed = catalog_review["sources"].get(domain) if catalog_review else None
+            if reviewed and reviewed["data_sha256"] != hashlib.sha256(content).hexdigest():
+                raise ValueError("Reviewed catalog does not match exact source CSV")
             source = session.publish(
                 workspace["id"],
-                out.getvalue().encode(),
+                content,
                 kinds,
                 sentinel,
                 {
@@ -320,6 +364,7 @@ def run_semantic(args) -> None:
                     for name in kinds
                     if any(r[name] is None for r in fixtures[domain])
                 },
+                reviewed_metadata=reviewed["columns"] if reviewed else None,
             )
             source["preview"] = session.request(
                 f"/datasets/{source['dataset_id']}/preview"
@@ -519,6 +564,7 @@ def main() -> None:
     parser.add_argument("--replacement", action="store_true", help="Bộ held-out thay thế đã khóa")
     parser.add_argument("--max-requests", type=int, default=0)
     parser.add_argument("--output", default="artifacts/semantic-live.json")
+    parser.add_argument("--catalog-review", help="Local source-checksummed metadata reviewed before evaluation")
     parser.add_argument("--restart", action="store_true")
     parser.add_argument(
         "--prepare-only",

@@ -6,6 +6,25 @@ from evaluations.model_live import semantic_shape, semantics_match
 
 
 class SemanticScoringTests(unittest.TestCase):
+    def test_scalar_filtered_count_rows_equals_only_the_same_nonnull_count(self):
+        actual = {"metrics": [{"operator": "COUNT_ROWS", "column": None}], "filters": {"operator": "IS_NOT_NULL", "column": "fee"}}
+        expected = {"metrics": [{"operator": "COUNT_NON_NULL", "column": "fee"}]}
+        self.assertTrue(semantics_match(actual, expected))
+        self.assertFalse(semantics_match(actual, {"metrics": [{"operator": "COUNT_ROWS", "column": None}]}))
+        self.assertFalse(semantics_match(actual, {"metrics": [{"operator": "COUNT_NON_NULL", "column": "other"}]}))
+        for change in ({"group_by": ["code"], "selection": ["code"]}, {"metrics": actual["metrics"] + [{"operator": "SUM", "column": "amount"}]}, {"filters": {"operator": "OR", "children": [actual["filters"], {"operator": "IS_NULL", "column": "amount"}]}}):
+            self.assertFalse(semantics_match({**actual, **change}, expected))
+
+    def test_boolean_spelling_equivalence_requires_both_catalog_and_literal_boolean(self):
+        for kind in ("boolean", "text"):
+            columns = [{"id": "a", "name": "enabled", "data_type": kind}]
+            for value_kind in ("boolean", "text"):
+                plan = {"filters": {"operator": "EQ", "column_id": "a", "literal": {"candidate_value": "False", "value_type": value_kind}}}
+                shape = semantic_shape(plan, columns)
+                expected = {"filters": {"operator": "EQ", "column": "enabled", "value": "false"}}
+                self.assertEqual(semantics_match(shape, expected), kind == value_kind == "boolean")
+                self.assertFalse(semantics_match(shape, {"filters": {"operator": "EQ", "column": "enabled", "value": "true"}}))
+
     def test_only_redundant_scalar_null_filters_are_equivalent(self):
         metric = {"operator": "COUNT_DISTINCT", "column": "value"}
         actual = {

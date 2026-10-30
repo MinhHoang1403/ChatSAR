@@ -9,6 +9,35 @@ from app.setup import check_proposal, local_proposal
 from app.tabular import read_table, validate_rows
 
 
+def test_setup_vocabulary_requires_explicit_opt_in_and_never_sends_rows() -> None:
+    from app.setup import setup_profile
+
+    parsed = read_table(
+        b"code,state,enabled,amount\n0007,ready,true,0.10\n0012,pending,false,0.20\n", ".csv"
+    )
+    revision = uuid4()
+    private = setup_profile(parsed, revision, include_values=False)
+    assert all("observed_values" not in column for column in private)
+    shared = setup_profile(parsed, revision, include_values=True)
+    assert shared[0]["observed_values"] == ["0007", "0012"]
+    assert shared[1]["observed_values"] == ["pending", "ready"]
+    assert shared[2]["observed_values"] == ["false", "true"]
+    assert shared[2]["data_type"] == "boolean"
+    assert "observed_values" not in shared[3]
+    assert all("rows" not in column for column in shared)
+
+
+@pytest.mark.parametrize("values", [[f"item-{i}" for i in range(21)], ["x" * 121]])
+def test_setup_omits_incomplete_or_oversize_vocabulary(values: list[str]) -> None:
+    from app.setup import setup_profile
+    from app.tabular import ParsedTable
+
+    columns = setup_profile(
+        ParsedTable(["label"], [[v] for v in values], [], ""), uuid4(), include_values=True
+    )
+    assert "observed_values" not in columns[0]
+
+
 def test_business_metadata_merges_by_id_and_never_changes_source_order() -> None:
     from app.setup import SetupSuggestion, merge_suggestion
 

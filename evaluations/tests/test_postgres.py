@@ -51,6 +51,13 @@ class PostgresTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip().splitlines(), ["0007|0.10", "0012|0.20", "0100|NULL"])
 
+    def test_scalar_count_equivalence_and_grouped_counterexample(self) -> None:
+        for values in ("(NULL::numeric),(0),(0),(10)", "(NULL::numeric),(NULL)"):
+            self.assertEqual(postgres(f"SELECT (SELECT count(v) FROM (VALUES {values}) t(v))=(SELECT count(*) FROM (VALUES {values}) t(v) WHERE v IS NOT NULL);").strip(), "t")
+        self.assertEqual(postgres("SELECT count(v)=0 AND count(*) FILTER (WHERE v IS NOT NULL)=0 FROM (SELECT NULL::numeric v WHERE FALSE) t;").strip(), "t")
+        self.assertEqual(postgres("SELECT (SELECT count(*) FROM (SELECT k,count(v) FROM (VALUES ('A',NULL::numeric),('B',1)) t(k,v) GROUP BY k) a)<>(SELECT count(*) FROM (SELECT k,count(*) FROM (VALUES ('A',NULL::numeric),('B',1)) t(k,v) WHERE v IS NOT NULL GROUP BY k) b);").strip(), "t")
+        self.assertEqual(postgres("SELECT 'False'::boolean = 'false'::boolean, 'False'::text <> 'false'::text;").strip(), "t|t")
+
     def test_reader_cannot_write_even_if_read_only_default_is_overridden(self) -> None:
         for statement in [
             f"INSERT INTO data.{self.table} VALUES ('forbidden', 1)",
