@@ -1,5 +1,11 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## Bổ sung natural answers và SQL evidence 30/10/2026
+
+AnswerEnvelope thêm `processing` (evidence_format=1, source snapshot, provider thực/selected phân biệt, processed_at, stages, failed_stage/error_code, sql compiled/statement/parameter_names/execution_status). Không raw parameter values. Chỉ SQL được compile thật từ cùng statement đưa executor; owner checks hiện hữu trên history/results áp dụng cho toàn envelope. `timings_ms` thêm compilation và checkpoint/persistence khi đo được; backend total ghi rõ phạm vi, không gọi browser E2E. Legacy fields giữ đọc được, không rebuild/rewrite SQL cũ. Không có statement thì sql.statement=null; execution not_started/in_progress/succeeded/failed/unknown phân biệt. Checkpoint pending có envelope nhưng vẫn pending, không cho retry generation; restart giữ SQL và nguồn đã lưu, execution đang chạy trở unknown.
+
+Composer tất định dùng typed facts/plan/catalog aliases đã xác nhận, không model call, không đổi rows. NUMERIC format Việt trên prose bằng chuỗi, values bảng giữ nguyên. COUNT_ROWS nói số bản ghi; COUNT_NONNULL/DISTINCT nói đúng nghĩa cột, không gắn số bản ghi cho distinct. NULL và tập rỗng không bằng0, partial nói chưa đầy đủ, ranking nói limit và thứ tự trong evidence. Source/model/timing/SQL chỉ hiển thị khi có dữ kiện lưu thật; lịch sử thiếu không tự suy từ model đang chọn hoặc metadata mới.
+
 ## Hoàn thiện chất lượng/UI 30/10/2026
 
 **Gate tương thích:** QueryRequest bên dưới là candidate offline, chưa dùng trong generate_proposal production. Runtime tiếp tục QueryPlan/schema đã chạy thành công trước đó. Không có flag/runtime thứ hai; generic adapter chỉ được test offline với candidate, chưa canary khi USAGE_UNKNOWN. Không công bố bốn lỗi đã sửa live hoặc accuracy mới. Chỉ chuyển hợp đồng runtime sau canary có quyền và bằng chứng tương thích.

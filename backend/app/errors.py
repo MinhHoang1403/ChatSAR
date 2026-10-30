@@ -1,9 +1,21 @@
 """Lỗi công khai ổn định; không đưa dữ liệu đầu vào hoặc secrets vào thông báo."""
 
+from typing import Any
+
 
 class AppError(Exception):
-    def __init__(self, status: int, code: str, message: str) -> None:
+    def __init__(
+        self,
+        status: int,
+        code: str,
+        message: str,
+        *,
+        stage: str | None = None,
+        diagnostics: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(message)
         self.status = status
         self.code = code
         self.message = message
+        self.stage = stage
+        self.diagnostics = diagnostics

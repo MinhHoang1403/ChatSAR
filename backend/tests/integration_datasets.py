@@ -56,7 +56,7 @@ class DatasetIntegration(unittest.TestCase):
                 headers={"Idempotency-Key": "management-request"},
             )
         self.assertEqual(response.json()["status"], "answered", response.text)
-        self.assertEqual(response.json()["facts"]["columns"][0]["label"], "Tổng · Phí")
+        self.assertEqual(response.json()["facts"]["columns"][0]["label"], "Tổng Phí")
         self.assertEqual(response.json()["facts"]["rows"], [["0.10"]])
         result_id = response.json()["result_id"]
         self.assertEqual(
@@ -168,6 +168,351 @@ class DatasetIntegration(unittest.TestCase):
             self.assertEqual(future.result(timeout=10).json()["status"], "answered")
             self.assertEqual(calls.call_count, 1)
         self.assertEqual(self.client.delete(f"/api/conversations/{chat}").status_code, 204)
+
+    def test_sql_evidence_is_parameterized_per_message_and_owner_scoped(self) -> None:
+        revision = self.published(b"code,amount\n0007,0.10\n0012,0.20\n")
+        code, amount = [c["id"] for c in revision["columns"]]
+        chat = self.client.post(
+            "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+        ).json()["id"]
+        plan = self.plan(
+            revision,
+            "0007",
+            select_columns=[code, amount],
+            filters={
+                "operator": "EQ",
+                "column_id": code,
+                "literal": {"raw_phrase": "0007", "candidate_value": "0007", "value_type": "text"},
+            },
+        )
+        captured = []
+
+        def execute(compiled, **kwargs):
+            captured.append(
+                str(
+                    compiled.statement.compile(
+                        dialect=db.get_reader_engine().dialect,
+                        compile_kwargs={"render_postcompile": True},
+                    )
+                )
+            )
+            return execute_query(compiled, **kwargs)
+
+        with (
+            patch(
+                "app.conversation.generate_proposal",
+                return_value=Proposal(plan, "gemini", "offline-model", 11, 7, 12.5, "offline"),
+            ) as provider,
+            patch("app.conversation.execute_query", side_effect=execute),
+        ):
+            path = f"/api/conversations/{chat}/messages"
+            body = {"question": "0007", "dataset_revision_id": str(revision["id"])}
+            first = self.client.post(
+                path, json=body, headers={"Idempotency-Key": "evidence-request-key"}
+            ).json()
+            evidence = first["processing"]
+            self.assertEqual(evidence["sql"]["statement"], captured[0])
+            self.assertNotIn("0007", evidence["sql"]["statement"])
+            self.assertIn("%(", evidence["sql"]["statement"])
+            self.assertTrue(evidence["sql"]["compiled"])
+            self.assertEqual(evidence["sql"]["execution_status"], "succeeded")
+            self.assertEqual(first["display_rows"], [["0007", "0.10"]])
+            self.assertIn("0,10", first["display_text"])
+            self.assertEqual(evidence["source"]["revision_id"], str(revision["id"]))
+            self.assertEqual(evidence["provider"]["model"], "offline-model")
+            self.assertEqual(evidence["provider"]["latency_ms"], 12.5)
+            second = self.client.post(
+                path, json=body, headers={"Idempotency-Key": "evidence-request-key"}
+            ).json()
+            self.assertEqual(second["processing"], evidence)
+            result_path = f"/api/results/{first['result_id']}"
+            for _ in range(2):
+                self.assertEqual(self.client.get(result_path).json()["processing"], evidence)
+                self.assertEqual(
+                    self.client.get(f"/api/conversations/{chat}").json()["messages"][0]["envelope"][
+                        "processing"
+                    ],
+                    evidence,
+                )
+            self.assertEqual(provider.call_count, 1)
+            self.assertEqual(len(captured), 1)
+        self.as_user(self.token_b)
+        self.assertEqual(self.client.get(result_path).status_code, 404)
+        self.assertEqual(self.client.get(f"/api/conversations/{chat}").status_code, 404)
+
+    def test_error_stages_do_not_borrow_or_invent_sql(self) -> None:
+        from sqlalchemy.exc import CompileError, OperationalError
+
+        from app.errors import AppError
+        from app.providers import ProviderError
+
+        revision = self.published(b"code,amount\n0007,0.10\n")
+        plan = self.plan(
+            revision,
+            "Tổng",
+            aggregations=[
+                {"operator": "SUM", "column_id": revision["columns"][1]["id"], "output_id": "total"}
+            ],
+        )
+        cases = [
+            (
+                "generate_proposal",
+                ProviderError("PROVIDER_DISABLED", "disabled"),
+                "provider_preparation",
+                False,
+                "not_started",
+            ),
+            (
+                "generate_proposal",
+                ProviderError(
+                    "PROVIDER_TIMEOUT",
+                    "timeout",
+                    stage="provider_call",
+                    provider_name="gemini",
+                    model="offline",
+                    latency_ms=12,
+                ),
+                "provider_call",
+                False,
+                "not_started",
+            ),
+            (
+                "generate_proposal",
+                ProviderError("PROVIDER_SCHEMA", "400", stage="provider_call"),
+                "provider_call",
+                False,
+                "not_started",
+            ),
+            (
+                "generate_proposal",
+                ProviderError("PROVIDER_SCHEMA", "invalid", stage="proposal_parse"),
+                "proposal_parse",
+                False,
+                "not_started",
+            ),
+            (
+                "generate_proposal",
+                AppError(503, "USAGE_UNKNOWN", "unknown"),
+                "provider_preparation",
+                False,
+                "not_started",
+            ),
+            (
+                "generate_proposal",
+                AppError(503, "CALL_LIMIT_REACHED", "quota"),
+                "provider_preparation",
+                False,
+                "not_started",
+            ),
+            (
+                "generate_proposal",
+                AppError(503, "DATA_PERMISSION_REQUIRED", "private"),
+                "provider_preparation",
+                False,
+                "not_started",
+            ),
+            (
+                "compile_query",
+                AppError(422, "QUERY_CLARIFY", "Thiếu điều kiện."),
+                "semantic_validation",
+                False,
+                "not_started",
+            ),
+            (
+                "ground_catalog",
+                OperationalError("secret db", {}, Exception("secret password")),
+                "catalog",
+                False,
+                "not_started",
+            ),
+            (
+                "capture_sql",
+                CompileError("secret compile"),
+                "sql_compilation",
+                False,
+                "not_started",
+            ),
+            ("compose_answer", ValueError("secret compose"), "composition", True, "succeeded"),
+        ]
+        for target, error, stage, compiled, execution in cases:
+            with self.subTest(target=target, stage=stage):
+                chat = self.client.post(
+                    "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+                ).json()["id"]
+                path = (
+                    "app.conversation." + target
+                    if target != "capture_sql"
+                    else "app.evidence.Processing.capture_sql"
+                )
+                with (
+                    patch(
+                        "app.conversation.generate_proposal",
+                        return_value=Proposal(plan, "gemini", "offline", 1, 1, 2, None),
+                    ),
+                    patch(path, side_effect=error),
+                ):
+                    response = self.client.post(
+                        f"/api/conversations/{chat}/messages",
+                        json={"question": "Tổng", "dataset_revision_id": str(revision["id"])},
+                        headers={"Idempotency-Key": uuid4().hex},
+                    )
+                self.assertEqual(response.status_code, 200, response.text)
+                body = response.json()
+                e = body["processing"]
+                self.assertEqual(e["failed_stage"], stage, body)
+                self.assertEqual(e["sql"]["compiled"], compiled)
+                self.assertEqual(e["sql"]["execution_status"], execution)
+                self.assertEqual(body["display_rows"], [])
+                self.assertNotIn("secret", response.text)
+
+    def test_clarify_unsupported_and_missing_source_have_no_sql(self) -> None:
+        from app.query import QueryPlan
+
+        revision = self.published(b"code,amount\n0007,0.10\n")
+        chat = self.client.post(
+            "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+        ).json()["id"]
+        for task, status in [("CLARIFY", "clarify"), ("UNSUPPORTED", "unsupported")]:
+            proposal = Proposal(QueryPlan(task=task), "gemini", "offline", 1, 1, 2, None)
+            with (
+                patch("app.conversation.generate_proposal", return_value=proposal),
+                patch("app.conversation.execute_query") as execute,
+            ):
+                response = self.client.post(
+                    f"/api/conversations/{chat}/messages",
+                    json={"question": "Cần giải thích", "dataset_revision_id": str(revision["id"])},
+                    headers={"Idempotency-Key": uuid4().hex},
+                ).json()
+            self.assertEqual(response["status"], status)
+            self.assertEqual(response["processing"]["failed_stage"], "semantic_validation")
+            self.assertFalse(response["processing"]["sql"]["compiled"])
+            execute.assert_not_called()
+        uploaded = self.upload(b"unconfirmed\n1\n")
+        response = self.client.post(
+            f"/api/conversations/{chat}/messages",
+            json={"question": "?", "dataset_revision_id": uploaded["revision_id"]},
+            headers={"Idempotency-Key": uuid4().hex},
+        )
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["diagnostics"]["failed_stage"], "authorization")
+        self.assertFalse(response.json()["diagnostics"]["sql"]["compiled"])
+
+    def test_persistence_failure_keeps_checkpoint_without_repeating_generation(self) -> None:
+        from sqlalchemy import event
+        from sqlalchemy.exc import OperationalError
+
+        from app.conversation import recover_messages
+
+        revision = self.published(b"code,amount\n0007,0.10\n")
+        plan = self.plan(
+            revision,
+            "Tổng",
+            aggregations=[
+                {"operator": "SUM", "column_id": revision["columns"][1]["id"], "output_id": "total"}
+            ],
+        )
+        chat = self.client.post(
+            "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+        ).json()["id"]
+        engine = db.get_engine()
+
+        def reject_final_save(conn, cursor, statement, parameters, context, executemany):
+            if (
+                statement.startswith("UPDATE app.messages SET")
+                and isinstance(parameters, dict)
+                and parameters.get("status") == "answered"
+            ):
+                raise OperationalError("secret storage", {}, Exception("secret"))
+
+        event.listen(engine, "before_cursor_execute", reject_final_save)
+        try:
+            with patch(
+                "app.conversation.generate_proposal",
+                return_value=Proposal(plan, "gemini", "offline", 1, 1, 2, None),
+            ) as provider:
+                path = f"/api/conversations/{chat}/messages"
+                body = {"question": "Tổng", "dataset_revision_id": str(revision["id"])}
+                first = self.client.post(
+                    path, json=body, headers={"Idempotency-Key": "persistence-request-key"}
+                )
+                self.assertEqual(first.status_code, 503, first.text)
+                self.assertEqual(first.json()["diagnostics"]["failed_stage"], "persistence")
+                self.assertEqual(
+                    first.json()["diagnostics"]["sql"]["execution_status"], "succeeded"
+                )
+                self.assertNotIn("secret", first.text)
+                repeated = self.client.post(
+                    path, json=body, headers={"Idempotency-Key": "persistence-request-key"}
+                )
+                self.assertEqual(repeated.json()["status"], "pending")
+                self.assertEqual(provider.call_count, 1)
+        finally:
+            event.remove(engine, "before_cursor_execute", reject_final_save)
+        recover_messages()
+        saved = self.client.get(f"/api/conversations/{chat}").json()["messages"][0]["envelope"]
+        self.assertEqual(saved["processing"]["sql"]["execution_status"], "unknown")
+        self.assertEqual(
+            saved["processing"]["sql"]["statement"], first.json()["diagnostics"]["sql"]["statement"]
+        )
+
+    def test_execution_failure_keeps_statement_and_recovery_keeps_unknown(self) -> None:
+        from sqlalchemy.exc import OperationalError
+
+        from app.conversation import recover_messages
+
+        revision = self.published(b"code,amount\n0007,0.10\n")
+        plan = self.plan(
+            revision,
+            "Tổng",
+            aggregations=[
+                {"operator": "SUM", "column_id": revision["columns"][1]["id"], "output_id": "total"}
+            ],
+        )
+        chat = self.client.post(
+            "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+        ).json()["id"]
+
+        def fail_execute(compiled, *, on_execute):
+            on_execute()
+            raise OperationalError("secret sql", {}, Exception("secret password"))
+
+        with (
+            patch(
+                "app.conversation.generate_proposal",
+                return_value=Proposal(plan, "gemini", "offline", 1, 1, 2, None),
+            ),
+            patch("app.conversation.execute_query", side_effect=fail_execute),
+        ):
+            response = self.client.post(
+                f"/api/conversations/{chat}/messages",
+                json={"question": "Tổng", "dataset_revision_id": str(revision["id"])},
+                headers={"Idempotency-Key": uuid4().hex},
+            )
+        body = response.json()
+        self.assertEqual(body["processing"]["failed_stage"], "execution")
+        self.assertEqual(body["processing"]["sql"]["execution_status"], "failed")
+        self.assertTrue(body["processing"]["sql"]["statement"].startswith("SELECT"))
+        self.assertNotIn("secret", response.text)
+        with db.get_engine().begin() as connection:
+            row = (
+                connection.execute(select(messages).where(messages.c.conversation_id == UUID(chat)))
+                .mappings()
+                .one()
+            )
+            saved = {**body, "status": "pending"}
+            saved["processing"]["sql"]["execution_status"] = "in_progress"
+            connection.execute(
+                update(messages)
+                .where(messages.c.id == row["id"])
+                .values(status="pending", envelope=saved)
+            )
+        recover_messages()
+        restored = self.client.get(f"/api/conversations/{chat}").json()["messages"][0]["envelope"]
+        self.assertEqual(restored["processing"]["failed_stage"], "interrupted")
+        self.assertEqual(restored["processing"]["sql"]["execution_status"], "unknown")
+        self.assertEqual(
+            restored["processing"]["sql"]["statement"], body["processing"]["sql"]["statement"]
+        )
 
     def test_provider_fallback_and_timing_do_not_bypass_semantic_refusals(self) -> None:
         from app.errors import AppError

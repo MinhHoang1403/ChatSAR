@@ -53,6 +53,22 @@ def create_app(*, recover_jobs: bool = True) -> FastAPI:
             {
                 "error": {"code": error.code, "message": error.message},
                 "request_id": request.state.request_id,
+                **(
+                    {
+                        "diagnostics": error.diagnostics
+                        or {
+                            "failed_stage": error.stage,
+                            "sql": {
+                                "compiled": False,
+                                "statement": None,
+                                "execution_status": "not_started",
+                            },
+                            "source_unchanged": True,
+                        }
+                    }
+                    if error.stage or error.diagnostics
+                    else {}
+                ),
             },
             status_code=error.status,
         )
@@ -76,6 +92,13 @@ def create_app(*, recover_jobs: bool = True) -> FastAPI:
                     "message": "Chưa thể xử lý yêu cầu. Vui lòng thử lại.",
                 },
                 "request_id": request.state.request_id,
+                "diagnostics": {
+                    "failed_stage": "session_and_result_retrieval"
+                    if request.method == "GET"
+                    else "authorization",
+                    "error_code": "DATABASE_UNAVAILABLE",
+                    "source_unchanged": True,
+                },
             },
             status_code=503,
         )

@@ -81,9 +81,22 @@ Proposal = ModelReply[QueryPlan]
 
 
 class ProviderError(AppError):
-    def __init__(self, code: str, message: str, upstream_status: int | None = None) -> None:
-        super().__init__(503, code, message)
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        upstream_status: int | None = None,
+        *,
+        stage: str = "provider_preparation",
+        provider_name: str | None = None,
+        model: str | None = None,
+        latency_ms: float | None = None,
+    ) -> None:
+        super().__init__(503, code, message, stage=stage)
         self.upstream_status = upstream_status
+        self.provider_name = provider_name
+        self.model = model
+        self.latency_ms = latency_ms
 
 
 def provider_error(code: str, message: str) -> AppError:
@@ -385,6 +398,7 @@ def generate_structured(
     input_tokens = output_tokens = thought_tokens = None
     request_id = None
     text: Any = None
+    error_stage = "provider_call"
     with observation("provider_proposal", provider=provider, model=model) as span:
         try:
             if provider == "gemini":
@@ -413,6 +427,7 @@ def generate_structured(
                         automatic_continuation=False,
                         timeout=REQUEST_TIMEOUT_SECONDS,
                     )
+                error_stage = "proposal_parse"
                 text = response.output_text
                 usage = getattr(response, "usage", None)
                 if usage:
@@ -441,12 +456,14 @@ def generate_structured(
                         },
                     )
                     response_http.raise_for_status()
+                    error_stage = "proposal_parse"
                     body = response_http.json()
                 text = body["choices"][0]["message"]["content"]
                 usage = body.get("usage") or {}
                 input_tokens = integer_or_none(usage.get("prompt_tokens"))
                 output_tokens = integer_or_none(usage.get("completion_tokens"))
                 request_id = body.get("id")
+            error_stage = "proposal_parse"
             if not isinstance(text, str) or len(text.encode()) > 65536:
                 raise ValueError("Invalid provider output")
             payload = json.loads(text)
@@ -560,10 +577,14 @@ def generate_structured(
                     else None,
                 },
             )
-            raise provider_error(
+            raise ProviderError(
                 code,
                 "Mô hình chưa xử lý được yêu cầu. "
                 "Vui lòng kiểm tra trạng thái kết nối hoặc cấu hình.",
+                stage=error_stage,
+                provider_name=provider,
+                model=model,
+                latency_ms=latency,
             ) from None
 
 

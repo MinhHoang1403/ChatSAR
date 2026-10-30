@@ -14,11 +14,13 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from app import database as db
+from app.answers import compose_answer, failure_text
 from app.auth import MutationDependency, Principal, PrincipalDependency
 from app.datasets import owned_revision
 from app.errors import AppError
+from app.evidence import Processing
 from app.observability import annotate, current_trace_id, observation
-from app.providers import can_fallback, generate_proposal
+from app.providers import ProviderError, can_fallback, generate_proposal
 from app.query import Contract, compile_query, execute_query, ground_catalog
 from app.schema import conversations, datasets, messages, results, revisions, workspaces
 from app.workspace import owned_workspace
@@ -342,11 +344,59 @@ def send_message(
             )
     except IntegrityError:
         raise AppError(
-            409, "REQUEST_PENDING", "Yêu cầu đã được tiếp nhận; vui lòng thử đọc lại."
+            409,
+            "REQUEST_PENDING",
+            "Yêu cầu đã được tiếp nhận; vui lòng thử đọc lại.",
+            stage="authorization",
         ) from None
+    except AppError as error:
+        error.stage = "authorization"
+        raise
     plan = None
     started = perf_counter()
     timings: dict[str, float] = {}
+    processing = Processing(
+        body.provider,
+        {
+            "name": revision["name"],
+            "dataset_id": str(dataset_id),
+            "revision_id": str(revision_id),
+            "workspace_id": str(conversation["workspace_id"]),
+            "checksum": revision["checksum"],
+            "timezone": revision["timezone"],
+            "grain": revision["grain"],
+        },
+    )
+    processing.stages["authorization"] = {"status": "succeeded"}
+
+    def checkpoint() -> None:
+        progress = empty_answer("pending", "Đang xử lý yêu cầu…", request.state.request_id)
+        progress["processing"] = processing.snapshot()
+        try:
+            with db.get_engine().begin() as connection:
+                connection.execute(
+                    update(messages)
+                    .where(messages.c.id == message_id)
+                    .values(
+                        envelope=progress, query_plan=plan.model_dump(mode="json") if plan else None
+                    )
+                )
+        except SQLAlchemyError:
+            raise AppError(
+                503,
+                "PERSISTENCE_UNAVAILABLE",
+                "Chưa thể lưu bằng chứng xử lý. Chưa tiếp tục truy vấn.",
+                stage="persistence",
+            ) from None
+
+    def execution_started() -> None:
+        processing.sql["execution_status"] = "in_progress"
+        try:
+            checkpoint()
+        except AppError:
+            processing.sql["execution_status"] = "not_started"
+            raise
+
     with observation(
         "answer_question",
         request_id=request.state.request_id,
@@ -354,135 +404,135 @@ def send_message(
         question_length=len(body.question),
     ) as span:
         try:
-            # Quyền gửi metadata được provider kiểm lại trước reserve/network.
-            with observation("ground_catalog"):
+            with processing.step("catalog"), observation("ground_catalog"):
                 revision = ground_catalog(revision)
-            timings["catalog"] = (perf_counter() - started) * 1000
-            try:
-                proposal = generate_proposal(body.question, revision, body.provider, context)
-            except AppError as error:
-                if not can_fallback(
-                    error, revision, body.provider, body.allow_fallback, perf_counter() - started
-                ):
-                    raise
-                proposal = generate_proposal(body.question, revision, "knowledge", context)
-            timings["provider"] = (perf_counter() - started) * 1000 - timings["catalog"]
+            timings["catalog"] = processing.stages["catalog"]["duration_ms"]
+            active_provider = body.provider
+            with processing.step("provider"):
+                try:
+                    proposal = generate_proposal(body.question, revision, active_provider, context)
+                except AppError as error:
+                    if not can_fallback(
+                        error,
+                        revision,
+                        body.provider,
+                        body.allow_fallback,
+                        perf_counter() - started,
+                    ):
+                        raise
+                    active_provider = "knowledge"
+                    proposal = generate_proposal(body.question, revision, active_provider, context)
+            timings["provider"] = processing.stages["provider"]["duration_ms"]
+            processing.provider = {
+                "name": proposal.provider,
+                "model": proposal.model,
+                "latency_ms": proposal.latency_ms,
+                "proposal_received": True,
+            }
+            processing.stages["proposal_parse"] = {"status": "succeeded"}
             plan = proposal.plan
             if plan.task != "SQL" or plan.unresolved:
                 status = "unsupported" if plan.task == "UNSUPPORTED" else "clarify"
-                answer = empty_answer(
-                    status,
-                    "Vui lòng làm rõ câu hỏi hoặc chọn yêu cầu nằm trong phạm vi dữ liệu.",
-                    request.state.request_id,
+                processing.failed_stage = "semantic_validation"
+                processing.error_code = (
+                    "QUERY_UNSUPPORTED" if status == "unsupported" else "QUERY_CLARIFY"
                 )
+                processing.stages["semantic_validation"] = {
+                    "status": "needs_clarification" if status == "clarify" else "unsupported"
+                }
+                answer = empty_answer(status, failure_text(status), request.state.request_id)
             else:
-                with observation("bind_and_compile") as validation:
-                    binding_started = perf_counter()
+                with (
+                    processing.step("semantic_validation"),
+                    observation("bind_and_compile") as validation,
+                ):
                     compiled = compile_query(
                         plan, revision, body.question, context["question"] if context else ""
                     )
                     annotate(validation, output={"validation_status": "passed"})
-                    timings["validation"] = (perf_counter() - binding_started) * 1000
-                with observation("execute_read_only") as execution:
-                    rows, latency = execute_query(compiled)
+                timings["validation"] = processing.stages["semantic_validation"]["duration_ms"]
+                with processing.step("sql_compilation"):
+                    processing.capture_sql(compiled, db.get_reader_engine().dialect)
+                timings["compilation"] = processing.stages["sql_compilation"]["duration_ms"]
+                # Checkpoint ngay trước execute: crash sau đây giữ statement thật,
+                # không dựng lại SQL cũ hoặc coi execution bị gián đoạn là thành công.
+                with processing.step("execution"), observation("execute_read_only") as execution:
+                    try:
+                        rows, latency = execute_query(compiled, on_execute=execution_started)
+                    finally:
+                        if compiled.execution_latency_ms is not None:
+                            processing.sql["duration_ms"] = compiled.execution_latency_ms
+                    processing.sql["execution_status"] = "succeeded"
                     annotate(execution, output={"row_count": len(rows), "latency_ms": latency})
-                    timings["execution"] = latency
-                composition_started = perf_counter()
-                output_columns = []
-                catalog_labels = {
-                    c["id"]: (c.get("aliases") or [c.get("description") or c["name"]])[0]
-                    for c in revision["columns"]
-                }
-                aggregate_columns = {a.output_id: a.column_id for a in plan.aggregations}
-                for item in compiled.columns:
-                    source_id = aggregate_columns.get(item["id"], item["id"])
-                    original = next(
-                        (c["name"] for c in revision["columns"] if c["id"] == source_id), None
-                    )
-                    label = item["name"]
-                    if original and source_id in catalog_labels:
-                        # Chỉ đổi nhãn cột, không đổi tên phép tính khi tên cột trùng
-                        # “Tổng”, “Đếm”… do chủ dữ liệu đặt.
-                        label = (
-                            label.removesuffix(original) + catalog_labels[source_id]
-                            if item["id"] in aggregate_columns
-                            else catalog_labels[source_id]
+                timings["execution"] = latency
+                if compiled.execution_latency_ms is not None:
+                    timings["sql"] = compiled.execution_latency_ms
+                with processing.step("composition"):
+                    text, output_columns = compose_answer(plan, compiled, revision, rows)
+                    partial = compiled.truncated and compiled.result_mode != "top"
+                    answer = {
+                        "status": "partial" if partial else "answered",
+                        "facts": {
+                            "columns": output_columns,
+                            "rows": rows,
+                            "filters": compiled.filters,
+                            "scope": {
+                                "workspace_id": str(conversation["workspace_id"]),
+                                "dataset_id": str(dataset_id),
+                                "dataset_name": revision["name"],
+                                "source_revision": str(revision_id),
+                                "checksum": revision["checksum"],
+                                "timezone": revision["timezone"],
+                                "grain": revision["grain"],
+                            },
+                            "execution_id": str(result_id),
+                            "execution_latency_ms": latency,
+                            "truncated": compiled.truncated,
+                            "limit": compiled.limit,
+                            "result_mode": compiled.result_mode,
+                            "provider": {
+                                "name": proposal.provider,
+                                "model": proposal.model,
+                                "input_tokens": proposal.input_tokens,
+                                "output_tokens": proposal.output_tokens,
+                                "latency_ms": proposal.latency_ms,
+                                "request_id": proposal.request_id,
+                            },
+                            "trust": "reference_only" if partial else "verified_result",
+                        },
+                        "display_rows": rows,
+                        "citations": [
+                            {
+                                "kind": "dataset",
+                                "dataset_id": str(dataset_id),
+                                "source_revision": str(revision_id),
+                                "checksum": revision["checksum"],
+                                "result_id": str(result_id),
+                            }
+                        ],
+                        "limitations": (
+                            [f"Chỉ hiển thị {plan.limit} dòng; hãy thu hẹp điều kiện để xem thêm."]
+                            if partial
+                            else []
                         )
-                    output_columns.append({**item, "label": label.replace("_", " ")})
-                if not rows:
-                    text = "Không có dòng nào khớp điều kiện đã chọn."
-                elif len(rows) == 1 and len(rows[0]) == 1:
-                    value = rows[0][0]
-                    unit = compiled.columns[0].get("unit")
-                    text = (
-                        output_columns[0]["label"]
-                        + ": "
-                        + (str(value) if value is not None else "Chưa có giá trị")
-                        + (" " + unit if unit and value is not None else "")
-                    )
-                else:
-                    text = f"Tìm thấy {len(rows)} dòng kết quả theo dữ liệu đã chọn."
-                partial = compiled.truncated and compiled.result_mode != "top"
-                if partial:
-                    text = f"Đang hiển thị {len(rows)} dòng đầu; vẫn còn kết quả chưa hiển thị."
-                answer = {
-                    "status": "partial" if partial else "answered",
-                    "facts": {
-                        "columns": output_columns,
-                        "rows": rows,
-                        "filters": compiled.filters,
-                        "scope": {
-                            "workspace_id": str(conversation["workspace_id"]),
-                            "dataset_id": str(dataset_id),
-                            "source_revision": str(revision_id),
-                            "checksum": revision["checksum"],
-                            "timezone": revision["timezone"],
-                            "grain": revision["grain"],
-                        },
-                        "execution_id": str(result_id),
-                        "execution_latency_ms": latency,
-                        "truncated": compiled.truncated,
-                        "limit": compiled.limit,
-                        "result_mode": compiled.result_mode,
-                        "provider": {
-                            "name": proposal.provider,
-                            "model": proposal.model,
-                            "input_tokens": proposal.input_tokens,
-                            "output_tokens": proposal.output_tokens,
-                            "latency_ms": proposal.latency_ms,
-                            "request_id": proposal.request_id,
-                        },
-                        "trust": "reference_only" if partial else "verified_result",
-                    },
-                    "display_rows": rows,
-                    "citations": [
-                        {
-                            "kind": "dataset",
-                            "dataset_id": str(dataset_id),
-                            "source_revision": str(revision_id),
-                            "checksum": revision["checksum"],
-                            "result_id": str(result_id),
-                        }
-                    ],
-                    "limitations": (
-                        [f"Chỉ hiển thị {plan.limit} dòng; hãy thu hẹp điều kiện để xem thêm."]
-                        if partial
-                        else []
-                    )
-                    + (
-                        [
-                            "Có giá trị lọc không khớp dữ liệu nguồn. "
-                            "Kết quả giữ điều kiện nguyên văn, không tự chọn giá trị gần giống."
-                        ]
-                        if any(f.get("source_match") == "no_match" for f in compiled.filters)
-                        else []
-                    ),
-                    "display_text": text,
-                    "request_id": request.state.request_id,
-                    "result_id": str(result_id),
-                }
-                timings["composition"] = (perf_counter() - composition_started) * 1000
+                        + (
+                            ["Có giá trị lọc không khớp nguồn; không tự chọn giá trị gần giống."]
+                            if any(f.get("source_match") == "no_match" for f in compiled.filters)
+                            else []
+                        ),
+                        "display_text": text,
+                        "request_id": request.state.request_id,
+                        "result_id": str(result_id),
+                    }
+                timings["composition"] = processing.stages["composition"]["duration_ms"]
         except AppError as error:
+            if isinstance(error, ProviderError) and error.provider_name:
+                processing.provider = {
+                    "name": error.provider_name,
+                    "model": error.model,
+                    "latency_ms": error.latency_ms,
+                    "proposal_received": False,
+                }
             status = (
                 "clarify"
                 if error.code == "QUERY_CLARIFY"
@@ -490,17 +540,44 @@ def send_message(
                 if error.code == "QUERY_UNSUPPORTED"
                 else "insufficient"
                 if error.code == "DATA_PERMISSION_REQUIRED"
+                else "execution_error"
+                if error.code == "PERSISTENCE_UNAVAILABLE"
                 else "provider_unavailable"
             )
-            answer = empty_answer(status, error.message, request.state.request_id)
-            answer["error_code"] = error.code
-        except SQLAlchemyError:
+            if error.stage:
+                processing.failed_stage = error.stage
+            elif processing.failed_stage == "provider" and error.code in {
+                "USAGE_UNKNOWN",
+                "CALL_LIMIT_REACHED",
+                "BUDGET_REACHED",
+                "GRANT_LIMIT_REACHED",
+                "GRANT_BUDGET_REACHED",
+                "CLOUD_DISABLED",
+                "DATA_PERMISSION_REQUIRED",
+            }:
+                processing.failed_stage = "provider_preparation"
+            processing.error_code = error.code
             answer = empty_answer(
-                "execution_error",
-                "Chưa thể lấy kết quả dữ liệu. Vui lòng thử lại.",
-                request.state.request_id,
+                status, failure_text(status, error.code, error.message), request.state.request_id
             )
+            answer["error_code"] = error.code
+        except (SQLAlchemyError, ValueError, TypeError):
+            processing.error_code = (
+                "SQL_EXECUTION_FAILED"
+                if processing.failed_stage == "execution"
+                else "PROCESSING_FAILED"
+            )
+            answer = empty_answer(
+                "execution_error", failure_text("execution_error"), request.state.request_id
+            )
+            answer["error_code"] = processing.error_code
+        if processing.sql["execution_status"] == "in_progress":
+            processing.sql["execution_status"] = "failed"
+        if processing.failed_stage and processing.failed_stage not in processing.stages:
+            processing.stages[processing.failed_stage] = {"status": "failed"}
         answer["timings_ms"] = {**timings, "server_processing": (perf_counter() - started) * 1000}
+        answer["processing"] = processing.snapshot()
+        answer["result_id"] = str(result_id)
         annotate(
             span,
             output={
@@ -510,20 +587,34 @@ def send_message(
             },
         )
         answer["trace_id"] = current_trace_id() if span is not None else None
-    with db.get_engine().begin() as connection:
-        connection.execute(
-            update(messages)
-            .where(messages.c.id == message_id)
-            .values(
-                status=answer["status"],
-                envelope=answer,
-                # Lưu proposal để chẩn đoán nội bộ; chỉ status answered được dùng làm context.
-                query_plan=plan.model_dump(mode="json") if plan else None,
+    # Nội dung này chỉ quan sát được khi transaction commit thành công. Không bịa
+    # duration persistence hoặc trả success khi không ghi được kết quả.
+    processing.stages["persistence"] = {"status": "succeeded"}
+    answer["processing"] = processing.snapshot()
+    try:
+        with db.get_engine().begin() as connection:
+            connection.execute(
+                update(messages)
+                .where(messages.c.id == message_id)
+                .values(
+                    status=answer["status"],
+                    envelope=answer,
+                    query_plan=plan.model_dump(mode="json") if plan else None,
+                )
             )
-        )
-        connection.execute(
-            insert(results).values(id=result_id, message_id=message_id, envelope=answer)
-        )
+            connection.execute(
+                insert(results).values(id=result_id, message_id=message_id, envelope=answer)
+            )
+    except SQLAlchemyError:
+        processing.failed_stage = "persistence"
+        processing.stages["persistence"] = {"status": "failed"}
+        raise AppError(
+            503,
+            "PERSISTENCE_UNAVAILABLE",
+            "Chưa lưu được kết quả. Hãy đọc lại lịch sử trước khi gửi yêu cầu mới.",
+            stage="persistence",
+            diagnostics=processing.snapshot(),
+        ) from None
     return answer
 
 
@@ -547,15 +638,33 @@ def get_result(result_id: UUID, principal: PrincipalDependency) -> dict[str, Any
 
 def recover_messages() -> None:
     with db.get_engine().begin() as connection:
-        connection.execute(
-            update(messages)
-            .where(messages.c.status == "pending")
-            .values(
-                status="execution_error",
-                envelope=empty_answer(
-                    "execution_error",
-                    "Lượt hỏi bị gián đoạn. Cần gửi lại bằng một yêu cầu mới.",
-                    "interrupted",
-                ),
+        pending = (
+            connection.execute(
+                select(messages).where(messages.c.status == "pending").with_for_update()
             )
+            .mappings()
+            .all()
         )
+        for message in pending:
+            answer = empty_answer(
+                "execution_error",
+                "Lượt hỏi bị gián đoạn. Hãy kiểm tra lịch sử trước khi gửi yêu cầu mới.",
+                "interrupted",
+            )
+            old = message["envelope"] or {}
+            if isinstance(old.get("processing"), dict):
+                evidence = old["processing"]
+                if evidence.get("sql", {}).get("execution_status") == "in_progress":
+                    evidence["sql"]["execution_status"] = "unknown"
+                evidence.update(failed_stage="interrupted", error_code="REQUEST_INTERRUPTED")
+                for detail in evidence.get("stages", {}).values():
+                    if detail.get("status") == "in_progress":
+                        detail["status"] = "unknown"
+                evidence.setdefault("stages", {})["interrupted"] = {"status": "unknown"}
+                answer["processing"] = evidence
+            answer["error_code"] = "REQUEST_INTERRUPTED"
+            connection.execute(
+                update(messages)
+                .where(messages.c.id == message["id"])
+                .values(status="execution_error", envelope=answer)
+            )

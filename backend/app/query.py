@@ -116,6 +116,7 @@ class CompiledQuery:
     result_mode: str = "bounded"
     truncated: bool = False
     grounding_required: bool = False
+    execution_latency_ms: float | None = None
 
 
 def fail(message: str, code: str = "QUERY_UNSUPPORTED") -> AppError:
@@ -482,7 +483,9 @@ def ground_catalog(revision: dict[str, Any]) -> dict[str, Any]:
     return {**revision, "grounding_values": values}
 
 
-def execute_query(compiled: CompiledQuery) -> tuple[list[list[Any]], float]:
+def execute_query(
+    compiled: CompiledQuery, *, on_execute: Callable[[], None] | None = None
+) -> tuple[list[list[Any]], float]:
     started = perf_counter()
     with db.get_reader_engine().connect().execution_options(postgresql_readonly=True) as connection:
         with connection.begin():
@@ -507,7 +510,13 @@ def execute_query(compiled: CompiledQuery) -> tuple[list[list[Any]], float]:
                         # Không bịa canonical value/mapping hoặc đổi SUM(empty) thành 0.
                         if not exists and item["mapping_source"] == "owner_confirmed_mapping":
                             raise fail("Mapping không còn khớp giá trị nguồn.", "QUERY_CLARIFY")
-            rows = connection.execute(compiled.statement).fetchmany(501)
+            if on_execute:
+                on_execute()
+            execution_started = perf_counter()
+            try:
+                rows = connection.execute(compiled.statement).fetchmany(501)
+            finally:
+                compiled.execution_latency_ms = (perf_counter() - execution_started) * 1000
     compiled.truncated = len(rows) > compiled.limit
     return [[wire(value) for value in row] for row in rows[: compiled.limit]], (
         perf_counter() - started
