@@ -78,6 +78,13 @@ class PostgresTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("57014", result.stderr)
 
+    def test_scalar_null_aggregate_equivalence_does_not_extend_to_count_rows(self) -> None:
+        result = postgres("WITH t(v) AS (VALUES(NULL::numeric),(1),(1),(0)) "
+                          "SELECT (SELECT ROW(COUNT(DISTINCT v),COUNT(v),SUM(v),AVG(v),MIN(v),MAX(v)) FROM t) "
+                          "IS NOT DISTINCT FROM (SELECT ROW(COUNT(DISTINCT v),COUNT(v),SUM(v),AVG(v),MIN(v),MAX(v)) FROM t WHERE v IS NOT NULL), "
+                          "(SELECT COUNT(*) FROM t) <> (SELECT COUNT(*) FROM t WHERE v IS NOT NULL);")
+        self.assertEqual(result.strip(), "t|t")
+
 
 if __name__ == "__main__":
     unittest.main()

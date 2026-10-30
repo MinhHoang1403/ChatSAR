@@ -126,6 +126,25 @@ def test_schema_projection_preserves_runtime_caps() -> None:
     assert QueryPlan.model_json_schema()["properties"]["select_columns"]["maxItems"] == 30
 
 
+def test_provider_schema_only_advertises_current_catalog_ids() -> None:
+    identifier = "c_" + "a" * 32
+    revision = {
+        "id": "revision",
+        "dataset_id": "dataset",
+        "columns": [{"id": identifier, "name": "Untrusted column name"}],
+    }
+    schema = providers.response_schema(QueryPlan, revision, "Câu hỏi nguyên văn?")
+    assert schema["properties"]["raw_user_spans"]["items"]["enum"] == ["Câu hỏi nguyên văn?"]
+    for field in ("select_columns", "group_by"):
+        assert schema["properties"][field]["items"]["enum"] == [identifier]
+    for definition in ("Aggregate", "Predicate"):
+        assert schema["$defs"][definition]["properties"]["column_id"]["anyOf"][0]["enum"] == [
+            identifier
+        ]
+    assert schema["properties"]["table_id"]["enum"] == ["dataset"]
+    assert "Untrusted column name" not in json.dumps(schema)
+
+
 @pytest.mark.parametrize(
     "code,enabled,allowed",
     [

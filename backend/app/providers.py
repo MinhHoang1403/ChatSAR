@@ -52,6 +52,9 @@ Dùng all cho danh sách đầy đủ; bounded cho xem một phần.
 Chỉ chuyển ngày ISO hoặc format cột đã duyệt; khoảng tháng chưa có ngày cụ thể dùng CLARIFY.
 COUNT_ROWS không có column_id. COUNT_NON_NULL khác COUNT_DISTINCT và COUNT_ROWS.
 Các select_columns khi có aggregate phải trùng group_by. output_id là tên chức năng đơn giản.
+Khi chỉ hỏi tổng/đếm/trung bình/cực trị trên toàn bảng hoặc một tập đã lọc: dùng aggregations,
+select_columns=[] và group_by=[]. Một điều kiện lọc không phải là yêu cầu chia nhóm.
+Chỉ dùng GROUP BY khi người dùng yêu cầu thống kê riêng từng nhóm; không tự thêm cột kết quả.
 IS_NULL/IS_NOT_NULL không có literal. AND/OR dùng children. IN dùng values.
 Thời gian dùng GTE start và LT end; không bỏ lọc, thứ tự hay giới hạn người dùng.
 Context chỉ được kế thừa từ verified plan/revision server cung cấp; không dùng prose làm fact.
@@ -242,11 +245,30 @@ def integer_or_none(value: Any) -> int | None:
     return value if type(value) is int and value >= 0 else None
 
 
-def response_schema(contract: type[BaseModel] = QueryPlan) -> dict[str, Any]:
+def response_schema(
+    contract: type[BaseModel] = QueryPlan,
+    revision: dict[str, Any] | None = None,
+    question: str | None = None,
+) -> dict[str, Any]:
     schema = contract.model_json_schema()
     if contract is QueryPlan:
         for key in ("intent", "entities", "metric", "population", "coverage"):
             schema["properties"].pop(key, None)
+        if question:
+            # Server biết nguyên văn yêu cầu; không yêu cầu model tự chép các đoạn rời
+            # rồi từ chối nhầm vì thiếu từ hỏi. Guard coverage/literal vẫn giữ nguyên.
+            schema["properties"]["raw_user_spans"]["items"] = {"type": "string", "enum": [question]}
+        if revision and revision["columns"]:
+            # Ràng buộc bằng catalog đã kiểm quyền, không cho tên cột thay mã nội bộ.
+            identifiers = [column["id"] for column in revision["columns"]]
+            for field in ("select_columns", "group_by"):
+                schema["properties"][field]["items"] = {"type": "string", "enum": identifiers}
+            for definition in ("Aggregate", "Predicate"):
+                schema["$defs"][definition]["properties"]["column_id"] = {
+                    "anyOf": [{"type": "string", "enum": identifiers}, {"type": "null"}]
+                }
+            schema["properties"]["table_id"]["enum"] = [str(revision["dataset_id"])]
+            schema["properties"]["source_revision_id"]["enum"] = [str(revision["id"])]
 
     def simplify(node: Any) -> None:
         if isinstance(node, dict):
@@ -337,7 +359,7 @@ def generate_structured(
         raise provider_error("MODEL_NOT_APPROVED", "Model chưa khớp cấu hình được phê duyệt.")
     if provider == "gemini" and not settings.gemini_api_key.get_secret_value():
         raise provider_error("PROVIDER_NOT_CONFIGURED", "Chưa hoàn tất cấu hình mô hình.")
-    schema = response_schema(contract)
+    schema = response_schema(contract, revision, payload.get("question"))
     prompt = json.dumps(
         {**payload, **({"response_contract": schema} if provider == "knowledge" else {})},
         ensure_ascii=False,
