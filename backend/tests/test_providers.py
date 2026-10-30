@@ -137,10 +137,16 @@ def test_provider_schema_only_advertises_current_catalog_ids() -> None:
     assert schema["properties"]["raw_user_spans"]["items"]["enum"] == ["Câu hỏi nguyên văn?"]
     for field in ("select_columns", "group_by"):
         assert schema["properties"][field]["items"]["enum"] == [identifier]
-    for definition in ("Aggregate", "Predicate"):
-        assert schema["$defs"][definition]["properties"]["column_id"]["anyOf"][0]["enum"] == [
-            identifier
-        ]
+    assert schema["$defs"]["Aggregate"]["properties"]["column_id"]["anyOf"][0]["enum"] == [
+        identifier
+    ]
+    for variant in schema["$defs"]["Predicate"]["anyOf"]:
+        fields = variant["properties"]
+        if "column_id" in fields:
+            assert fields["column_id"]["enum"] == [identifier]
+        else:
+            assert fields["operator"]["enum"] == ["AND", "OR"]
+            assert fields["children"]["minItems"] == 2
     assert schema["properties"]["table_id"]["enum"] == ["dataset"]
     assert "Untrusted column name" not in json.dumps(schema)
 

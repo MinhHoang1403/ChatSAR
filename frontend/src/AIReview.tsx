@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, record } from './api';
 import type { Column, Preview } from './data';
-import { parseColumn } from './data';
+import { mergeProposalColumn, parseColumn } from './data';
 
 type Props = { preview: Preview; csrf: string; onBusy: (busy: boolean) => void;
   onProposal: (columns: Column[], description: string, grain: string) => void };
@@ -24,7 +24,9 @@ export default function AIReview({ preview, csrf, onBusy, onProposal }: Props) {
       || typeof data.proposal.description !== 'string' || typeof data.proposal.grain !== 'string') throw new Error('Đề xuất chưa đúng định dạng.');
     const columns = data.proposal.columns.map((value: unknown): Column => {
       const column = parseColumn(value);
-      return { ...preview.columns.find((c) => c.id === column.id), ...column };
+      const source = preview.columns.find((c) => c.id === column.id);
+      if (!source) throw new Error('Đề xuất có mã cột không thuộc file nguồn.');
+      return mergeProposalColumn(source, column);
     });
     onProposal(columns, data.proposal.description, data.proposal.grain);
     setNotes([...(Array.isArray(data.proposal.notes) ? data.proposal.notes.filter((v): v is string => typeof v === 'string') : []),

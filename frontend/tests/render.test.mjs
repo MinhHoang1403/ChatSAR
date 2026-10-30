@@ -51,6 +51,18 @@ test('API DTO rejects unknown data shape and preserves catalog metadata', async 
   assert.equal(parsed.columns[0].description, col.description);
   assert.equal(parsed.columns[0].value_mappings[0].value, '0007');
 });
+test('applying local or AI metadata preserves immutable empty/null/duplicate statistics', async () => {
+  const { parseColumn, mergeProposalColumn } = await vite.ssrLoadModule('/src/data.ts');
+  const source = parseColumn({ id: 'column', name: 'Value', data_type: 'numeric', nullable: true,
+    empty_count: 1, null_count: 2, duplicate_count: 3 });
+  const proposal = parseColumn({ id: 'column', name: 'Value', data_type: 'numeric', nullable: true,
+    null_values: [''], description: 'Metadata mới' });
+  const merged = mergeProposalColumn(source, proposal);
+  assert.equal(merged.empty_count, 1); assert.equal(merged.null_count, 2);
+  assert.equal(merged.duplicate_count, 3); assert.deepEqual(merged.null_values, ['']);
+  assert.equal(merged.description, 'Metadata mới');
+  assert.throws(() => mergeProposalColumn(source, { ...proposal, id: 'other' }));
+});
 test('saved setup is offered without another cloud call only for matching checksum and sheet', async () => {
   const p = { ...preview, checksum: 'file-hash', setup_proposal: { status: 'complete', response: { checksum: 'file-hash', sheet_name: '' } } };
   const props = { preview: p, csrf: 'csrf', onBusy: noop, onProposal: noop };

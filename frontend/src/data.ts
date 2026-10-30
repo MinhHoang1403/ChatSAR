@@ -64,3 +64,10 @@ export function parseColumn(value: unknown): Column {
       empty_count: typeof value.empty_count === 'number' ? value.empty_count : undefined,
       duplicate_count: typeof value.duplicate_count === 'number' ? value.duplicate_count : undefined };
 }
+
+export function mergeProposalColumn(source: Column, proposal: Column): Column {
+  if (source.id !== proposal.id) throw new Error('Đề xuất không khớp cột nguồn.');
+  // Thống kê thuộc file gốc, đề xuất metadata không được ghi đè bằng undefined.
+  return { ...proposal, null_count: source.null_count, empty_count: source.empty_count,
+    duplicate_count: source.duplicate_count };
+}

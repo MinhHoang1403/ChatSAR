@@ -269,6 +269,41 @@ def response_schema(
                 }
             schema["properties"]["table_id"]["enum"] = [str(revision["dataset_id"])]
             schema["properties"]["source_revision_id"]["enum"] = [str(revision["id"])]
+        predicate = schema["$defs"]["Predicate"]["properties"]
+        # Hợp đồng provider chỉ biểu diễn các tổ hợp compiler đã hỗ trợ.
+        # Không còn AND rỗng hoặc literal đi cùng IS_NULL/IN; không tự sửa plan nhận về.
+        column_type = predicate["column_id"]["anyOf"][0]
+        literal_type = {"$ref": "#/$defs/QueryLiteral"}
+        variants = [
+            {
+                "operator": {"type": "string", "enum": ["AND", "OR"]},
+                "children": {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {"$ref": "#/$defs/Predicate"},
+                },
+            },
+            {
+                "operator": {"type": "string", "enum": ["IS_NULL", "IS_NOT_NULL"]},
+                "column_id": column_type,
+            },
+            {
+                "operator": {"type": "string", "enum": ["IN"]},
+                "column_id": column_type,
+                "values": {"type": "array", "minItems": 1, "items": literal_type},
+            },
+            {
+                "operator": {"type": "string", "enum": ["EQ", "NE", "GT", "GTE", "LT", "LTE"]},
+                "column_id": column_type,
+                "literal": literal_type,
+            },
+        ]
+        schema["$defs"]["Predicate"] = {
+            "anyOf": [
+                {"type": "object", "properties": fields, "additionalProperties": False}
+                for fields in variants
+            ]
+        }
 
     def simplify(node: Any) -> None:
         if isinstance(node, dict):
