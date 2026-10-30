@@ -79,7 +79,7 @@ Ruff/format/mypy18modules, TypeScript/build, runtime, prepare-only fidelity đ�
 
 ### G. Usage
 
-Ledger đầu/cuối63=Gemini58/Knowledge5; mới0/0, LlamaParse/BGE0. Baseline quyền13=8/5, đã dùng50 Gemini bổ sung. Known tokens68810input/15050output/0thought; estimate0.0582680USD, tổng reserve0.6671498USD. HTTP400 `d10d5f23-d15d-4c9e-8e21-37e67b510b1c`: dispatch1, usage/costNULL, reserve0.0137353USD, PROVIDER_SCHEMA. Không suy unknown thành miễn phí.
+Ledger đầu/cuối63=Gemini58/Knowledge5; mới0/0, LlamaParse/BGE0. Baseline quyền13=8/5, đã dùng50 Gemini bổ sung. Riêng50 lượt trong grant bổ sung: known tokens68810input/15050output/0thought, estimate0.0582680USD, reserve0.6671498USD. Toàn ledger63: known tokens81973input/20570output/0thought, estimate đã biết0.0655169USD, tổng reserve0.7764988USD (không phải hóa đơn hoặc chi phí đầy đủ khi còn usage thiếu). HTTP400 `d10d5f23-d15d-4c9e-8e21-37e67b510b1c`: dispatch1, usage/costNULL, reserve0.0137353USD, PROVIDER_SCHEMA. Không suy unknown thành miễn phí.
 
 Đọc PG/Langfuse trace `974e3f15543b1b415e25f9fb3c8e5837` chỉ xác nhận400/BadRequestError/schema_complexity=false, thuộc tính schema lỗi cụ thể UNKNOWN. Không interaction ID/billing account access; store=false không chứng minh charge0. Guard thật trả USAGE_UNKNOWN trước insert/network, count không đổi. Không tạo reconciliation record/quota exception thiếu chứng cứ/quyền riêng. Còn trần45Codex/50tổng, giữ5 cho chủ dự án, **không dispatch được hiện tại**. Không sửa .env/keys/flags/global budget/grant/ledger.
 
