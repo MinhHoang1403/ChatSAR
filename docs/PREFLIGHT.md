@@ -10,16 +10,16 @@
 | PostgreSQL/API integration (provider mock) | 24 | 24 | 0 | 0 | 0 |
 | SQL oracle baseline bất biến | 25 | 25 | 0 | 0 | 0 |
 | Gold SQL cho semantic scenarios (có tham chiếu lại baseline) | 75 | 75 | 0 | 0 | 0 |
-| Manifest/Decimal/DB privileges | 13 | 13 | 0 | 0 | 0 |
+| Manifest/Decimal/DB privileges + acceptance stop guard | 14 | 14 | 0 | 0 | 0 |
 | Semantic model benchmark mới | 90 | 0 | 0 | 0 | 90 |
 | Provider contract, nhóm con của unit | 24 | 24 | 0 | 0 | 0 |
-| Model-live mới, kế hoạch tối đa 3 lượt Gemini | 3 | 0 | 0 | 3 | 0 |
+| Model-live mới, kế hoạch tối đa 3 lượt Gemini | 3 | 0 | 1 | 0 | 2 |
 | Frontend SSR/DTO | 7 | 7 | 0 | 0 | 0 |
 | Browser E2E sau redesign | 20 | 0 | 0 | 20 | 0 |
 | Auth + reader security, nhóm con đã đếm ở trên | 24 | 24 | 0 | 0 | 0 |
 | Docker/HTTP restart persistence | 1 luồng | 1 | 0 | 0 | 0 |
 
-Lệnh đã chạy: backend ruff/format/mypy/pytest; `evaluations.integration`, `oracle`, `semantic`, `acceptance` prepare-only, `planning`, `persistence`, `runtime`; `CHATSAR_POSTGRES_TESTS=1 unittest discover -s evaluations/tests`; frontend typecheck/test/build. Một cảnh báo deprecation từ Starlette/httpx, không skip test. Các hàng nhóm con không cộng thành tổng độc lập. Chưa có model-live của bản này, nên không có mẫu số release accuracy/semantic coverage/false refusal/silent wrong answer hoặc p50/p95 model latency mới. Không lấy 75 gold checks hoặc 94 unit làm bằng chứng hiểu câu hỏi 95%.
+Lệnh đã chạy: backend ruff/format/mypy/pytest; `evaluations.integration`, `oracle`, `semantic`, `acceptance` prepare-only và một lượt live theo quyền bổ sung, `planning`, `persistence`, `runtime`; `CHATSAR_POSTGRES_TESTS=1 unittest discover -s evaluations/tests`; frontend typecheck/test/build. Một cảnh báo deprecation từ Starlette/httpx, không skip test. Các hàng nhóm con không cộng thành tổng độc lập. Lượt live mới chỉ tới AI Setup, chưa tới SQL: chưa có mẫu số release accuracy/semantic coverage/false refusal/silent wrong answer hoặc p50/p95 SQL model latency mới. Không lấy 75 gold checks hoặc 94 unit làm bằng chứng hiểu câu hỏi 95%.
 
 Semantic scenarios đã khóa checksum riêng: basic 30, paraphrase 20, edge 15, negative 10, follow-up 10, metamorphic 5; sáu domain logistics/hotel/energy/agriculture/library/maintenance. Maintenance là schema mới, 5 ca held-out chưa dùng tuning/model-live; labels do người viết fixture biết, không phải blind external benchmark. Gold SQL/expected gốc giữ nguyên; 75 gold checks không phải 75 câu model trả đúng. 15 tình huống không phải SQL dùng context/negative expectations. `semantic.json` có metric/filter/group/order/limit gold riêng; expected không đi vào prompt.
 
@@ -29,7 +29,17 @@ Vòng kiểm oracle phát hiện guard “giá trị không tồn tại thì lu�
 
 Prepare-only qua proxy web/PostgreSQL thật đã đối chiếu tất cả typed rows/NULL/TEXT zero đầu của hotel và maintenance; checksums CSV lần lượt `ea5702c6d69013434b897044b1a6f320de770876b214a71df25839b5d28e1311`, `1d3bcbb55df03218b8bc3549179f144d87a0a52fabc45e49b9b4ed0cc186d5b8`. Không gọi generation; dọn đúng test owner sau phép thử. Google users thật 2, workspace thật 1 vẫn còn, test users 0 sau cleanup. Migrations: foundation/identity/datasets/conversation/catalog. Langfuse Observations v2 HTTP 200, đọc lại trace metadata mới (ví dụ `fce78f8ba9cf853b2d3f6b13b58cba6d`); đó là trace từ HTTP tests, không phải provider model-live mới.
 
-Ledger vẫn **12 reservations: Gemini 7, Knowledge 5**. Chưa có quyền generation mới. Đã trình kế hoạch riêng tối đa 3 HTTP requests Gemini, reserve tổng <=0.06 USD: AI Setup hotel → hotel SUM 300.15 → maintenance SUM 2.50. Dừng khi setup/provider/answer sai, không retry/Knowledge; cap 10/Gemini và .env giữ nguyên. Nếu chưa được duyệt, cả ba model-live BLOCKED. Knowledge 403 lần cuối vẫn ngăn fallback tự động. Không đủ cơ sở tuyên bố khắc phục hotel timeout hoặc đạt >=95% semantic accuracy.
+Chủ dự án đã cấp tối đa **3 HTTP requests Gemini, trần 0.06 USD** ngày 30/10/2026 cho AI Setup hotel → hotel SUM 300.15 → maintenance SUM 2.50, với điều kiện dừng khi provider hoặc kết quả lỗi. Precheck ledger 12 (Gemini 7/Knowledge 5), flags/model hợp lệ, reserve tối đa ba lượt 0.05952 USD; không sửa .env.
+
+### Kết quả một lượt live được cấp bổ sung
+
+Chạy trên commit `d36c8447dac77a88c5a1e694056ccf77de6a304e`. Gemini trả SetupProposal hợp lệ về JSON/Pydantic sau **4993.72 ms**, nhưng backend trả `mode=local`, `SETUP_PROPOSAL_REJECTED`; AI Setup **FAIL nghiệm thu**. Đây là lỗi ở bước kiểm tra đề xuất, không phải timeout hoặc lỗi truy cập provider. Chưa đủ bằng chứng kết luận đề xuất model sai hay validator từ chối sai. Không publish đề xuất AI bị từ chối; fallback local vẫn trả về an toàn. Harness đã dừng ngay, hai câu SQL còn lại **NOT_RUN**, không retry hoặc gọi Knowledge.
+
+Usage lượt này: input **790**, output **900**, thought **0**; chi phí ước tính **0.002487 USD**, reserve **0.0122368 USD**, không phải hóa đơn. Usage record `ba4e43f0-cf83-4238-85f8-0584d3dfeb8c`, source checksum `ea5702c6d69013434b897044b1a6f320de770876b214a71df25839b5d28e1311`; Langfuse Observations v2 HTTP 200, provider trace `3f7c5b09e53bb690738330c9dd5103a0`. Ledger hiện **13 reservations: Gemini 8, Knowledge 5**. Hai lượt được cấp chưa dùng; điều kiện dừng đã có hiệu lực nên Codex không tự sử dụng tiếp.
+
+Giới hạn bằng chứng: response `validation_errors=[]` mô tả proposal local sau fallback, trong khi lý do loại AI nằm trong `proposal.notes`. Harness cũ chưa lưu notes trước cleanup test owner, nên lý do cụ thể đã mất; **root cause chi tiết UNKNOWN**, không đoán lỗi schema/type/key/date hoặc sửa prompt/validator theo phỏng đoán. Đã sửa riêng harness lưu `rejection_notes` và exit code 1 khi live FAIL. Regression offline xác nhận notes được lưu trước cleanup, chỉ một setup request và không gửi SQL tiếp; không có generation bổ sung. Dữ liệu Google users thật 2/workspace 1 giữ nguyên, test users 0. Bằng chứng local: `artifacts/acceptance.json`, `artifacts/acceptance-langfuse.json`.
+
+Gate AI Setup còn FAIL; hai SQL và độ chính xác benchmark chưa nghiệm thu, không tuyên bố khắc phục hotel timeout hoặc đạt >=95% semantic accuracy. Knowledge 403 ở lần live gần nhất và browser E2E vẫn là các giới hạn độc lập. Không merge hoặc chuyển Giai đoạn 2.
 
 Browser IAB đọc được trang login mới và nút Google; khi chọn phiên Cốc Cốc, tool dừng vì browser URL policy enforcement chưa hỗ trợ. Đã dừng UI automation, không dùng công cụ khác vượt chặn. Google live trước redesign có xác nhận thủ công + DB; 20 luồng E2E và kiểm tra visual responsive của UI mới chưa được nghiệm thu. Chủ dự án giữ quyền user acceptance.
 
@@ -162,7 +172,7 @@ Tổng usage Gemini đã biết (kể cả một response schema lỗi có usage
 
 Langfuse đọc lại trace `9b9246e1a14e141f903f27ed244afe10`: provider input/output tokens + latency, bind_and_compile validation passed, execute_read_only row_count 1 + latency, answer_question answered. Metadata mặc định không gửi question/raw rows/SQL/secrets; dùng API v2 vì API traces cũ trả 404 trên server này. Bằng chứng đã lọc ở `artifacts/langfuse-proof.json` local.
 
-## Exit gate hiện tại
+## Exit gate tại mốc trước bản cải tiến
 
 ### Workstream B — 30/10/2026
 

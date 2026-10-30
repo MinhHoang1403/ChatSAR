@@ -8,7 +8,7 @@ ChatSAR là MVP demo hỏi đáp dữ liệu bằng tiếng Việt, hướng đ�
 
 **Trạng thái: PARTIALLY_READY.** Giai đoạn 1 trên `feature/sql-foundation` có Google/workspaces, CSV/XLSX, Smart Data Setup (local hoặc AI metadata có consent), catalog nghiệp vụ, SQL một bảng, chat/history/source và giao diện sáng xanh dương. Kết quả bị cắt được báo rõ; Decimal/NULL/TEXT ID được giữ nguyên. Gemini mặc định, Knowledge dự phòng theo opt-in/quyền dữ liệu/kết nối/hạn mức.
 
-94 unit, 24 integration, 25 SQL oracle gốc, 13 manifest/quyền DB, 75 phép kiểm gold SQL của bộ 90 tình huống và 7 frontend SSR/DTO đã PASS local. Đây không phải accuracy model. Model-live của bản cải tiến cần quyền bổ sung; browser sau đăng nhập bị chặn bởi công cụ Cốc Cốc. Google live trước đó đã có bằng chứng thủ công + DB. Chưa nghiệm thu cuối, chưa merge main; RAG/Hybrid chưa triển khai. Xem [bằng chứng và blockers](docs/PREFLIGHT.md).
+94 unit, 24 integration, 25 SQL oracle gốc, 14 manifest/quyền DB/acceptance guard, 75 phép kiểm gold SQL của bộ 90 tình huống và 7 frontend SSR/DTO đã PASS local. Đây không phải accuracy model. Một lượt Gemini AI Setup mới đã nhận JSON hợp lệ nhưng bị backend từ chối; đã dừng, hai ca SQL còn NOT_RUN. Chi tiết nguyên nhân UNKNOWN vì harness cũ chưa lưu notes trước cleanup; không tự coi FAIL là PASS. Browser sau đăng nhập bị chặn bởi công cụ Cốc Cốc. Google live trước đó đã có bằng chứng thủ công + DB. Chưa nghiệm thu cuối, chưa merge main; RAG/Hybrid chưa triển khai. Xem [bằng chứng và blockers](docs/PREFLIGHT.md).
 
 ## Thiết kế dự kiến
 

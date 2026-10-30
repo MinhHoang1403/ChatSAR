@@ -43,6 +43,8 @@ F4 cụ thể hóa bằng một QueryPlan/binder/compiler, một adapter lựa c
 
 ## Nguồn đã đối chiếu
 
+Quyền bổ sung ngày 30/10/2026: chủ dự án đồng ý tối đa 3 HTTP requests Gemini/trần 0.06 USD cho đúng kế hoạch AI Setup hotel, hotel SUM, maintenance SUM; giữ cap 10/provider, .env và ledger. Chỉ sử dụng một lượt: JSON hợp lệ nhưng setup bị backend từ chối, đã dừng theo điều kiện. Ledger 13 (Gemini 8, Knowledge 5); không tự dùng hai lượt còn lại sau FAIL. Chi tiết và giới hạn chẩn đoán ở PREFLIGHT; không đổi prompt/validator khi chưa có bằng chứng nguyên nhân cụ thể.
+
 ## Hoàn thiện Giai đoạn 1 — Workstream A, 30/10/2026
 
 Chủ dự án phê duyệt phạm vi trong yêu cầu “FINAL PHASE 1 IMPROVEMENT & ACCEPTANCE”: metadata nghiệp vụ đã xác nhận, value grounding, phát hiện cắt kết quả, AI Smart Data Setup và UI sáng xanh dương. Không sửa hai kế hoạch gốc. Giữ feature/sql-foundation và PR #1 nháp; không merge/sang Giai đoạn 2. Không có quyền generation mới: ledger lịch sử 12 reservations vẫn giữ nguyên.

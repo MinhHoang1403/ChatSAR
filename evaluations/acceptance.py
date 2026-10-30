@@ -147,6 +147,9 @@ def main() -> None:
                             "mode": setup["mode"],
                             "error_code": setup["error_code"],
                             "validation_errors": setup["validation_errors"],
+                            # validation_errors thuộc proposal local sau fallback;
+                            # lý do loại proposal AI nằm trong notes, cần lưu trước cleanup.
+                            "rejection_notes": setup["proposal"].get("notes", []),
                             "checksum": setup["checksum"],
                             "pass": setup["mode"] == "ai_proposal"
                             and not setup["validation_errors"],
@@ -292,6 +295,8 @@ get_engine().dispose()
             encoding="utf-8",
         )
         session.close()
+    if args.live and any(not case["pass"] for case in report["cases"]):
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
