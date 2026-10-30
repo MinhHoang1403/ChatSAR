@@ -1,5 +1,15 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Bổ sung nghiệm thu: trang chủ khách và header — 30/10/2026
+
+Theo yêu cầu tiếp nối của chủ dự án: lần đầu và logout ở trang chủ; ô tài khoản khách chỉ có Đăng nhập → `/login`; có nút về trang chủ. Khách dùng đầy đủ upload CSV/XLSX/setup/chat qua cùng pipeline. Token chỉ sống trong bộ nhớ trang, reload tạo principal mới và không còn lịch sử/nguồn của phiên cũ. Login mở dữ liệu tài khoản, **không chuyển phiên khách**. Không thay session Google bằng giả lập.
+
+Dòng status đúng **Chế độ khách**. Bộ chọn không gian bỏ khung/nền, co theo chữ, cao28px/gap6px với title, giữ focus bàn phím rõ và không chồng chữ. Browser kiểm logout→home, login→back, tạo không gian tên dài, upload XLSX/chọn sheetData/3rows/publish private, hỏi khi chưa cấp quyền bị chặn trước dispatch, reload về nguồn/history rỗng. Kiểm mobile/desktop và bằng chứng local guest-*.png/json; không tự gọi Google dialog. Google mới/hai tài khoản browser còn BLOCKED, guest Gemini positive browser NOT_RUN vì toàn9lượt còn lại đã bàn giao thủ công. Không lấy mock làm model-live.
+
+Backend148unit PASS;40API/PGintegration PASS (8auth+26datasets/chat+6guest). Guest tests kiểm token header/cookie đúng provider, CSRF/Origin/owner isolation, CSV→publish→mocked Gemini QueryRequest→compiler/PG SUM0.30/prose0,30/SQL thật, scope result, dọn file/table/user; expiry/reaper giữ Google/activeguest; pending query/ingestion/setup giữ dữ liệu đến hoàn tất, token đã revoked; login tài khoản không nhập guest. Frontend14SSR/DTO PASS; ruff/format/mypy19modules/TypeScript/build đạt. Migration9 gồm guest_sessions; web/api/db healthy. Không generation thêm, ledger104=99Gemini/5Knowledge, .env không đổi. Những số kiểm thử34integration/12frontend/18modules dưới là checkpoint cũ, không cộng dồn thành test mới.
+
+Dữ liệu guest được xử lý/lưu tạm server, pagehide/login gửi cleanup keepalive; khi browser không gửi được có TTL2giờ+reaper60giây. Cleanup chỉ principal guest hết phiên, chờ pending hoàn tất/recovery, không xóa hoặc sửa ledger. Upload kiểm lại workspace sau await và khóa trước ghi tài nguyên để tránh race với cleanup. Google account data giữ bền; không import guest. Hai plan/gold/manifests không đổi. **Phase1 NOT_ACCEPTED**:4FAIL chất lượng và57/90NL chưa chạy vẫn giữ theo báo cáoA–I bên dưới; chưa merge/Phase2.
+
 ## Usage/Data Permission, SQL runtime & UI acceptance — 30/10/2026
 
 ### A. Tổng quan

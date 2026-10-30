@@ -32,6 +32,32 @@ test('composer requires a ready source and Gemini is the default', async () => {
   assert.match(html, /rows="1"/);
   assert.doesNotMatch(html, /Cập nhật lịch sử|fallback-choice|composer-note|empty-symbol/);
 });
+test('guest home exposes login and concise guest status without account profile', async () => {
+  const html = await render('Workspace', { me: { id: 'guest-user', display_name: 'Never show account', csrf_token: 'never-render-token', is_guest: true }, workspaces: [{ id: 'guest-ws', name: 'Không gian tạm' }], selected: { id: 'guest-ws', name: 'Không gian tạm' }, onSelect: noop, onCreate: noop, onLogout: noop, onLogin: noop, busy: false, error: '' });
+  assert.match(html, /Đăng nhập<\/button>/);
+  assert.match(html, /class="guest-notice">Chế độ khách<\/p>/);
+  assert.doesNotMatch(html, /Never show account|Tài khoản cá nhân|Hồ sơ ChatSAR|never-render-token/);
+  assert.match(html, /Bạn muốn tìm hiểu điều gì/);
+});
+test('guest credentials live only in memory and are removed when the page ends', async () => {
+  const { activateGuestSession, endGuestSession, api } = await vite.ssrLoadModule('/src/api.ts');
+  const oldFetch = globalThis.fetch;
+  const oldWindow = globalThis.window;
+  const calls = [];
+  globalThis.window = { setTimeout, clearTimeout, localStorage: { setItem() { throw new Error('Must not persist guest credentials'); } } };
+  globalThis.fetch = async (path, options) => { calls.push({ path, options }); return { status: 200, ok: true, json: async () => [] }; };
+  try {
+    assert.throws(() => activateGuestSession({}));
+    const who = activateGuestSession({ id: 'guest', display_name: 'Khách', csrf_token: 'guest-csrf', guest_token: 'ephemeral-only', is_guest: true });
+    assert.equal(who.is_guest, true); assert.equal(who.guest_token, undefined);
+    await api('/workspaces', {}, who.csrf_token);
+    assert.equal(calls[0].options.headers.get('X-Guest-Session'), 'ephemeral-only');
+    await endGuestSession();
+    assert.equal(calls[1].options.method, 'DELETE'); assert.equal(calls[1].options.keepalive, true);
+    await api('/workspaces');
+    assert.equal(calls[2].options.headers.has('X-Guest-Session'), false);
+  } finally { globalThis.fetch = oldFetch; if (oldWindow === undefined) delete globalThis.window; else globalThis.window = oldWindow; }
+});
 test('history groups by immutable revision, including equal filenames and legacy records', async () => {
   const { historyGroups } = await vite.ssrLoadModule('/src/Workspace.tsx');
   const { conversation } = await vite.ssrLoadModule('/src/Chat.tsx');

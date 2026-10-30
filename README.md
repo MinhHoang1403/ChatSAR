@@ -1,5 +1,7 @@
 # ChatSAR
 
+**Bổ sung hiện hành 30/10 — trang chủ khách và header:** lần đầu/đăng xuất mở trang chủ, nút Đăng nhập ở chân sidebar mở `/login`. Khách dùng CSV/XLSX/setup/chat/SQL cùng pipeline và guard; token chỉ trong bộ nhớ trang, reload mở guest mới. Login mở dữ liệu tài khoản, không nhập phiên khách. Chỉ hiện “Chế độ khách”; bộ chọn không gian không nền/viền, co theo chữ, cách title6px.148unit/40integration/14frontend PASS; mypy19modules/types/build đạt. Guest provider được mock khi kiểm tích hợp, không thêm HTTP model;9lượt đã bàn giao chủ dự án giữ nguyên. Chất lượng tổng thể vẫn NOT_ACCEPTED với4FAIL và57/90NOT_RUN; báo cáo Usage/SQL bên dưới là checkpoint trước bổ sung khách.
+
 ChatSAR là MVP demo hỏi đáp dữ liệu bằng tiếng Việt, hướng đến kết quả chính xác, có nguồn đối chiếu và dễ bảo trì:
 
 - **Text-to-SQL:** hỏi dữ liệu CSV/XLSX; backend kiểm tra kế hoạch truy vấn có kiểu và biên dịch truy vấn chỉ đọc bằng SQLAlchemy Core.

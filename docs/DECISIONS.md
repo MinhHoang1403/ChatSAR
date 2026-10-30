@@ -1,5 +1,13 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+## Trang chủ khách và header — quyền mở rộng 30/10/2026
+
+Chủ dự án yêu cầu lần đầu truy cập/sau logout mở trang chủ, ô account có Đăng nhập dẫn sang trang login; xác nhận khách được upload CSV/XLSX và hỏi AI đầy đủ nhưng reload mất dữ liệu/chat. Đây là ngoại lệ mới cho gate Google bắt buộc trước mọi thao tác; không tắt auth/owner hoặc dùng token Google giả. Hai plan gốc giữ nguyên, không Phase2. Chi phí không cấp thêm:9lượt còn lại đã bàn giao cho chủ dự án, Codex chỉ kiểm mock/offline/browser không generation.
+
+Quyết định tối thiểu: principal guest thật, token ngẫu nhiên chỉ trong bộ nhớ trang, không cookie/localStorage để khôi phục phiên khách. Dùng cùng workspace/ingestion/catalog/compiler/chat/provider quota hiện hữu; dữ liệu khách lưu tạm server để xử lý và bị dọn khi kết thúc trang, có TTL/reaper trong API để xử lý đóng tab/network không gửi cleanup được. Không một query engine/local giả khác, không hứa hủy HTTP model đang bay; quota/ledger giữ dù user reload. Cleanup chỉ owner provider=guest đã hết phiên, giữ toàn bộ Google và provider ledger. Login Google giữ verify/nonce/CSRF/cookie cũ. Chủ dự án xác nhận login mở dữ liệu tài khoản và không chuyển phiên khách hiện tại; cleanup chỉ dọn guest, không nhập vào tài khoản khác.
+
+Header screenshot xác minh focus outline của select sát title khi không có gap, không phải dữ liệu đè DOM. Tạo hai dòng có gap6px, select28px co theo chữ, bỏ nền/viền theo yêu cầu tiếp nối; outline bàn phím2px/offset1px, giữ context dưới title; kiểm focus và bốn breakpoint sau build.
+
 ## Usage review, quyền nguồn ready và nghiệm thu mới — 30/10/2026
 
 **Kết quả:** một pilot lookup thiếu projection đã FAIL/dừng; sửa tổng quát record phải project EQ lookup columns và chỉ thêm một lần hướng dẫn cấu trúc, không thêm cột sau model. Candidate sau khóa đạt canary4/4, cùng26ca baseline26/26 và printing6/6 chưa dùng model trước đó. Đã chuyển QueryRequest vào một đường runtime; wrapper process canary đã bỏ. Compiler/query.py, parser/tabular.py, setup/publish logic và hai plan/gold giữ nguyên. Mở rộng qua HTTP phát hiện3 false refusals (lúa→rice, chưa thu hoạch→false chưa có mapping; follow-up3→quận3) và top hotel output dư cột/thiếu order phụ. Giữ4FAIL, dừng từng nhóm, không tiếp tục tuning dựa held-out hay sửa expected. Bản hiện hành NOT_ACCEPTED. Không lấy việc guard ngăn sai literal làm NL PASS.

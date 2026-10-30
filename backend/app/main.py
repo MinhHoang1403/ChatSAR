@@ -1,7 +1,8 @@
 """Health endpoints tối thiểu cho nền tảng ChatSAR."""
 
+import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from uuid import uuid4
 
 from fastapi import FastAPI, Request
@@ -18,6 +19,8 @@ from app.database import database_ready
 from app.datasets import recover_ingestion
 from app.datasets import router as dataset_router
 from app.errors import AppError
+from app.guest import guest_maintenance, reap_guests
+from app.guest import router as guest_router
 from app.observability import flush_observations
 from app.providers import router as provider_router
 from app.setup import router as setup_router
@@ -27,13 +30,20 @@ from app.workspace import router as workspace_router
 @asynccontextmanager
 async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     get_settings()
+    maintenance = None
     if application.state.recover_jobs:
         try:
             recover_ingestion()
             recover_messages()
+            reap_guests()
         except SQLAlchemyError:
             pass
+        maintenance = asyncio.create_task(guest_maintenance())
     yield
+    if maintenance is not None:
+        maintenance.cancel()
+        with suppress(asyncio.CancelledError):
+            await maintenance
     flush_observations()
 
 
@@ -41,6 +51,7 @@ def create_app(*, recover_jobs: bool = True) -> FastAPI:
     application = FastAPI(title="ChatSAR", version="0.1.0", lifespan=lifespan)
     application.state.recover_jobs = recover_jobs
     application.include_router(auth_router)
+    application.include_router(guest_router)
     application.include_router(workspace_router)
     application.include_router(dataset_router)
     application.include_router(setup_router)

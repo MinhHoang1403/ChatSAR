@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { api, identity, record } from './api';
 import type { Identity } from './api';
 
-export default function Authentication({ onLogin }: { onLogin: (me: Identity) => void }) {
+export default function Authentication({ onLogin, onBack }: { onLogin: (me: Identity) => void; onBack?: () => void }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [googleReady, setGoogleReady] = useState<boolean | null>(null);
@@ -53,6 +53,7 @@ export default function Authentication({ onLogin }: { onLogin: (me: Identity) =>
 
 
   return <main className="login"><div className="login-card">
+    {onBack && <button className="quiet back-home" onClick={onBack}>← Về trang chủ</button>}
     <div className="brand">ChatSAR</div>
     <h1>Không gian dữ liệu của bạn</h1>
     <p>Đặt câu hỏi, xem số liệu và kiểm tra nguồn trong cùng một nơi.</p>

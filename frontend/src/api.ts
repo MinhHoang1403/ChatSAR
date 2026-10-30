@@ -1,6 +1,24 @@
 export type RecordValue = Record<string, unknown>;
-export type Identity = { id: string; display_name: string; csrf_token: string };
+export type Identity = { id: string; display_name: string; csrf_token: string; is_guest?: boolean };
 export type Workspace = { id: string; name: string };
+
+// Chỉ sống trong bộ nhớ trang; không cookie/localStorage để khôi phục khách.
+let guestSession: { token: string; csrf: string } | null = null;
+export function activateGuestSession(value: unknown): Identity {
+  if (!record(value) || typeof value.guest_token !== 'string' || !value.guest_token
+    || value.is_guest !== true) throw new Error('Chưa tạo được phiên khách.');
+  const me = identity(value);
+  guestSession = { token: value.guest_token, csrf: me.csrf_token };
+  return me;
+}
+export async function endGuestSession(): Promise<void> {
+  const current = guestSession; guestSession = null;
+  if (!current) return;
+  try {
+    await fetch('/api/auth/guest', { method: 'DELETE', credentials: 'same-origin', keepalive: true,
+      headers: { 'X-Guest-Session': current.token, 'X-CSRF-Token': current.csrf } });
+  } catch { /* Server dọn phiên hết hạn nếu pagehide không gửi được cleanup. */ }
+}
 
 export class ApiError extends Error {
   constructor(message: string, public diagnostics: RecordValue | null) { super(message); }
@@ -12,6 +30,7 @@ export function record(value: unknown): value is RecordValue {
 
 export async function api(path: string, options: RequestInit = {}, csrf?: string): Promise<unknown> {
   const headers = new Headers(options.headers);
+  if (guestSession) headers.set('X-Guest-Session', guestSession.token);
   if (csrf) headers.set('X-CSRF-Token', csrf);
   if (typeof options.body === 'string') headers.set('Content-Type', 'application/json');
   const controller = new AbortController();
@@ -35,7 +54,8 @@ export async function api(path: string, options: RequestInit = {}, csrf?: string
 export function identity(value: unknown): Identity {
   if (!record(value) || typeof value.id !== 'string' || typeof value.display_name !== 'string'
     || typeof value.csrf_token !== 'string') throw new Error('Thông tin phiên không hợp lệ.');
-  return { id: value.id, display_name: value.display_name, csrf_token: value.csrf_token };
+  return { id: value.id, display_name: value.display_name, csrf_token: value.csrf_token,
+    is_guest: value.is_guest === true };
 }
 
 export function workspaceList(value: unknown): Workspace[] {

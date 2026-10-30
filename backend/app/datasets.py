@@ -237,6 +237,9 @@ async def upload_dataset(
         raise AppError(413, "UPLOAD_LIMIT", "File trống hoặc vượt giới hạn 20 MiB.")
     checksum = hashlib.sha256(data).hexdigest()
     with db.get_engine().begin() as connection:
+        # Recheck sau await đọc file, trước tạo tài nguyên: phiên khách có thể
+        # vừa kết thúc; khóa workspace để không tạo file sau khi cleanup đã xong.
+        owned_workspace(connection, workspace_id, principal, lock=True)
         existing = connection.execute(
             select(datasets.c.id).where(
                 and_(datasets.c.workspace_id == workspace_id, datasets.c.checksum == checksum)

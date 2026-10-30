@@ -45,10 +45,12 @@ small, .muted { color: var(--muted); font-size: 12px; }
 .popup-menu button { display: block; width: 100%; text-align: left; background: transparent; color: #314b6e; font-size: 13px; font-weight: 400; padding: 10px; border-radius: 7px; }
 .popup-menu button:hover, .popup-menu button:focus-visible { background: #edf3ff; }
 .popup-menu button.danger { color: #b23148; }
-.chat-context { flex: 1; min-width: 0; }
-.chat-context > strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; font-weight: 600; }
-.workspace-switch { width: fit-content; max-width: 100%; }
-.workspace-switch select { font-size: 11px; color: #71819a; border: 0; margin: 0; padding: 1px 19px 1px 0; background: transparent; height: 23px; cursor: pointer; text-overflow: ellipsis; }
+.chat-context { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.chat-context > strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; line-height: 20px; font-weight: 600; }
+.workspace-switch { width: fit-content; max-width: min(240px, 100%); }
+.workspace-switch select { display: block; width: auto; max-width: 100%; font-size: 11px; line-height: 18px; color: #647b9d; border: 0; border-radius: 4px; margin: 0; padding: 4px 0; background: transparent; height: 28px; cursor: pointer; text-overflow: ellipsis; }
+.workspace-switch select:hover { color: #315eaa; }
+.workspace-switch select:focus-visible { outline: 2px solid #8ab3f8; outline-offset: 1px; }
 .account { padding-top: 8px; }
 .account-menu > button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 8px; border-radius: 14px; }
 .account-menu > button:hover { background: #ebf1fa; }
@@ -57,6 +59,9 @@ small, .muted { color: var(--muted); font-size: 12px; }
 .account-identity strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; color: #30496f; }
 .account-identity > span { font-size: 10px; font-weight: 400; color: #8a98ad; }
 .account-chevron { font-size: 15px; color: #8a98ad; }
+.account-login { width: 100%; border-radius: 12px; padding: 10px 14px; font-size: 13px; background: #2a67dc; }
+.guest-notice { flex-shrink: 0; margin: 0; padding: 8px 24px; font-size: 12px; color: #6a7e9c; background: #f8faff; border-bottom: 1px solid #edf2f9; }
+.back-home { margin: -15px 0 22px -10px; font-size: 12px; padding: 7px 10px; }
 .workspace-main { min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
 .workspace-header { min-height: 64px; display: flex; align-items: center; gap: 18px; padding: 12px 26px; border-bottom: 1px solid #f1f4f9; }
 

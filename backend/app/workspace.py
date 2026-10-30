@@ -21,12 +21,15 @@ class WorkspaceInput(BaseModel):
     name: str = Field(min_length=1, max_length=120, pattern=r"\S")
 
 
-def owned_workspace(connection: Connection, workspace_id: UUID, principal: Principal) -> None:
-    found = connection.execute(
-        select(workspaces.c.id).where(
-            and_(workspaces.c.id == workspace_id, workspaces.c.owner_id == principal.user_id)
-        )
-    ).one_or_none()
+def owned_workspace(
+    connection: Connection, workspace_id: UUID, principal: Principal, *, lock: bool = False
+) -> None:
+    query = select(workspaces.c.id).where(
+        and_(workspaces.c.id == workspace_id, workspaces.c.owner_id == principal.user_id)
+    )
+    if lock:
+        query = query.with_for_update()
+    found = connection.execute(query).one_or_none()
     if found is None:
         raise AppError(404, "NOT_FOUND", "Không tìm thấy không gian làm việc.")
 

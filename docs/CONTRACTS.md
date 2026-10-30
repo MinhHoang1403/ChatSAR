@@ -1,5 +1,13 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## Bổ sung hiện hành: principal khách tạm — 30/10/2026
+
+Yêu cầu chủ dự án mở rộng truy cập ẩn danh, giữ Google verify/nonce/CSRF nguyên vẹn. POST `/api/auth/guest` body{} tạo principal provider=guest, workspace tạm và token2giờ; trả no-store, không cookie. Header X-Guest-Session chỉ nhận token guest; cookie chỉ nhận Google. Google cookie hợp lệ ưu tiên khi login. Mutations giữ Origin+CSRF+owner; profile yêu cầu Google. Không nhận owner/token qua query/body. Không localStorage/sessionStorage hoặc tự nhập dữ liệu khách vào tài khoản khi login.
+
+DELETE cùng endpoint với guest token+CSRF thu hồi phiên trước khi dọn đúng owner guest. Frontend gửi keepalive khi pagehide hoặc login; nếu không gửi được, phiên hết2giờ và reaper60giây dọn. Dữ liệu được lưu tạm server để xử lý, không hứa chỉ nằm RAM. Reload không khôi phục token/data/chat. Nếu ingestion/setup/model đang pending, thu hồi truy cập nhưng đợi hoàn tất/recovery rồi dọn file/bảng/revision/chat; provider ledger giữ nguyên. API startup và maintenance dùng cùng cleanup, không worker/DB/engine mới. Migration guest_sessions chỉ mở check provider thêm guest và ghi version;9migrations. Upload recheck+khóa owner workspace sau await trước ghi file để không tạo tài nguyên sau cleanup.
+
+UI trang chủ có nút Đăng nhập thay tên tài khoản, status đúng “Chế độ khách”. Bộ chọn không gian bỏ nền/border, co theo nội dung và có gap6px với title; focus bàn phím vẫn có dấu nhận diện. Hai plan gốc không sửa; đây là ngoại lệ Google-only được người dùng xác nhận trong phiên, không thay các gate nghiệm thu chất lượng.
+
 ## Hiện hành: usage review, quyền nguồn ready, QueryRequest runtime — 30/10/2026
 
 Yêu cầu mới cho phép hạch toán bảo thủ có audit, không mở ngân sách mới. Migration usage_review additive: provider_usage thêm http_status nullable; provider_usage_reviews theo usage_id chỉ admin ghi/app SELECT. Ngoại lệ chỉ đúng lỗi Gemini/PROVIDER_SCHEMA/error/dispatch1, evidence HTTP400 và snapshot model/status/error/reserve khớp. Giữ tokens/costNULL và toàn reserved_cost, không ghi chi phí giả0; request đang bay/unknown mới/mismatch vẫn chặn. Một review đã duyệt cho HTTP400 lịch sử, 63 dòng ledger gốc không đổi. Usage nhận trước lỗi JSON vẫn có estimate theo tokens thật đã nhận; không gọi estimate là billing.

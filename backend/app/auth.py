@@ -43,6 +43,7 @@ class Principal:
     display_name: str
     token_hash: str = field(repr=False)
     csrf_token: str = field(repr=False)
+    is_guest: bool = False
 
 
 class LoginInput(BaseModel):
@@ -141,23 +142,28 @@ def verify_google_identity(credential: str, nonce: str) -> dict[str, Any]:
     return claims
 
 
-def create_session(connection: Connection, user_id: UUID, nonce: str | None = None) -> str:
+def create_session(
+    connection: Connection,
+    user_id: UUID,
+    nonce: str | None = None,
+    *,
+    lifetime: timedelta = timedelta(hours=24),
+) -> str:
     token = secrets.token_urlsafe(32)
     connection.execute(
         insert(sessions).values(
             token_hash=digest(token),
             user_id=user_id,
-            expires_at=datetime.now(UTC) + timedelta(hours=24),
+            expires_at=datetime.now(UTC) + lifetime,
             google_nonce_hash=digest("nonce:" + nonce) if nonce else None,
         )
     )
     return token
 
 
-def current_principal(request: Request) -> Principal:
-    token = request.cookies.get(SESSION_COOKIE, "")
+def session_principal(token: str, provider: str) -> Principal | None:
     if not token or len(token) > 128:
-        raise AppError(401, "UNAUTHENTICATED", "Vui lòng đăng nhập để tiếp tục.")
+        return None
     token_hash = digest(token)
     with db.get_engine().connect() as connection:
         row = (
@@ -169,15 +175,41 @@ def current_principal(request: Request) -> Principal:
                         sessions.c.token_hash == token_hash,
                         sessions.c.expires_at > datetime.now(UTC),
                         sessions.c.revoked_at.is_(None),
+                        users.c.provider == provider,
                     )
                 )
             )
             .mappings()
             .one_or_none()
         )
-    if row is None:
+    return (
+        Principal(
+            row["id"], row["display_name"], token_hash, digest("csrf:" + token), provider == "guest"
+        )
+        if row
+        else None
+    )
+
+
+def current_principal(request: Request) -> Principal:
+    # Cookie Google đã xác minh ưu tiên sau login; guest chỉ nhận qua header
+    # chỉ sống trong bộ nhớ trang. Cookie guest hoặc header token Google bị loại.
+    principal = session_principal(request.cookies.get(SESSION_COOKIE, ""), "google")
+    if principal is not None:
+        return principal
+    guest = request.headers.get("X-Guest-Session", "")
+    principal = session_principal(guest, "guest")
+    if principal is not None:
+        return principal
+    if guest:
+        raise AppError(
+            401,
+            "GUEST_SESSION_EXPIRED",
+            "Phiên khách đã kết thúc. Tải lại trang để bắt đầu phiên mới.",
+        )
+    if request.cookies.get(SESSION_COOKIE):
         raise AppError(401, "SESSION_EXPIRED", "Phiên đăng nhập đã hết hạn.")
-    return Principal(row["id"], row["display_name"], token_hash, digest("csrf:" + token))
+    raise AppError(401, "UNAUTHENTICATED", "Vui lòng đăng nhập để tiếp tục.")
 
 
 PrincipalDependency = Annotated[Principal, Depends(current_principal)]
@@ -269,11 +301,12 @@ def google_login(body: LoginInput, request: Request, response: Response) -> dict
 
 
 @router.get("/me")
-def me(principal: PrincipalDependency) -> dict[str, str]:
+def me(principal: PrincipalDependency) -> dict[str, Any]:
     return {
         "id": str(principal.user_id),
         "display_name": principal.display_name,
         "csrf_token": principal.csrf_token,
+        "is_guest": principal.is_guest,
     }
 
 
@@ -290,6 +323,8 @@ def logout(principal: MutationDependency, response: Response) -> None:
 
 @router.get("/profile")
 def get_profile(principal: PrincipalDependency) -> dict[str, str]:
+    if principal.is_guest:
+        raise AppError(403, "LOGIN_REQUIRED", "Đăng nhập để xem hồ sơ tài khoản.")
     with db.get_engine().connect() as connection:
         row = (
             connection.execute(
@@ -305,6 +340,8 @@ def get_profile(principal: PrincipalDependency) -> dict[str, str]:
 
 @router.patch("/profile")
 def update_profile(body: ProfileInput, principal: MutationDependency) -> dict[str, str]:
+    if principal.is_guest:
+        raise AppError(403, "LOGIN_REQUIRED", "Đăng nhập để lưu hồ sơ tài khoản.")
     with db.get_engine().begin() as connection:
         connection.execute(
             update(users).where(users.c.id == principal.user_id).values(**body.model_dump())

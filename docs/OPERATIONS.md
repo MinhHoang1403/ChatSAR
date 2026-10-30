@@ -1,5 +1,11 @@
 # Vận hành ChatSAR
 
+## Bổ sung hiện hành: phiên khách — 30/10/2026
+
+Áp dụng migration guest_sessions sau usage_review trước build/start; readiness yêu cầu đủ9migrations. Trang chủ không còn yêu cầu login trước. Đăng xuất chỉ thu hồi session tài khoản, không xóa dữ liệu Google. Login từ khách mở dữ liệu tài khoản, không nhập guest. Guest token không được lưu bền phía trình duyệt; refresh tạo phiên sạch. Frontend pagehide/login gửi DELETE keepalive; server giới hạn token2giờ và reaper60giây dọn guest hết phiên, không chạm provider ledger hoặc Google. Pending setup/ingestion/model trì hoãn cleanup đến khi xong/recovery, không hủy hoặc replay HTTP đang bay. Nếu trình duyệt không gửi cleanup, dữ liệu tạm còn server đến TTL/reaper; không coi việc UI mất dữ liệu là chứng minh xóa vật lý ngay mọi tình huống.
+
+Kiểm guest dùng mock provider, quota thực không tăng.9lượt còn lại dành chủ dự án, không gọi để smoke test guest. Khách vẫn phải cấp quyền hỏi đáp cho nguồn private và chịu cùng budget/provider guards. Không có public deployment hoặc quota vô hạn mới.40integration gồm6guest;14frontend,148unit/types/build PASS. Tổng Phase1 vẫn NOT_ACCEPTED.
+
 **Hiện hành 30/10/2026:** Phase1 NOT_ACCEPTED. QueryRequest đã vào một runtime sau canary/so sánh/printing;4FAIL mở rộng còn giữ. Usage review admin theo từng usage_id giữ toàn reserve cho HTTP400 lịch sử, không sửa tokens/costNULL. Unknown mới vẫn chặn; app không tự approve. .env/keys/flags không đổi. Migration usage_review additive, app chỉ đọc provider_usage_reviews; không cấp INSERT/UPDATE/DELETE cho app/reader. Không tự thêm review vì chỉ thấyHTTP400: phải có chứng cứ/snapshot/quyền chủ dự án. Đây là dự phòng được chấp thuận, không là hóa đơn.
 
 Đợt này41Gemini, tổng grant91/100, reserved1.2290194/1.50USD. Codex dừng generation tại91/95. Còn9lượt tổng, ít nhất5dành chủ dự án; đã chuyển cap grant95→100 khi bàn giao toàn9lượt cho chủ dự án trong đúng quyền100đã cấp; budget1.50USD/baseline/ledger giữ nguyên, Codex không gọi thêm sau bàn giao. Không dùng9lượt đó làm quyền tự test ở nhiệm vụ sau. Ledger104=Gemini99/Knowledge5; Knowledge/LlamaParse/BGE mới0.
@@ -45,7 +51,7 @@ npm.cmd ci --ignore-scripts --prefix frontend
 
 # Khởi động DB duy nhất và áp dụng migration.
 docker compose up -d --wait db
-foreach ($name in @('foundation','identity','datasets','conversation','catalog','provider_grants','chat_management','usage_review')) {
+foreach ($name in @('foundation','identity','datasets','conversation','catalog','provider_grants','chat_management','usage_review','guest_sessions')) {
   Get-Content "backend/migrations/$name.sql" -Raw -Encoding UTF8 | docker compose exec -T db psql -X -q -U chatsar_admin -d chatsar -v ON_ERROR_STOP=1
   if ($LASTEXITCODE -ne 0) { throw "Migration thất bại: $name" }
 }

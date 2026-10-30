@@ -10,7 +10,7 @@ import Menu from './Menu';
 
 type Props = { me: Identity; workspaces: Workspace[]; selected: Workspace | null;
   onSelect: (workspace: Workspace) => void; onCreate: (name: string) => Promise<void>;
-  onLogout: () => Promise<void>; busy: boolean; error: string };
+  onLogout: () => Promise<void>; onLogin?: () => void; busy: boolean; error: string };
 type Profile = { display_name: string; phone: string; interests: string };
 type Action = { kind: 'rename' | 'delete'; chat: Conversation } | { kind: 'bulk' } | null;
 export function historyGroups(items: Conversation[]) {
@@ -35,7 +35,7 @@ function Modal({ open, title, onClose, children, wide = false, error = '', close
     {open && children}
   </dialog>;
 }
-export default function WorkspaceView({ me, workspaces, selected, onSelect, onCreate, onLogout, busy, error }: Props) {
+export default function WorkspaceView({ me, workspaces, selected, onSelect, onCreate, onLogout, onLogin, busy, error }: Props) {
   const [scope, setScope] = useState<Dataset | null>(null);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -78,7 +78,7 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
   useEffect(() => {
     let active = true;
     api('/health').then((data) => { if (active) setHealth(record(data) && data.status === 'ok' ? 'Hệ thống sẵn sàng' : 'Chưa kết nối hệ thống'); }).catch(() => { if (active) setHealth('Chưa kết nối hệ thống'); });
-    api('/profile').then((data) => {
+    if (!me.is_guest) api('/profile').then((data) => {
       if (active && record(data) && typeof data.display_name === 'string' && typeof data.phone === 'string' && typeof data.interests === 'string') {
         setProfile({ display_name: data.display_name, phone: data.phone, interests: data.interests }); setSavedName(data.display_name);
       }
@@ -124,10 +124,10 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
         </>}
       </nav>
 
-      <div className="account"><Menu label="Tài khoản ChatSAR" text={<><span className="account-avatar" aria-hidden="true">{savedName.trim().slice(0,1).toLocaleUpperCase('vi')}</span><span className="account-identity"><strong>{savedName}</strong><span>Tài khoản cá nhân</span></span><span className="account-chevron" aria-hidden="true">⌃</span></>} className="account-menu" disabled={unavailable} items={[
+      <div className="account">{me.is_guest ? <button className="account-login" disabled={unavailable} onClick={onLogin}>Đăng nhập</button> : <Menu label="Tài khoản ChatSAR" text={<><span className="account-avatar" aria-hidden="true">{savedName.trim().slice(0,1).toLocaleUpperCase('vi')}</span><span className="account-identity"><strong>{savedName}</strong><span>Tài khoản cá nhân</span></span><span className="account-chevron" aria-hidden="true">⌃</span></>} className="account-menu" disabled={unavailable} items={[
         { label: 'Hồ sơ ChatSAR', action: () => { setDraftProfile(profile); setLocalError(''); setProfileOpen(true); } },
         { label: 'Đăng xuất', action: () => void onLogout() },
-      ]} /></div>
+      ]} />}</div>
     </aside>
     <main className="workspace-main">
       <header className="workspace-header"><button className="quiet open-sidebar" aria-label="Mở điều hướng" onClick={() => { setCollapsed(false); setMobileOpen(true); }}>☰</button>
@@ -140,6 +140,7 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
           <option value="">Chọn dữ liệu</option>{datasets.filter((d) => d.status === 'ready').map((d) => <option key={d.revision_id} value={d.revision_id}>{d.name}</option>)}</select></label>
         <span className="health" role="status">{health}</span></header>
       {(error || localError) && <p className="error" role="alert">{error || localError}</p>}
+      {me.is_guest && <p className="guest-notice">Chế độ khách</p>}
       {notice && <p className="status-notice" role="status">{notice}</p>}
       {selected ? <Chat workspaceId={selected.id} csrf={me.csrf_token} scope={scope} selected={conversationId} onSelect={setConversationId}
         onRefresh={refreshConversations} onBusy={setPending} onManageData={manage} onCreateWorkspace={() => setCreateOpen(true)} />
@@ -174,7 +175,7 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
           <button className={action?.kind === 'rename' ? '' : 'danger-button'} disabled={unavailable || (action?.kind === 'rename' && !title.trim())}>{action?.kind === 'rename' ? 'Lưu' : 'Xác nhận xóa'}</button></div>
       </form>
     </Modal>
-    <Modal open={profileOpen} title="Hồ sơ ChatSAR" error={localError} closeDisabled={mutating} onClose={() => { if (!mutating) setProfileOpen(false); }}>
+    {!me.is_guest && <Modal open={profileOpen} title="Hồ sơ ChatSAR" error={localError} closeDisabled={mutating} onClose={() => { if (!mutating) setProfileOpen(false); }}>
       <form className="dialog-body" onSubmit={(e) => { e.preventDefault(); void mutate(async () => {
         await api('/profile', { method: 'PATCH', body: JSON.stringify(draftProfile) }, me.csrf_token);
         setProfile(draftProfile); setSavedName(draftProfile.display_name.trim()); setProfileOpen(false); setNotice('Đã lưu hồ sơ ChatSAR.');
@@ -185,7 +186,7 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
         <label>Sở thích (tùy chọn)<textarea rows={3} value={draftProfile.interests} maxLength={1000} onChange={(e) => setDraftProfile({ ...draftProfile, interests: e.target.value })} /></label>
         <div className="dialog-actions"><button type="button" className="secondary" disabled={mutating} onClick={() => setProfileOpen(false)}>Hủy</button><button disabled={mutating || !draftProfile.display_name.trim()}>Lưu hồ sơ</button></div>
       </form>
-    </Modal>
+    </Modal>}
   </div>;
 }
 function message(error: unknown): string { return error instanceof Error ? error.message : 'Chưa thể xử lý yêu cầu.'; }
