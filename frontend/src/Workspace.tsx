@@ -108,6 +108,9 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
           { label: hidden ? 'Hiện tất cả đoạn chat' : 'Ẩn tất cả đoạn chat', action: () => setHidden(!hidden) },
           { label: 'Xóa tất cả đoạn chat', danger: true, action: () => setAction({ kind: 'bulk' }) },
         ]} /></div>
+      <label className="workspace-switch">Không gian làm việc<select value={selected?.id ?? ''} disabled={unavailable} onChange={(e) => {
+        const item = workspaces.find((w) => w.id === e.target.value); if (item) onSelect(item);
+      }}>{!selected && <option value="">Chưa có không gian</option>}{workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
       <label className="search"><span className="sr-only">Tìm đoạn chat</span><input type="search" value={search} placeholder="Tìm đoạn chat…" onChange={(e) => setSearch(e.target.value)} /></label>
       <nav className="history" aria-label="Lịch sử cuộc trò chuyện">
         {hidden ? <button className="quiet" onClick={() => setHidden(false)}>Hiện tất cả đoạn chat</button> : <>
@@ -123,9 +126,7 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
           </details>)}
         </>}
       </nav>
-      <label className="workspace-switch">Không gian làm việc<select value={selected?.id ?? ''} disabled={unavailable} onChange={(e) => {
-        const item = workspaces.find((w) => w.id === e.target.value); if (item) onSelect(item);
-      }}>{!selected && <option value="">Chưa có không gian</option>}{workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
+
       <div className="account"><Menu label="Tài khoản ChatSAR" text={savedName} className="account-menu" disabled={unavailable} items={[
         { label: 'Hồ sơ ChatSAR', action: () => { setDraftProfile(profile); setLocalError(''); setProfileOpen(true); } },
         { label: 'Đăng xuất', action: () => void onLogout() },

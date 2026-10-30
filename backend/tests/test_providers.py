@@ -136,6 +136,7 @@ def test_knowledge_403_one_call_and_classified(
     with pytest.raises(AppError) as error:
         providers.generate_proposal("?", revision, "knowledge")
     assert error.value.code == "PROVIDER_FORBIDDEN"
+    assert error.value.stage == "provider_call"
     assert len(captured) == finish.call_count == 1
 
 
@@ -166,6 +167,7 @@ def test_private_dataset_denied_before_reserving_or_network(adapter: tuple) -> N
     with pytest.raises(AppError) as error:
         providers.generate_proposal("?", revision, "gemini")
     assert error.value.code == "DATA_PERMISSION_REQUIRED"
+    assert error.value.stage == "provider_preparation"
     reserve.assert_not_called()
 
 
@@ -299,6 +301,7 @@ def test_incomplete_sql_plan_is_rejected_and_usage_retained(
     with pytest.raises(AppError) as error:
         providers.generate_proposal("?", revision, "knowledge")
     assert error.value.code == "PROVIDER_SCHEMA"
+    assert error.value.stage == "proposal_parse"
     assert finish.call_args.args[3:5] == (11, 7)
 
 

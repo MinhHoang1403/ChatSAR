@@ -1,6 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
 
-type Item = { label: string; action: () => void; danger?: boolean };
+type Item = { label: string; action: () => void; danger?: boolean; icon?: 'upload'|'workspace'|'data' };
+function ActionIcon({ kind }: { kind: NonNullable<Item['icon']> }) {
+  return <svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+    {kind==='upload'?<><path d="M12 16V3m-5 5 5-5 5 5"/><path d="M4 15v5h16v-5"/></>
+      :kind==='workspace'?<><rect x="3" y="5" width="18" height="15" rx="2"/><path d="M8 5V3h8v2M8 12h8m-4-4v8"/></>
+      :<><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/></>}
+  </svg>;
+}
 export default function Menu({ label, text = '···', items, disabled = false, className = '' }: {
   label: string; text?: string; items: Item[]; disabled?: boolean; className?: string;
 }) {
@@ -45,7 +52,7 @@ export default function Menu({ label, text = '···', items, disabled = false, 
     {open && <div ref={popup} id={id} role="menu" aria-label={label} className="popup-menu" style={position}
       onBlur={(e) => { if (!root.current?.contains(e.relatedTarget)) setOpen(false); }}>
       {items.map((item) => <button key={item.label} type="button" role="menuitem"
-        className={item.danger ? 'danger' : ''} onClick={() => { close(); item.action(); }}>{item.label}</button>)}
+        className={item.danger ? 'danger' : ''} onClick={() => { close(); item.action(); }}>{item.icon && <ActionIcon kind={item.icon} />}<span>{item.label}</span></button>)}
     </div>}
   </div>;
 }

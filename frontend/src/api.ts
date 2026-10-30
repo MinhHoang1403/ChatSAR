@@ -2,6 +2,10 @@ export type RecordValue = Record<string, unknown>;
 export type Identity = { id: string; display_name: string; csrf_token: string };
 export type Workspace = { id: string; name: string };
 
+export class ApiError extends Error {
+  constructor(message: string, public diagnostics: RecordValue | null) { super(message); }
+}
+
 export function record(value: unknown): value is RecordValue {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -23,7 +27,7 @@ export async function api(path: string, options: RequestInit = {}, csrf?: string
   if (!response.ok) {
     const message = record(data) && record(data.error) && typeof data.error.message === 'string'
       ? data.error.message : 'Chưa thể xử lý yêu cầu. Vui lòng thử lại.';
-    throw new Error(message);
+    throw new ApiError(message, record(data) && record(data.diagnostics) ? data.diagnostics : null);
   }
   return data;
 }

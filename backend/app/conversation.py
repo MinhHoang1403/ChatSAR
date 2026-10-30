@@ -562,17 +562,27 @@ def send_message(
             )
             answer["error_code"] = error.code
         except (SQLAlchemyError, ValueError, TypeError):
-            processing.error_code = (
-                "SQL_EXECUTION_FAILED"
-                if processing.failed_stage == "execution"
-                else "PROCESSING_FAILED"
-            )
+            processing.error_code = {
+                "execution": "SQL_EXECUTION_FAILED",
+                "sql_compilation": "SQL_COMPILATION_FAILED",
+                "composition": "ANSWER_COMPOSITION_FAILED",
+                "catalog": "CATALOG_UNAVAILABLE",
+                "semantic_validation": "QUERY_VALIDATION_FAILED",
+            }.get(processing.failed_stage or "", "PROCESSING_FAILED")
             answer = empty_answer(
                 "execution_error", failure_text("execution_error"), request.state.request_id
             )
             answer["error_code"] = processing.error_code
         if processing.sql["execution_status"] == "in_progress":
             processing.sql["execution_status"] = "failed"
+            answer["display_text"] = (
+                "Chưa thể lấy kết quả từ dữ liệu. "
+                "Truy vấn đã được tạo nhưng thực hiện không thành công."
+            )
+            answer["limitations"] = [answer["display_text"]]
+        elif processing.failed_stage == "composition":
+            answer["display_text"] = "Đã lấy dữ liệu nhưng chưa thể diễn đạt câu trả lời."
+            answer["limitations"] = [answer["display_text"]]
         if processing.failed_stage and processing.failed_stage not in processing.stages:
             processing.stages[processing.failed_stage] = {"status": "failed"}
         answer["timings_ms"] = {**timings, "server_processing": (perf_counter() - started) * 1000}

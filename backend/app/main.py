@@ -58,6 +58,7 @@ def create_app(*, recover_jobs: bool = True) -> FastAPI:
                         "diagnostics": error.diagnostics
                         or {
                             "failed_stage": error.stage,
+                            "error_code": error.code,
                             "sql": {
                                 "compiled": False,
                                 "statement": None,

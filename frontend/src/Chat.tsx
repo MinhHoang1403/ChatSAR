@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
-import { api, record } from './api';
+import { api, ApiError, record } from './api';
 import type { Dataset } from './Datasets';
 import Menu from './Menu';
 import Result from './Result';
 
 export type Conversation = { id: string; title: string; revision_id: string | null; dataset_name: string | null };
 export type Answer = { status: string; display_text: string; facts: Record<string, unknown>;
-  display_rows: unknown[][]; limitations: string[] };
+  display_rows: unknown[][]; limitations: string[]; processing?: Record<string, unknown>;
+  timings_ms?: Record<string, unknown> };
 type Message = { id: string; question: string; revision_id: string; envelope: Answer | null };
 function answer(value: unknown): Answer {
   if (!record(value) || typeof value.status !== 'string' || typeof value.display_text !== 'string'
@@ -15,7 +16,9 @@ function answer(value: unknown): Answer {
     || !value.display_rows.every(Array.isArray) || !Array.isArray(value.limitations)
     || !value.limitations.every((v: unknown) => typeof v === 'string')) throw new Error('Câu trả lời chưa đúng định dạng.');
   return { status: value.status, display_text: value.display_text, facts: value.facts,
-    display_rows: value.display_rows as unknown[][], limitations: value.limitations as string[] };
+    display_rows: value.display_rows as unknown[][], limitations: value.limitations as string[],
+    processing: record(value.processing) ? value.processing : undefined,
+    timings_ms: record(value.timings_ms) ? value.timings_ms : undefined };
 }
 export function conversation(value: unknown): Conversation {
   if (!record(value) || typeof value.id !== 'string' || typeof value.title !== 'string') throw new Error('Cuộc trò chuyện chưa đúng định dạng.');
@@ -34,12 +37,13 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onR
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [requestFailure, setRequestFailure] = useState<Answer | null>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
   const form = useRef<HTMLFormElement>(null);
   const sending = useRef(false);
   const pending = useRef<{ body: string; key: string; conversationId: string } | null>(null);
   const historyRequest = useRef(0);
-  const serverPending = history.some((m) => m.envelope === null);
+  const serverPending = history.some((m) => m.envelope === null || m.envelope.status === 'pending');
   const blocked = busy || serverPending;
   useEffect(() => { onBusy(blocked); }, [blocked, onBusy]);
   useEffect(() => {
@@ -57,7 +61,7 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onR
   useEffect(() => {
     let active = true;
     const version = ++historyRequest.current;
-    setHistory([]); setError('');
+    setHistory([]); setError(''); setRequestFailure(null);
     if (!selected) { setLoading(false); return; }
     setLoading(true);
     readHistory(selected).then((data) => { if (active && version === historyRequest.current) setHistory(data); })
@@ -77,7 +81,7 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onR
   async function send(event: FormEvent) {
     event.preventDefault();
     if (sending.current || blocked || loading || !scope || !question.trim()) return;
-    sending.current = true; setBusy(true); setError('');
+    sending.current = true; setBusy(true); setError(''); setRequestFailure(null);
     let id = selected;
     try {
       if (!id) {
@@ -88,7 +92,11 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onR
       if (!pending.current || pending.current.body !== body || pending.current.conversationId !== id) pending.current = { body, key: crypto.randomUUID(), conversationId: id };
       await api(`/conversations/${id}/messages`, { method: 'POST', body, headers: { 'Idempotency-Key': pending.current.key } }, csrf).then(answer);
       pending.current = null; setQuestion('');
-    } catch (e: unknown) { setError(message(e)); }
+    } catch (e: unknown) {
+      if (e instanceof ApiError && e.diagnostics) setRequestFailure({status:'execution_error',
+        display_text:e.message,facts:{},display_rows:[],limitations:[],processing:e.diagnostics});
+      else setError(message(e));
+    }
     finally {
       if (id) {
         ++historyRequest.current;
@@ -108,15 +116,16 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onR
           {item.envelope ? <Result value={item.envelope} /> : <p role="status">Đang xử lý…</p>}
         </div></article>)}
       {busy && !serverPending && <div className="pending-message"><p role="status">Đang xử lý…</p></div>}
+      {requestFailure && <div className="assistant-message"><Result value={requestFailure} /></div>}
     </div>
     <div className="composer-area">
       {error && <p className="error" role="alert">{error}</p>}
       {stale && <p className="scope-note">Nguồn đã đổi. <button className="secondary" disabled={blocked} onClick={() => onSelect('')}>Tạo đoạn chat mới</button></p>}
       <form ref={form} className="composer" onSubmit={send}>
         <Menu label="Thêm dữ liệu và không gian" text="＋" className="composer-menu" disabled={blocked} items={[
-          { label: 'Tải dữ liệu lên', action: () => onManageData(true) },
-          { label: 'Tạo không gian làm việc', action: onCreateWorkspace },
-          { label: 'Quản lý dữ liệu', action: () => onManageData(false) },
+          { label: 'Tải dữ liệu lên', icon:'upload', action: () => onManageData(true) },
+          { label: 'Tạo không gian làm việc', icon:'workspace', action: onCreateWorkspace },
+          { label: 'Quản lý dữ liệu', icon:'data', action: () => onManageData(false) },
         ]} />
         <label htmlFor="question" className="sr-only">Câu hỏi của bạn</label>
         <textarea ref={textarea} id="question" rows={1} value={question} maxLength={4000} required disabled={blocked}

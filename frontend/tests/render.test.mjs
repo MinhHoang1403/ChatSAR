@@ -20,6 +20,8 @@ test('workspace exposes one data manager, history and account without internal I
   assert.match(html, /aria-haspopup="menu"/);
   assert.doesNotMatch(html, /brand-mark|Trợ lý dữ liệu/);
   assert.doesNotMatch(html, /never-render-token|private-user-id|RAG|Hybrid/);
+  assert.ok(html.indexOf('workspace-switch') < html.indexOf('class="search"'));
+  assert.equal((html.match(/class="workspace-switch"/g) ?? []).length, 1);
 });
 test('composer requires a ready source and Gemini is the default', async () => {
   const html = await render('Chat', { workspaceId: 'workspace', csrf: 'csrf', scope: null, selected: '', onSelect: noop, onList: noop, onBusy: noop, onManageData: noop });
@@ -51,6 +53,25 @@ test('friendly headings preserve underscores inside exact values and answer text
     display_rows: [['A_0007']], facts: { columns: [{ name: 'job_code', label: 'Mã lệnh' }] }, limitations: [] } });
   assert.match(html, /Mã lệnh: A_0007/); assert.match(html, /<td>A_0007<\/td>/);
   assert.doesNotMatch(html, /A 0007/);
+});
+test('answer tools are collapsed and never expose SQL or source identifiers by default', async () => {
+  const html = await render('Result', { value: { status:'answered',display_text:'Có 2 bản ghi.',display_rows:[],facts:{},limitations:[],
+    processing:{source:{revision_id:'private-revision'},sql:{compiled:true,statement:'SELECT secret_column FROM private_table',execution_status:'succeeded'}} } });
+  assert.match(html,/Nguồn &amp; xử lý/); assert.match(html,/Xem SQL/);
+  assert.equal((html.match(/aria-expanded="false"/g) ?? []).length,2);
+  assert.doesNotMatch(html,/private-revision|private_table|secret_column/);
+  const error = await render('Result',{value:{status:'provider_unavailable',display_text:'Chưa thể gọi mô hình.',display_rows:[],facts:{},limitations:[],processing:{sql:{compiled:false,statement:null}}}});
+  assert.match(error,/Chi tiết lỗi/);assert.match(error,/SQL chưa tạo/);
+  assert.doesNotMatch(error,/SELECT/);
+});
+test('SQL formatting changes only whitespace and preserves quoted identifiers and binds', async () => {
+  const { formatSql } = await vite.ssrLoadModule('/src/Result.tsx');
+  const sql='SELECT sum(data.r.c) AS "SELECT FROM", count(*) AS total \nFROM data.r \nWHERE data.r.c IN (%(codes_1)s, %(codes_2)s) AND data.r.d >= %(start)s GROUP BY data.r.c ORDER BY total DESC LIMIT %(limit)s';
+  const formatted=formatSql(sql);
+  assert.match(formatted,/SELECT\n/);assert.match(formatted,/FROM\n/);
+  assert.ok(formatted.includes('"SELECT FROM"'));
+  assert.equal(formatted.replace(/\s+/g,' '),sql.replace(/\s+/g,' '));
+  assert.equal((formatted.match(/%\(/g) ?? []).length,4);
 });
 test('private AI setup starts with explicit consent and disabled cloud action', async () => {
   const html = await render('AIReview', { preview, csrf: 'never-render-token', onBusy: noop, onProposal: noop });

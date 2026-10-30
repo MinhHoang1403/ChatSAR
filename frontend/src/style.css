@@ -128,3 +128,25 @@ table { width: 100%; border-collapse: collapse; text-align: left; font-size: 12p
   .review-summary { flex-direction: column; gap: 3px; } .login-card { padding: 28px; }
 }
 @media (prefers-reduced-motion: reduce) { .messages { scroll-behavior: auto; } }
+.new-chat-row { gap: 0; background: #edf3ff; border: 1px solid #d5e2fb; border-radius: 10px; }
+.new-chat-row .new-chat { background: transparent; border: 0; border-radius: 9px 0 0 9px; height: 42px; }
+.new-chat-row > .popup-anchor { border-left: 1px solid #d7e3f8; }
+.new-chat-row .menu-trigger { border-radius: 0 9px 9px 0; height: 42px; min-width: 37px; color: #2259c3; }
+.popup-menu { border-color: #edf1f7; padding: 7px; box-shadow: 0 9px 30px #19354a1a; }
+.popup-menu button { display: flex; align-items: center; gap: 11px; min-height: 40px; }
+.popup-menu svg { flex-shrink: 0; color: #5c7291; }
+.model-select select { font-size: 12px; width: 112px; padding: 6px 5px 6px 7px; border-radius: 18px; cursor: pointer; }
+.model-select select:hover { background: #f2f6fc; }
+.answer-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.detail-button { background: #f7f9fc; color: #516985; font-size: 12px; font-weight: 500; border: 1px solid #e9eef5; padding: 7px 11px; min-height: 36px; }
+.detail-button[aria-expanded=true] { color: #245dc3; background: #edf3ff; border-color: #d7e4fc; }
+.answer-panel { background: #fafcff; border: 1px solid #e8eef6; border-radius: 10px; padding: 15px; font-size: 12px; margin-bottom: 14px; max-width: 100%; overflow: hidden; }
+.answer-panel p { font-size: 12px; margin-bottom: 9px; }
+.answer-panel dl { display: grid; grid-template-columns: minmax(100px, .8fr) minmax(0, 2fr); gap: 7px 14px; margin: 0 0 10px; }
+.answer-panel dt { color: #6c7f97; } .answer-panel dd { margin: 0; overflow-wrap: anywhere; }
+.stage-row { display: contents; }
+.assistant-message details.advanced-evidence { border: 0; padding: 0; background: transparent; }
+.advanced-evidence summary { font-size: 11px; margin: 10px 0; }
+.sql-statement { max-width: 100%; overflow-x: auto; background: #f2f5fa; padding: 14px; border-radius: 8px; line-height: 1.65; white-space: pre; }
+.sql-statement code { font: 12px/1.65 Consolas, 'Cascadia Code', monospace; overflow-wrap: normal; }
+@media (max-width:720px) { .model-select select { width: 94px; font-size: 11px; } .detail-button { min-height: 40px; padding: 9px 12px; } .answer-panel { padding: 12px; } .answer-panel dl { grid-template-columns: minmax(90px, .8fr) minmax(0, 1.6fr); gap: 7px 9px; } }

@@ -192,6 +192,41 @@ def main() -> None:
             and result["error_code"] == "DATA_PERMISSION_REQUIRED"
         )
         history = session.request(f"/conversations/{conversation['id']}")
+        # Provider mock chỉ trong process harness với owner tổng hợp này. SQL được
+        # compiler/executor thật chạy; đây không phải model-live hoặc Google E2E.
+        sql_answer = json.loads(inside('''
+import json
+from uuid import UUID,uuid4
+from unittest.mock import patch
+from contextlib import nullcontext
+from fastapi.testclient import TestClient
+from sqlalchemy import select
+from app.main import create_app
+from app.database import get_engine
+from app.schema import revisions
+from app.query import QueryPlan
+from app.providers import Proposal
+from app.auth import SESSION_COOKIE
+revision_id=UUID("''' + source["revision_id"] + '''")
+with get_engine().connect() as c:
+    revision=dict(c.execute(select(revisions).where(revisions.c.id==revision_id)).mappings().one())
+amount=next(col['id'] for col in revision['columns'] if col['name']=='amount')
+plan=QueryPlan(task='SQL',table_id=str(revision['dataset_id']),source_revision_id=str(revision_id),raw_user_spans=['Tổng'],coverage=['Tổng'],aggregations=[{'operator':'SUM','column_id':amount,'output_id':'total'}])
+client=TestClient(create_app(recover_jobs=False))
+client.cookies.set(SESSION_COOKIE,"''' + session.state["token"] + '''")
+client.headers.update({'Origin':'http://localhost:18181','X-CSRF-Token':"''' + session.state["csrf"] + '''"})
+with patch('app.conversation.generate_proposal',return_value=Proposal(plan,'offline_test','mock',None,None,1,None)),patch('app.conversation.observation',side_effect=lambda *a,**kw:nullcontext(None)):
+    response=client.post('/api/conversations/''' + conversation["id"] + '''/messages',json={'question':'Tổng','dataset_revision_id':str(revision_id)},headers={'Idempotency-Key':uuid4().hex})
+    assert response.status_code==200
+    print(json.dumps(response.json()))
+client.close()
+get_engine().dispose()
+'''))
+        assert sql_answer["display_rows"] == [["0.30"]]
+        assert "0,30" in sql_answer["display_text"]
+        assert sql_answer["processing"]["sql"]["execution_status"] == "succeeded"
+        sql_before = session.request(f"/results/{sql_answer['result_id']}")
+        history = session.request(f"/conversations/{conversation['id']}")
         subprocess.run(["docker", "compose", "restart"], cwd=ROOT, check=True, timeout=60)
         subprocess.run(
             ["docker", "compose", "up", "-d", "--wait"], cwd=ROOT, check=True, timeout=90
@@ -200,8 +235,9 @@ def main() -> None:
         assert workspace in session.request("/workspaces")
         assert session.request(f"/datasets/{source['dataset_id']}/preview") == ready_before
         assert session.request(f"/conversations/{conversation['id']}") == history
+        assert session.request(f"/results/{sql_answer['result_id']}") == sql_before
         print(
-            "PASS: HTTP ingestion/session/workspace/source/catalog/typed rows/chat refusal history persisted; no provider calls."
+            "PASS: HTTP/session/source/typed rows/history and real SQL evidence/natural answer persisted; provider mocked, zero generation."
         )
     finally:
         session.close()
