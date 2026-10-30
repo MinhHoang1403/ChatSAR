@@ -1,5 +1,13 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Đợt ổn định mới — đang thực hiện, 30/10/2026
+
+Quyền mới: thêm tối đa 100 HTTP Gemini / dự phòng 1.50 USD, Codex dùng tối đa 95, giữ ít nhất 5 thủ công; Knowledge/LlamaParse/BGE mới = 0. Quyền này thay điều kiện không dùng hai lượt còn lại của lần cấp trước, không cộng hai lượt đó vào 100. Baseline lúc 02:17:55 UTC: tổng 13, Gemini 8/Knowledge 5, hai Google users và một workspace thật. HEAD/local/remote db38d1b92f3004c518d6f5736e989ba476cac9da, working tree sạch, PR #1 Draft/CLEAN, hai CI cuối SUCCESS.
+
+Chạy lại baseline đúng HEAD: 94 backend unit, 24 integration (7 auth +17 datasets), 25 oracle, 75 semantic gold checks, 14 manifest/DB/acceptance guard, 7 frontend SSR/DTO, types/lint/build và HTTP restart/persistence đều PASS. Chưa generation mới. Không lấy baseline làm nghiệm thu AI Setup hoặc 90 câu model-live. Root cause chi tiết lượt hotel cũ vẫn UNKNOWN; lỗi validator khóa ghép và contract dư trường được xác minh riêng, không gán cho phản hồi đã mất.
+
+Mốc offline sửa Setup/quota: 105 unit (+11: metadata-only, khóa ghép, toàn bảng rỗng/mixed/Decimal, ID lạ/lặp/thứ tự, đơn vị cần review, structured rule), 24 integration, 16 evaluation tests (+2 quota thật: 8 threads tranh 2 reservations chỉ 2 được cấp; chặn budget, provider khác, dispatch thứ hai và unknown usage), 7 frontend SSR/DTO PASS. Lint/format/mypy/build PASS. Migration provider_grants additive đã áp dụng; reader không có quyền grant. Chưa generation mới. Đơn vị/ngày mơ hồ không còn mặc định loại toàn proposal, nhưng vẫn cần owner confirm; thay đổi dữ liệu nguy hiểm tiếp tục bị validate_rows chặn. Cấu trúc AI không cho sửa nullable/NULL sentinel/name/order/raw values. Hai plan/fixtures/gold/checksums gốc không đổi.
+
 ## Trạng thái bản cải tiến ngày 30/10/2026
 
 **PARTIALLY_READY — chưa nghiệm thu cuối.** Hoàn thiện độc lập Workstreams A–F: catalog nghiệp vụ, grounded values/mappings, kết quả partial, Smart Setup có consent/full-table validation/local fallback, UI sáng xanh dương và Gemini mặc định/Knowledge fallback có điều kiện. Mô hình, parser, SQLAlchemy Core, Google/session/ownership và một Compose chatsar được giữ. Không thay Master/Implementation Plan, không merge main/sang Giai đoạn 2.

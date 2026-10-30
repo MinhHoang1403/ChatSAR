@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from time import perf_counter
 from typing import Any, Generic, Literal, TypeVar
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 from fastapi import APIRouter
@@ -22,7 +22,7 @@ from app.config import get_settings
 from app.errors import AppError
 from app.observability import annotate, observation
 from app.query import QueryPlan
-from app.schema import provider_usage
+from app.schema import provider_grants, provider_usage
 
 Provider = Literal["gemini", "knowledge"]
 INPUT_USD_PER_MILLION = Decimal("0.30")
@@ -86,7 +86,9 @@ def provider_error(code: str, message: str) -> AppError:
     return ProviderError(code, message)
 
 
-def request_client(transport: httpx.BaseTransport | None = None) -> httpx.Client:
+def request_client(
+    transport: httpx.BaseTransport | None = None, *, call_id: Any = None
+) -> httpx.Client:
     sent = False
     last_status: int | None = None
 
@@ -103,6 +105,18 @@ def request_client(transport: httpx.BaseTransport | None = None) -> httpx.Client
                 "PROVIDER_RETRY_BLOCKED", "Đã chặn tự gọi lại mô hình.", last_status
             )
         sent = True
+        if call_id is not None:
+            # Ghi trước transport: nếu process chết thì tính bảo thủ là có dispatch.
+            with db.get_engine().begin() as connection:
+                changed = connection.execute(
+                    update(provider_usage)
+                    .where(provider_usage.c.id == call_id, provider_usage.c.dispatch_count == 0)
+                    .values(dispatch_count=1)
+                ).rowcount
+                if changed != 1:
+                    raise provider_error(
+                        "PROVIDER_RETRY_BLOCKED", "Không thể xác nhận lượt gửi duy nhất."
+                    )
 
     options: dict[str, Any] = {
         "timeout": REQUEST_TIMEOUT_SECONDS,
@@ -126,7 +140,12 @@ def reserve_call(provider: Provider, model: str, reserve: Decimal) -> Any:
             .select_from(provider_usage)
             .where(provider_usage.c.provider == provider)
         ).scalar_one()
-        if total >= settings.cloud_max_requests or count >= 10:
+        provider_cap = (
+            settings.gemini_max_requests
+            if provider == "gemini"
+            else settings.knowledge_max_requests
+        )
+        if total >= settings.cloud_max_requests or count >= provider_cap:
             raise provider_error("CALL_LIMIT_REACHED", "Đã đạt hạn mức kiểm thử mô hình được cấp.")
         spent = connection.execute(
             select(
@@ -144,6 +163,40 @@ def reserve_call(provider: Provider, model: str, reserve: Decimal) -> Any:
             settings.cloud_budget_usd <= 0 or spent + reserve > settings.cloud_budget_usd
         ):
             raise provider_error("BUDGET_REACHED", "Chưa đủ ngân sách đã cấp để gọi mô hình.")
+        grant_id = None
+        if settings.cloud_grant_id:
+            try:
+                grant_id = UUID(settings.cloud_grant_id)
+            except ValueError:
+                raise provider_error("GRANT_INVALID", "Hạn mức tác vụ chưa hợp lệ.") from None
+            grant = (
+                connection.execute(select(provider_grants).where(provider_grants.c.id == grant_id))
+                .mappings()
+                .one_or_none()
+            )
+            if grant is None or grant["provider"] != provider:
+                raise provider_error("GRANT_INVALID", "Mô hình không thuộc quyền tác vụ đã cấp.")
+            used, reserved, unknown = connection.execute(
+                select(
+                    func.count(),
+                    func.coalesce(func.sum(provider_usage.c.reserved_cost_usd), 0),
+                    func.count().filter(
+                        provider_usage.c.dispatch_count == 1,
+                        provider_usage.c.status != "reserved",
+                        provider_usage.c.estimated_cost_usd.is_(None),
+                    ),
+                ).where(provider_usage.c.grant_id == grant_id)
+            ).one()
+            if unknown:
+                raise provider_error(
+                    "USAGE_UNKNOWN", "Lượt trước chưa xác định chi phí; dừng kiểm thử live."
+                )
+            if used >= grant["max_requests"]:
+                raise provider_error("GRANT_LIMIT_REACHED", "Đã đạt số lượt của tác vụ được cấp.")
+            if reserved + reserve > grant["budget_usd"]:
+                raise provider_error(
+                    "GRANT_BUDGET_REACHED", "Đã đạt ngân sách dự phòng của tác vụ."
+                )
         request_id = uuid4()
         connection.execute(
             insert(provider_usage).values(
@@ -152,6 +205,8 @@ def reserve_call(provider: Provider, model: str, reserve: Decimal) -> Any:
                 model=model,
                 status="reserved",
                 reserved_cost_usd=reserve,
+                grant_id=grant_id,
+                dispatch_count=0,
             )
         )
     return request_id
@@ -309,7 +364,7 @@ def generate_structured(
         try:
             if provider == "gemini":
                 with (
-                    request_client() as http_client,
+                    request_client(call_id=call_id) as http_client,
                     genai.Client(
                         api_key=settings.gemini_api_key.get_secret_value(),
                         http_options=types.HttpOptions(
@@ -342,7 +397,7 @@ def generate_structured(
                 request_id = getattr(response, "id", None)
             else:
                 # Endpoint Knowledge không nhận Authorization hoặc API key giả.
-                with request_client() as client:
+                with request_client(call_id=call_id) as client:
                     response_http = client.post(
                         settings.knowledge_base_url.rstrip("/") + "/chat/completions",
                         json={

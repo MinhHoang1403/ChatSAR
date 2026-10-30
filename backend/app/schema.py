@@ -113,4 +113,17 @@ provider_usage = Table(
     Column("latency_ms", Float),
     Column("error_code", String),
     Column("created_at", DateTime(timezone=True)),
+    Column("grant_id", Uuid),
+    Column("dispatch_count", Integer),
+)
+
+provider_grants = Table(
+    "provider_grants",
+    metadata,
+    Column("id", Uuid, primary_key=True),
+    Column("provider", String),
+    Column("baseline", JSONB),
+    Column("max_requests", Integer),
+    Column("budget_usd", Numeric),
+    Column("created_at", DateTime(timezone=True)),
 )

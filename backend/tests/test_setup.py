@@ -9,6 +9,135 @@ from app.setup import check_proposal, local_proposal
 from app.tabular import read_table, validate_rows
 
 
+def test_business_metadata_merges_by_id_and_never_changes_source_order() -> None:
+    from app.setup import SetupSuggestion, merge_suggestion
+
+    parsed = read_table(b"code,value\n0007,0.10\n0012,\n", ".csv")
+    revision = uuid4()
+    local = local_proposal(parsed, revision)
+    suggestion = SetupSuggestion.model_validate(
+        {
+            "columns": [
+                {
+                    "id": local.columns[1].id,
+                    "description": "Giá trị được nhập",
+                    "aliases": ["giá trị"],
+                },
+                {"id": local.columns[0].id, "role": "identifier"},
+            ]
+        }
+    )
+    merged, issues = merge_suggestion(suggestion, parsed, revision)
+    assert not issues and not check_proposal(merged, parsed, revision)
+    assert [c.id for c in merged.columns] == [c.id for c in local.columns]
+    assert [c.name for c in merged.columns] == parsed.headers
+    assert merged.columns[1].null_values == [""]
+    assert validate_rows(parsed, merged.columns, "UTC")[0][merged.columns[0].id] == "0007"
+
+
+def test_composite_key_is_checked_on_full_tuple_not_individual_columns() -> None:
+    parsed = read_table(b"site,item\nA,1\nA,2\nB,1\n", ".csv")
+    revision = uuid4()
+    proposal = local_proposal(parsed, revision)
+    for column in proposal.columns:
+        column.primary_key = True
+    assert not check_proposal(proposal, parsed, revision)
+    parsed.rows.append(["A", "1"])
+    issues = check_proposal(proposal, parsed, revision)
+    assert any(i.rule == "primary_key_uniqueness" and i.decision == "rejected" for i in issues)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        b"booking_ref,room_charge\nH01,100.05\nH02,200.10\nH03,\nH04,0.00\n",
+        b"code,value\n0007,\n0012,\n",
+        b"code,value\n0007,1.10\n0012,unknown\n",
+        b"code,value\n0007,\n0012,hello\n",
+    ],
+)
+def test_metadata_only_suggestion_preserves_full_local_rows(source: bytes) -> None:
+    from app.setup import SetupSuggestion, merge_suggestion
+
+    parsed = read_table(source, ".csv")
+    revision = uuid4()
+    original = [row[:] for row in parsed.rows]
+    proposal, issues = merge_suggestion(
+        SetupSuggestion(description="Chờ xác nhận"), parsed, revision
+    )
+    assert not issues and not check_proposal(proposal, parsed, revision)
+    assert parsed.rows == original
+    assert validate_rows(parsed, proposal.columns, "UTC") == validate_rows(
+        parsed, local_proposal(parsed, revision).columns, "UTC"
+    )
+
+
+@pytest.mark.parametrize("duplicate", [True, False])
+def test_unknown_or_duplicate_suggestion_id_rejected(duplicate: bool) -> None:
+    from app.setup import SetupSuggestion, merge_suggestion
+
+    parsed = read_table(b"code\n0007\n", ".csv")
+    revision = uuid4()
+    identifier = local_proposal(parsed, revision).columns[0].id
+    columns = [{"id": identifier}, {"id": identifier if duplicate else "c_" + "f" * 32}]
+    _, issues = merge_suggestion(
+        SetupSuggestion.model_validate({"columns": columns}), parsed, revision
+    )
+    assert issues[0].code == "COLUMN_ID_INVALID" and issues[0].decision == "rejected"
+
+
+def test_unknown_units_need_owner_review_and_source_names_cannot_be_replaced() -> None:
+    from pydantic import ValidationError
+
+    from app.setup import SetupSuggestion, merge_suggestion
+
+    parsed = read_table(b"code,value\n0007,1.10\n", ".csv")
+    revision = uuid4()
+    identifier = local_proposal(parsed, revision).columns[1].id
+    proposal, _ = merge_suggestion(
+        SetupSuggestion.model_validate(
+            {"columns": [{"id": identifier, "unit": "Đơn vị chưa được xác nhận"}]}
+        ),
+        parsed,
+        revision,
+    )
+    assert any(
+        i.code == "UNIT_UNCONFIRMED" and i.decision == "needs_review"
+        for i in check_proposal(proposal, parsed, revision)
+    )
+    for forbidden in ({"name": "new"}, {"null_values": ["0"]}, {"rows": [[0]]}):
+        with pytest.raises(ValidationError):
+            SetupSuggestion.model_validate({"columns": [{"id": identifier, **forbidden}]})
+
+
+def test_invalid_mapping_and_mixed_numeric_report_column_and_rule() -> None:
+    from app.tabular import ValueMapping
+
+    parsed = read_table(b"code,value\n0007,1.10\n0012,other\n", ".csv")
+    revision = uuid4()
+    proposal = local_proposal(parsed, revision)
+    proposal.columns[1].data_type = "numeric"
+    issue = check_proposal(proposal, parsed, revision)[0]
+    assert issue.column_id == proposal.columns[1].id and issue.position == 2
+    assert issue.rule == "lossless_type_conversion" and issue.decision == "rejected"
+    proposal = local_proposal(parsed, revision)
+    proposal.columns[0].value_mappings = [ValueMapping(phrase="mã đầu", value="0007")]
+    assert not check_proposal(proposal, parsed, revision)
+    proposal.columns[0].value_mappings[0].value = "absent"
+    assert check_proposal(proposal, parsed, revision)[0].rule == "mapping_source_exists"
+
+
+def test_reordered_review_and_duplicate_names_cannot_publish_as_valid_proposal() -> None:
+    parsed = read_table(b"code,amount\n0007,0.10\n", ".csv")
+    revision = uuid4()
+    proposal = local_proposal(parsed, revision)
+    proposal.columns.reverse()
+    assert check_proposal(proposal, parsed, revision)[0].code == "COLUMN_ORDER_INVALID"
+    proposal.columns.reverse()
+    proposal.columns[1].name = proposal.columns[0].name
+    assert check_proposal(proposal, parsed, revision)[0].code == "COLUMN_NAME_INVALID"
+
+
 @pytest.mark.parametrize(
     "source",
     [
@@ -53,7 +182,10 @@ def test_date_ambiguity_requires_confirmation_and_bad_column_ids_rejected() -> N
     proposal = local_proposal(parsed, revision_id)
     proposal.columns[0].data_type = "date"
     proposal.columns[0].date_format = "%d/%m/%Y"
-    assert any("mơ hồ" in text for text in check_proposal(proposal, parsed, revision_id))
+    assert any(
+        issue.code == "DATE_FORMAT_AMBIGUOUS" and issue.decision == "needs_review"
+        for issue in check_proposal(proposal, parsed, revision_id)
+    )
     proposal.columns[0].id = "c_" + "a" * 32
     assert check_proposal(proposal, parsed, revision_id)
 

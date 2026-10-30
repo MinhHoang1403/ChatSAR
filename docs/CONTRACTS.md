@@ -1,5 +1,11 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## Ổn định được phê duyệt 30/10/2026
+
+SetupSuggestion gửi model chỉ có description/grain/notes và patches metadata theo column ID; không có name/order/nullable/null_values/raw rows/checksum/revision do AI tạo lại. Backend ghép theo thứ tự profile, dùng defaults local cho thay đổi null; patches thiếu cột hợp lệ, ID lạ/lặp bị loại. SetupProposal trả UI/publish vẫn đầy đủ, tương thích lịch sử. check_proposal dùng validate_rows chính thức, uniqueness khóa ghép trên toàn tuple. Response thêm issues (code,column_id,position,rule,data_type,decision,message), proposal_decision; nguy hiểm rejected/fallback local, đơn vị chưa xác nhận/ngày mơ hồ needs_review. mode=ai_proposal chỉ là đề xuất, luôn cần owner confirm, không auto publish. Lý do lỗi chỉ giữ trong DB owner-scoped/response, không raw proposal lên trace.
+
+Quota provider cấu hình riêng (defaults 10), cộng với quota tổng/ngân sách và grant PostgreSQL tùy chọn. Grant có baseline bất biến, tối đa 100 reservations/1.50 USD; active grant của Codex cap 95. Bất kỳ reservation lỗi cũng tính lượt. Tổng reserved_cost trong grant chặn trước network, không trừ theo giá estimate. dispatch_count mới là 0/1, lịch sử NULL nghĩa UNKNOWN. Guard HTTP chặn dispatch lần hai, đánh dấu trước transport để không bỏ sót trường hợp process chết; dấu 1 là dispatch intent bảo thủ, HTTP response/usage bổ sung chứng cứ gửi thực. Lượt đã dispatch mà thiếu cost/usage sau hoàn tất chặn live tiếp bằng USAGE_UNKNOWN. Không mặc định rằng reservation đồng nghĩa HTTP dispatch.
+
 ## Bổ sung được phê duyệt 30/10/2026
 
 Catalog columns giữ trong JSON hiện hữu, bổ sung description/aliases/role/value_mappings và aggregation_policy. Chỉ sau owner confirm/publish mới là metadata tin cậy; mapping phải đúng kiểu, có giá trị trong toàn bảng. Migration `catalog` chỉ thêm description, sharing_providers và setup_proposal; giá trị mặc định giữ nguyên metadata/rows/permissions cũ. Rollback ứng dụng không cần DROP cột; không downgrade/xóa dữ liệu. Preview trả lại metadata và quyền chia sẻ để review.

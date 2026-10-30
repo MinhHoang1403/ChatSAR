@@ -17,12 +17,23 @@ from app.errors import AppError
 from app.providers import generate_structured
 from app.query import Contract
 from app.schema import revisions
-from app.tabular import ColumnReview, ParsedTable, profile, read_table, validate_rows
+from app.tabular import (
+    KINDS,
+    ColumnReview,
+    ParsedTable,
+    TableValidationError,
+    ValueMapping,
+    profile,
+    read_table,
+    validate_rows,
+)
 
 router = APIRouter(prefix="/api")
 
 INSTRUCTIONS = """Đề xuất metadata từ profile local, không tạo hoặc sửa dữ liệu.
-Giữ nguyên thứ tự và id cột. Chỉ đề xuất kiểu có căn cứ thống kê; thiếu căn cứ giữ text.
+Column id do backend cấp; chỉ trả các cột cần bổ sung metadata hoặc thay đổi.
+Không lặp tên, thứ tự, nullable, NULL sentinel hoặc định dạng mặc định của backend.
+Các trường thay đổi để null khi giữ đề xuất local. Chỉ đổi kiểu khi có căn cứ thống kê.
 Không tự đoán đơn vị, timezone, ngày mơ hồ, ý nghĩa mã hoặc giá trị trạng thái.
 Tên/description/grain/role/aliases là đề xuất để chủ dữ liệu xác nhận, không phải sự thật.
 Không tạo value_mappings khi không có giá trị nguồn trong profile. Giữ mã zero đầu ở text.
@@ -46,6 +57,63 @@ class SetupProposal(Contract):
     notes: list[str] = Field(default_factory=list, max_length=20)
 
 
+class ColumnSuggestion(Contract):
+    id: str = Field(pattern=r"^c_[a-f0-9]{32}$")
+    description: str = Field(default="", max_length=500)
+    aliases: list[str] = Field(default_factory=list, max_length=12)
+    role: Literal["identifier", "status", "time", "amount", "quantity", "name", "other"] = "other"
+    unit: str | None = Field(default=None, max_length=80)
+    aggregation_policy: Literal["unspecified", "additive", "non_additive"] = "unspecified"
+    data_type: KINDS | None = None
+    primary_key: bool | None = None
+    date_format: Literal["%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"] | None = None
+    value_mappings: list[ValueMapping] = Field(default_factory=list, max_length=50)
+
+
+class SetupSuggestion(Contract):
+    description: str = Field(default="", max_length=1000)
+    grain: str | None = Field(default=None, min_length=1, max_length=300)
+    columns: list[ColumnSuggestion] = Field(default_factory=list, max_length=100)
+    notes: list[str] = Field(default_factory=list, max_length=20)
+
+
+class SetupIssue(Contract):
+    code: str
+    column_id: str | None = None
+    position: int | None = None
+    rule: str
+    data_type: str | None = None
+    decision: Literal["rejected", "needs_review"]
+    message: str
+
+
+def merge_suggestion(
+    suggestion: SetupSuggestion, parsed: ParsedTable, revision_id: UUID
+) -> tuple[SetupProposal, list[SetupIssue]]:
+    proposal = local_proposal(parsed, revision_id)
+    patches = {column.id: column for column in suggestion.columns}
+    known = {column.id for column in proposal.columns}
+    if len(patches) != len(suggestion.columns) or not set(patches) <= known:
+        return proposal, [
+            SetupIssue(
+                code="COLUMN_ID_INVALID",
+                rule="source_identity",
+                decision="rejected",
+                message="Đề xuất có mã cột lạ hoặc lặp; chưa áp dụng metadata AI.",
+            )
+        ]
+    proposal.description = suggestion.description
+    proposal.grain = suggestion.grain or proposal.grain
+    proposal.notes = suggestion.notes
+    for index, column in enumerate(proposal.columns):
+        patch = patches.get(column.id)
+        if patch is None:
+            continue
+        changes = patch.model_dump(exclude={"id"}, exclude_none=True)
+        proposal.columns[index] = ColumnReview.model_validate({**column.model_dump(), **changes})
+    return proposal, []
+
+
 def local_proposal(parsed: ParsedTable, revision_id: UUID) -> SetupProposal:
     columns = []
     for item in profile(parsed, revision_id):
@@ -59,22 +127,59 @@ def local_proposal(parsed: ParsedTable, revision_id: UUID) -> SetupProposal:
     return SetupProposal(columns=columns)
 
 
-def check_proposal(proposal: SetupProposal, parsed: ParsedTable, revision_id: UUID) -> list[str]:
+def check_proposal(
+    proposal: SetupProposal, parsed: ParsedTable, revision_id: UUID
+) -> list[SetupIssue]:
     expected = profile(parsed, revision_id)
     if [c.id for c in proposal.columns] != [c["id"] for c in expected]:
-        return ["AI đề xuất cột không khớp file nguồn. Hãy dùng phân tích local."]
+        return [
+            SetupIssue(
+                code="COLUMN_ORDER_INVALID",
+                rule="source_identity",
+                decision="rejected",
+                message="Thứ tự hoặc mã cột không khớp nguồn.",
+            )
+        ]
     if any(not c.name.strip() for c in proposal.columns) or len(
         {c.name.strip().casefold() for c in proposal.columns}
     ) != len(proposal.columns):
-        return ["Tên cột trống hoặc trùng lặp; cần chỉnh sửa trước khi dùng."]
-    errors = []
+        return [
+            SetupIssue(
+                code="COLUMN_NAME_INVALID",
+                rule="unique_names",
+                decision="rejected",
+                message="Tên cột trống hoặc trùng lặp.",
+            )
+        ]
+    issues: list[SetupIssue] = []
     try:
         validate_rows(parsed, proposal.columns, "Asia/Ho_Chi_Minh")
     except AppError as error:
-        errors.append(error.message)
-    for item, column in zip(expected, proposal.columns, strict=True):
-        if column.primary_key and not item["candidate_key"]:
-            errors.append(f"Cột {column.name}: chưa có bằng chứng là mã duy nhất.")
+        # Cùng validator với publish, kể cả uniqueness của khóa ghép toàn tuple.
+        issues.append(
+            SetupIssue(
+                code="SOURCE_CONVERSION_REJECTED",
+                rule=error.rule if isinstance(error, TableValidationError) else "validate_rows",
+                column_id=error.column_id if isinstance(error, TableValidationError) else None,
+                position=error.position if isinstance(error, TableValidationError) else None,
+                data_type=error.data_type if isinstance(error, TableValidationError) else None,
+                decision="rejected",
+                message=error.message,
+            )
+        )
+    for index, column in enumerate(proposal.columns):
+        if column.unit is not None:
+            issues.append(
+                SetupIssue(
+                    code="UNIT_UNCONFIRMED",
+                    column_id=column.id,
+                    position=index + 1,
+                    rule="owner_confirmation",
+                    data_type=column.data_type,
+                    decision="needs_review",
+                    message="Đơn vị AI đề xuất cần chủ dữ liệu xác nhận.",
+                )
+            )
         if column.data_type == "date":
             formats = ("%d/%m/%Y", "%m/%d/%Y")
             valid = 0
@@ -83,7 +188,7 @@ def check_proposal(proposal: SetupProposal, parsed: ParsedTable, revision_id: UU
                     validate_rows(
                         ParsedTable(
                             [column.name],
-                            [[row[expected.index(item)]] for row in parsed.rows],
+                            [[row[index]] for row in parsed.rows],
                             [],
                             "",
                         ),
@@ -94,11 +199,18 @@ def check_proposal(proposal: SetupProposal, parsed: ParsedTable, revision_id: UU
                 except AppError:
                     pass
             if valid == 2:
-                errors.append(
-                    f"Cột {column.name}: ngày/tháng mơ hồ. "
-                    "Cần chọn định dạng trong chỉnh sửa chi tiết."
+                issues.append(
+                    SetupIssue(
+                        code="DATE_FORMAT_AMBIGUOUS",
+                        column_id=column.id,
+                        position=index + 1,
+                        rule="date_interpretation",
+                        data_type="date",
+                        decision="needs_review",
+                        message="Ngày/tháng mơ hồ; cần chọn định dạng trước công bố.",
+                    )
                 )
-    return errors
+    return issues
 
 
 @router.post("/datasets/{dataset_id}/setup")
@@ -168,6 +280,7 @@ def propose_setup(
             )
     proposal = local_proposal(parsed, revision_id)
     mode, error_code = "local", None
+    issues: list[SetupIssue] = []
     if body.use_ai:
         try:
             # Quyền này chỉ cho metadata trong lượt setup, không tự cấp quyền query/private.
@@ -180,14 +293,16 @@ def propose_setup(
                 },
                 shared,
                 body.provider,
-                SetupProposal,
+                SetupSuggestion,
             )
-            errors = check_proposal(reply.plan, parsed, revision_id)
-            if errors:
-                proposal.notes = errors
+            candidate, issues = merge_suggestion(reply.plan, parsed, revision_id)
+            if not issues:
+                issues = check_proposal(candidate, parsed, revision_id)
+            if any(issue.decision == "rejected" for issue in issues):
+                proposal.notes = [issue.message for issue in issues]
                 error_code = "SETUP_PROPOSAL_REJECTED"
             else:
-                proposal = reply.plan
+                proposal = candidate
                 mode = "ai_proposal"
         except AppError as error:
             error_code = error.code
@@ -198,7 +313,13 @@ def propose_setup(
         "proposal": proposal.model_dump(mode="json"),
         "mode": mode,
         "error_code": error_code,
-        "validation_errors": check_proposal(proposal, parsed, revision_id),
+        "validation_errors": [
+            issue.message
+            for issue in check_proposal(proposal, parsed, revision_id)
+            if issue.decision == "rejected"
+        ],
+        "issues": [issue.model_dump(mode="json") for issue in issues],
+        "proposal_decision": "rejected" if error_code else "needs_review",
         "row_count": len(parsed.rows),
         "checksum": revision["checksum"],
         "sheet_name": parsed.sheet_name,

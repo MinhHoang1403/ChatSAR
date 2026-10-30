@@ -137,12 +137,13 @@ class DatasetIntegration(unittest.TestCase):
         )
 
     def test_setup_invalid_proposal_falls_back_and_restart_is_explicit(self) -> None:
-        from app.setup import local_proposal
+        from app.setup import ColumnSuggestion, SetupSuggestion, local_proposal
         from app.tabular import read_table
 
         content = b"code,amount\n0007,0.10\n0007,0.20\n"
         uploaded = self.upload(content)
-        proposal = local_proposal(read_table(content, ".csv"), UUID(uploaded["revision_id"]))
+        local = local_proposal(read_table(content, ".csv"), UUID(uploaded["revision_id"]))
+        proposal = SetupSuggestion(columns=[ColumnSuggestion(id=c.id) for c in local.columns])
         proposal.columns[0].primary_key = True
         url = f"/api/datasets/{uploaded['dataset_id']}/setup"
         body = {"revision_id": uploaded["revision_id"], "use_ai": True, "consent_metadata": True}

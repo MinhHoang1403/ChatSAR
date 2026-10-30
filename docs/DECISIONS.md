@@ -1,5 +1,13 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+## Quyền và thiết kế ổn định hiện hành — 30/10/2026
+
+Chủ dự án cấp tối đa 100 HTTP Gemini bổ sung, Codex tối đa 95, dành ít nhất 5 cho kiểm thử thủ công, dự phòng 1.50 USD; Knowledge/LlamaParse/BGE = 0. Baseline PostgreSQL 02:17:55 UTC là 13 reservations (Gemini 8/Knowledge 5), không đổi lịch sử. Được điều chỉnh quota local cần thiết nhưng không API keys; mỗi reservation vẫn chặn dispatch thứ hai. Chưa gọi live trong baseline.
+
+Quyết định nội bộ trước sửa: giữ SetupProposal đầy đủ cho review/publish và lịch sử; contract gửi model chỉ chứa đề xuất metadata/thay đổi theo column ID. Backend ghép vào local profile theo thứ tự nguồn rồi dùng validate_rows chính thức. Vấn đề nguy hiểm bị từ chối; metadata chưa có căn cứ và ngày mơ hồ cần review, không tự publish. Không giữ contract cũ bắt model sao chép các bất biến, không bỏ validation. Khóa ghép phải kiểm uniqueness toàn tuple bằng validate_rows, thay kiểm từng cột riêng (tái hiện offline); chưa khẳng định đây là nguyên nhân lượt hotel cũ.
+
+Quota đợt nghiệm thu lưu PostgreSQL, liên kết usage với grant có baseline/cap/ngân sách; cấu hình runtime chọn grant, default không grant/cloud OFF và per-provider 10. Grant của Codex cap 95 trước khi chuyển phần còn lại cho thủ công; toàn đợt không quá 100. Dự phòng từng request bị trừ vào trần 1.50, không lấy chi phí ước tính thấp hơn để mở thêm quota. Ghi số dispatch trước transport; lỗi/unknown usage không được tự coi miễn phí. Migration additive, không DROP/rewrite dữ liệu; rollback code giữ cột/bảng quota và app cũ vẫn đọc được.
+
 Ngày: 29/10/2026. Baseline: `c05f26b1a301e91e8ea6ddaadedb0e1ed03b735d`.
 Người cấp quyền: chủ dự án, yêu cầu bắt đầu preflight và Giai đoạn 1 trong hội thoại.
 

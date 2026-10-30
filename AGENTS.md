@@ -1,5 +1,7 @@
 # Chỉ dẫn Codex cho ChatSAR
 
+- Quyền hiện hành 30/10/2026, “PHASE 1 FINAL STABILIZATION & ACCEPTANCE”: tối đa 100 HTTP Gemini bổ sung/trần dự phòng 1.50 USD; Codex tối đa 95, giữ ít nhất 5 cho chủ dự án. Baseline đã kiểm PostgreSQL 02:17:55 UTC: 13 reservations (Gemini 8/Knowledge 5). Được chỉnh quota local có kiểm soát, không đổi keys/reset ledger; Knowledge/LlamaParse/BGE mới = 0. Quyền này thay điều kiện dừng và cap cũ cho nhiệm vụ mới, không sửa lịch sử. Offline trước live; dừng nhóm kiểm thử khi lỗi hệ thống/critical/unknown usage, sửa có căn cứ rồi mới thử lại. Không merge/main hoặc sang Giai đoạn 2.
+
 - Mỗi phiên làm việc mới, trước khi thực hiện thay đổi và đặc biệt trước khi sửa code, bắt buộc đọc toàn bộ [Skills/Rules.md](Skills/Rules.md). Không bỏ qua hoặc dựa vào trí nhớ của phiên trước.
 - Đọc phần kế hoạch tương ứng trong [docs/IMPLIMENT_PLAN.md](docs/IMPLIMENT_PLAN.md) và [docs/ChatSAR_MASTER_PLAN.md](docs/ChatSAR_MASTER_PLAN.md). Trước lần sửa mã nguồn đầu tiên, đọc toàn bộ Implementation Plan theo mục 0.1. Dùng đúng tên file hiện có, không tạo bản sao theo tên cũ trong tài liệu.
 - Tuân thủ Rules.md về chất lượng code, tránh thiết kế quá phức tạp, một source chính, Docker, an toàn dữ liệu, Git/GitHub Public và chính sách cloud/chi phí. Báo cáo bằng tiếng Việt.

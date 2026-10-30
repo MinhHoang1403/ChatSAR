@@ -27,6 +27,7 @@ def adapter(monkeypatch: pytest.MonkeyPatch) -> tuple[Settings, dict, Mock, Mock
         knowledge_enabled=True,
     )
     reserve, finish = Mock(), Mock()
+    reserve.return_value = None
     monkeypatch.setattr(providers, "get_settings", lambda: settings)
     monkeypatch.setattr(providers, "reserve_call", reserve)
     monkeypatch.setattr(providers, "finish_call", finish)

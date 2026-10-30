@@ -14,6 +14,9 @@ class Settings(BaseSettings):
     cloud_calls_allowed: bool = False
     cloud_max_requests: int = Field(default=0, ge=0)
     cloud_budget_usd: Decimal = Field(default=Decimal("0"), ge=0)
+    gemini_max_requests: int = Field(default=10, ge=0)
+    knowledge_max_requests: int = Field(default=10, ge=0)
+    cloud_grant_id: str = ""
     gemini_enabled: bool = False
     knowledge_enabled: bool = False
     llamaparse_enabled: bool = False

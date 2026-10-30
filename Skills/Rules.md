@@ -1,5 +1,7 @@
 # ChatSAR — Quy tắc phát triển và quản lý repository
 
+**Quyền tác vụ mới nhất (30/10/2026):** “PHASE 1 FINAL STABILIZATION & ACCEPTANCE” cấp thêm tối đa 100 HTTP Gemini, Codex tối đa 95 và ít nhất 5 dành kiểm thử thủ công, dự phòng bổ sung 1.50 USD. Cho phép điều chỉnh quota local có kiểm soát và per-provider cap; giữ PostgreSQL ledger/guard trước dispatch, không đổi keys/reset lịch sử. Knowledge/LlamaParse/BGE mới = 0. Các giới hạn 10/provider và không sửa .env phía dưới là lịch sử, được quyền mới thay thế trong đúng tác vụ này.
+
 Áp dụng cho toàn bộ dự án tại `C:\Work\ChatSAR`, trong mọi phiên Codex. Đây là nguồn quy tắc chính; `AGENTS.md` chỉ dẫn đến file này, không nhân bản toàn bộ nội dung.
 
 **Trạng thái hiện tại:** Chủ dự án đã cho phép kiểm tra tiền triển khai và Giai đoạn 1 (F1 → F4) ngày 29/10/2026, theo kế hoạch và nghiệm thu từng mốc. Giữ Giai đoạn 1 trên feature branch đến khi được duyệt merge. Điều kiện bên ngoài thiếu phải ghi BLOCKED và chỉ tiếp tục phần độc lập an toàn; xem `docs/DECISIONS.md`, `docs/PREFLIGHT.md`. Được smoke test tối đa 10 calls Gemini và 10 Knowledge, hoặc hạn mức cấu hình thấp hơn; không sửa .env/flags enabled, không gọi LlamaParse trong Phase 1. Được tiếp tục F3/F4 qua test harness an toàn khi Google live BLOCKED; không tự sang Giai đoạn 2 hoặc tác động dự án khác.

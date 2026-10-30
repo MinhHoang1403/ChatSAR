@@ -67,6 +67,23 @@ def invalid(message: str) -> AppError:
     return AppError(422, "INVALID_TABULAR_FILE", message)
 
 
+class TableValidationError(AppError):
+    """Chi tiết chỉ gồm rule và vị trí, không giữ giá trị ô dữ liệu."""
+
+    def __init__(
+        self,
+        message: str,
+        rule: str,
+        column: ColumnReview | None = None,
+        position: int | None = None,
+    ) -> None:
+        super().__init__(422, "INVALID_TABULAR_FILE", message)
+        self.rule = rule
+        self.column_id = column.id if column else None
+        self.data_type = column.data_type if column else None
+        self.position = position
+
+
 def read_table(data: bytes, suffix: str, sheet_name: str | None = None) -> ParsedTable:
     if not data or len(data) > MAX_BYTES:
         raise AppError(413, "UPLOAD_LIMIT", "File trống hoặc vượt giới hạn 20 MiB.")
@@ -276,7 +293,7 @@ def validate_rows(
     rows: list[dict[str, Any]] = []
     for index, raw in enumerate(parsed.rows, start=2):
         row: dict[str, Any] = {"_source_row": index}
-        for column, value in zip(columns, raw, strict=True):
+        for position, (column, value) in enumerate(zip(columns, raw, strict=True), start=1):
             try:
                 if (
                     column.data_type != "text"
@@ -289,32 +306,51 @@ def validate_rows(
                     raise ValueError("NULL primary key")
                 row[column.id] = converted
             except (ValueError, TypeError, ArithmeticError):
-                raise invalid(
-                    f"Dòng {index}: dữ liệu không khớp kiểu đã chọn ở cột {column.name}."
+                raise TableValidationError(
+                    f"Dòng {index}: dữ liệu không khớp kiểu đã chọn ở cột {column.name}.",
+                    "lossless_type_conversion",
+                    column,
+                    position,
                 ) from None
         rows.append(row)
     primary = [c.id for c in columns if c.primary_key]
     if primary and len({tuple(row[c] for c in primary) for row in rows}) != len(rows):
-        raise invalid("Khóa đã chọn có giá trị trùng lặp. Chưa công bố dữ liệu.")
+        raise TableValidationError(
+            "Khóa đã chọn có giá trị trùng lặp. Chưa công bố dữ liệu.", "primary_key_uniqueness"
+        )
     for column in columns:
         values = {row[column.id] for row in rows}
         phrases: set[str] = set()
         for mapping in column.value_mappings:
             if mapping.phrase in phrases:
-                raise invalid("Mapping có tên gọi trùng lặp; cần xác nhận lại.")
+                raise TableValidationError(
+                    "Mapping có tên gọi trùng lặp; cần xác nhận lại.",
+                    "mapping_phrase_unique",
+                    column,
+                )
             phrases.add(mapping.phrase)
             try:
                 target = typed_value(mapping.value, column, timezone)
             except (ValueError, TypeError, ArithmeticError):
-                raise invalid("Mapping không khớp kiểu cột đã chọn.") from None
+                raise TableValidationError(
+                    "Mapping không khớp kiểu cột đã chọn.", "mapping_type", column
+                ) from None
             if target is None or target not in values:
-                raise invalid("Mapping phải trỏ tới một giá trị thật trong dữ liệu.")
+                raise TableValidationError(
+                    "Mapping phải trỏ tới một giá trị thật trong dữ liệu.",
+                    "mapping_source_exists",
+                    column,
+                )
             try:
                 exact = typed_value(mapping.phrase, column, timezone)
             except (ValueError, TypeError, ArithmeticError):
                 exact = None
             if exact is not None and exact in values and exact != target:
-                raise invalid("Mapping xung đột với một giá trị nguyên văn trong dữ liệu.")
+                raise TableValidationError(
+                    "Mapping xung đột với một giá trị nguyên văn trong dữ liệu.",
+                    "mapping_exact_conflict",
+                    column,
+                )
     return rows
 
 

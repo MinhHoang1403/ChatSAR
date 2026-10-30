@@ -28,6 +28,7 @@ export default function AIReview({ preview, csrf, onBusy, onProposal }: Props) {
     });
     onProposal(columns, data.proposal.description, data.proposal.grain);
     setNotes([...(Array.isArray(data.proposal.notes) ? data.proposal.notes.filter((v): v is string => typeof v === 'string') : []),
+      ...(Array.isArray(data.issues) ? data.issues.filter(record).map((issue) => typeof issue.message === 'string' ? issue.message : '').filter(Boolean) : []),
       ...(Array.isArray(data.validation_errors) ? data.validation_errors.filter((v): v is string => typeof v === 'string') : [])]);
   }
   async function analyze(useAI: boolean) {
