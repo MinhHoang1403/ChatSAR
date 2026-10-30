@@ -1,5 +1,13 @@
 # Vận hành nền tảng ChatSAR
 
+## Trạng thái vận hành sau ổn định 30/10/2026
+
+Runtime healthy, Phase1 NOT_ACCEPTED do chất lượng model còn thiếu, model-live BLOCKED_USAGE_UNKNOWN sau một HTTP400 không usage. Không gửi thêm model request để test health, không reset hoặc sửa usage/dispatch counter. Các đoạn quota cũ bên dưới là lịch sử; quyền mới tối đa100Gemini/1.50USD, Codex95, Knowledge mới0. Đã dùng50, còn trần45Codex/50tổng nhưng guard dừng live. .env giữ keys/flags/global budget20; globalcap113, Geminicap108, Knowledgecap5, active grant cap95/1.50USD. Giá trị trước thay đổi nằm trong artifacts/stabilization-quota.json; không coi global budget20 là quyền bổ sung.
+
+Grant chỉ admin cấp, app chỉ đọc; migrations hiện gồm foundation/identity/datasets/conversation/catalog/provider_grants. Migration mới additive, rollback app giữ cột/bảng quota; không DROP hoặc sửa ledger. Default runtime vẫn cloudOFF/max0/budget0 và providercap10. Cần đối chiếu usage/billing lượt d10d5f23-d15d-4c9e-8e21-37e67b510b1c trước khi xem xét quyền tiếp tục; thiếu usage không phải chi phí0. Không tự bỏ guard vì còn quota.
+
+Workspace nghiệm thu trên tài khoản hiện hữu giữ 3 file synthetic để chủ dự án xem: hotel-ui.csv ready, workbook-ui.xlsx(Data) ready/private không cloud, fallback-ui.csv needs_review/local. History “Tổng tiền phòng?” đọc lại300.15 không gọi model. Browser đã logout và reset viewport. Có thể kiểm login hai tài khoản/upload/local review độc lập trong khi live bị chặn. Không dùng test harness cleanup workspace Google thật này; harness chỉ dọn đúng UUID test owners do nó tạo.
+
 Chỉ chạy tại root repository chính. Một Compose project `chatsar`, volume `chatsar_database`, không có test/staging project thứ hai. DB không publish port ra host. Web `http://localhost:18181`; API health `http://127.0.0.1:18081/health`. Kiểm tra lại port trước mỗi lần khởi động nếu môi trường đã thay đổi.
 
 ## Cấu hình local
@@ -17,7 +25,7 @@ npm.cmd ci --ignore-scripts --prefix frontend
 
 # Khởi động DB duy nhất và áp dụng migration.
 docker compose up -d --wait db
-foreach ($name in @('foundation','identity','datasets','conversation','catalog')) {
+foreach ($name in @('foundation','identity','datasets','conversation','catalog','provider_grants')) {
   Get-Content "backend/migrations/$name.sql" -Raw -Encoding UTF8 | docker compose exec -T db psql -X -q -U chatsar_admin -d chatsar -v ON_ERROR_STOP=1
   if ($LASTEXITCODE -ne 0) { throw "Migration thất bại: $name" }
 }

@@ -1,5 +1,104 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Kết quả ổn định cuối ngày 30/10/2026
+
+### A. Tổng quan và gates
+
+**NOT_ACCEPTED — chưa đủ điều kiện READY_FOR_USER_ACCEPTANCE.** AI Smart Data Setup và hai SQL smoke đã hoạt động thật; chất lượng benchmark chưa đạt mục tiêu, 64/90 tình huống chưa được đo trên cấu hình cuối. Model-live hiện **BLOCKED_USAGE_UNKNOWN** theo điều kiện dừng của chủ dự án. Không merge main, không sang Giai đoạn 2.
+
+| Gate | Kết quả | Bằng chứng và giới hạn |
+|---|---|---|
+| A Backend/security | PASS | Unit/integration/reader/owner/CSRF/session, không mất dữ liệu |
+| B Smart Setup | PASS trong phạm vi đã kiểm | 2 lượt Gemini hotel được backend chấp nhận, có review/publish/source fidelity/restart; đề xuất nguy hiểm bị chặn offline |
+| C Text-to-SQL | FAIL chất lượng; live BLOCKED | In-scope 16/19, negative status 6/7; 4 ca không đạt; không suy thành accuracy 90 ca |
+| D Frontend | 18/20 browser scenarios PASS, 2 BLOCKED | Fresh Google login và hai tài khoản độc lập chưa làm lại; unit/build và các luồng CSV/XLSX/chat/source/restart đã kiểm browser thật |
+| E Infrastructure | Local PASS; CI theo exact commit báo cuối | web/api/db healthy, 2 volumes giữ nguyên, Langfuse đọc trace thật, secrets scan trước push |
+
+### B. AI Smart Data Setup
+
+Nguyên nhân cụ thể của lượt hotel cũ vẫn **UNKNOWN**: phản hồi trước đã mất, không thể quy lỗi chính xác cho model hay validator. Các lỗi xác minh độc lập đã sửa: model phải sao chép toàn bộ cấu hình kỹ thuật cột; validator kiểm candidate key từng cột làm từ chối nhầm khóa ghép hợp lệ. SetupSuggestion chỉ chứa metadata/thay đổi theo column ID; backend giữ cấu trúc nguồn, defaults NULL, order/name/checksum/revision, ghép thành SetupProposal rồi dùng validate_rows chính thức. Uniqueness khóa ghép kiểm trên toàn tuple. Không có validator thứ hai, không bỏ leading-zero/Decimal/NULL/mapping/type checks.
+
+Phản hồi thêm issues với code/rule/column_id/position/data_type/decision/message. Đề xuất nguy hiểm rejected và fallback local; đơn vị chưa xác nhận/ngày mơ hồ needs_review. Mọi đề xuất vẫn chờ owner confirm, không auto publish. UI giữ thống kê NULL/empty/duplicate của preview khi áp dụng proposal; lỗi mất cảnh báo ô trống đã tái hiện và có regression.
+
+Live: hotel Setup 1 qua HTTP harness và 1 qua browser đều mode=ai_proposal, toàn bảng/metadata/typed rows đúng trước publish; room_charge trống thành NULL theo review, booking_ref TEXT giữ nguyên, source checksum bất biến. CLI kiểm setup response đã lưu còn nguyên sau restart. Browser review/publish có thể xem trong workspace nghiệm thu riêng. Knowledge quota chặn trước network cho bài UI local fallback: mode=local/CALL_LIMIT_REACHED, nguồn vẫn needs_review; Knowledge ledger không tăng. Lỗi JSON/provider timeout/403 và restart pending được kiểm offline/integration, không giả là live outage test.
+
+### C. Text-to-SQL, quality và latency
+
+Pipeline giữ nguyên: question → grounded catalog → Gemini typed proposal → validation → SQLAlchemy Core → PostgreSQL reader → verified facts → deterministic Vietnamese answer. Sửa có căn cứ: hướng dẫn scalar aggregate không tự thêm GROUP BY/projection, schema provider enum IDs từ catalog đã kiểm quyền và raw_user_spans nguyên văn câu hỏi do server biết. Không nới compiler/owner/literal/coverage checks, không raw SQL, retry loop hoặc JOIN.
+
+Thí nghiệm tách Predicate thành anyOf để chặn AND rỗng ở provider **FAIL tương thích**: lượt đầu HTTP 400/BadRequestError, code PROVIDER_SCHEMA, trace `974e3f15543b1b415e25f9fb3c8e5837`; schema_complexity=false trong chẩn đoán, không biết chính xác thuộc tính gây lỗi. Không có usage; đã dừng live, loại thí nghiệm và phục hồi **toàn bộ 15 app modules đúng byte của 92580c71cef6eff6978a90edfcf919de68acebd3**. Local/container fingerprints khớp; không reset ledger hoặc đổi trạng thái lỗi. Frontend giữ bản sửa thống kê. Không để code provider bị từ chối trong runtime.
+
+Hai SQL smoke cấu hình đã khôi phục: hotel SUM room_charge **300.15**, maintenance SUM labor_hours **2.50**, đúng cột/operator, không thêm filter/group/projection; provenance/checksum và lịch sử sau restart đã xác minh. Browser hotel hiển thị 300.15 thật, không tính thêm một lần benchmark độc lập cho cùng ca.
+
+| Bộ đo trên hợp đồng cuối | Đã chạy | PASS | FAIL | Chưa đo sau điều kiện dừng |
+|---|---:|---:|---:|---:|
+| 90 scenarios đã khóa | 26 | 22 | 4 | 64 BLOCKED |
+| In-scope, nhóm con | 19 | 16 (84.21%) | 3 | Không ngoại suy |
+| Negative/status, nhóm con | 7 | 6 (85.71%) | 1 | Không ngoại suy |
+| Maintenance held-out, nhóm con | 5 | 4 | 1 | Không dùng ca FAIL để tuning |
+
+In-scope false refusal **2/19 (10.53%)**. Chấm bảo thủ có **1 answered plan/output mismatch**, vẫn là FAIL dù số phí trùng; chưa thấy sai giá trị số trong 17 answers đã thực thi của tập cuối, không coi đó là zero risk hoặc đạt critical gate. Negative status đối chiếu exact gold, đồng thời kiểm plan/task và không có rows; chưa có full contextual/owner/revision model benchmark. Per-domain: logistics 14/17, hotel 2/2, energy 1/1, library 1/1, maintenance 4/5. Agriculture/follow-up/metamorphic NL chưa nghiệm thu; 75 gold SQL checks chỉ là oracle tất định.
+
+| Ca FAIL còn lại | Nguyên nhân được quan sát | Xử lý |
+|---|---|---|
+| basic_logistics_text_id | Model dùng SUM(fee), chỉ trả 10.10; gold yêu cầu projection mã 0007 và phí | Số phí đúng nhưng thiếu cột/sai dạng plan; giữ FAIL, không sửa gold/câu hỏi |
+| basic_maintenance_minimum | MIN đúng cột nhưng result_mode=top không order | Guard trả clarify; false refusal, không tuning trên held-out |
+| paraphrase_08 | AND không children, COUNT_NON_NULL thay COUNT_ROWS; thiếu khoảng timestamp | Guard chặn trước SQL; thí nghiệm grammar bị HTTP400 đã loại, chưa sửa được live |
+| negative_05 | Trả unsupported trong khi gold là clarify do thiếu tỷ giá | Không execute/đoán đơn vị; vẫn FAIL status |
+
+Scorer ban đầu không nhận scalar COUNT(DISTINCT col)+IS_NOT_NULL cùng col tương đương gold. Đã chứng minh trên PostgreSQL độc lập, thêm regression và chấm lại response đã lưu không thêm cloud; không thay expected. Không áp dụng equivalence này cho COUNT_ROWS/GROUP BY/OR hoặc cột khác. Runtime không đổi vì sửa scorer.
+
+HTTP latency của **19 in-scope attempts**: p50 **2170.08 ms**, p95 **5856.69 ms** (nearest rank, gồm 2 refusal). Provider tương ứng p50 **2108.47 ms**, p95 **5783.25 ms**. PostgreSQL execution **17 samples**: p50 **3.72 ms**, p95 **51.51 ms**. Không phải browser end-to-end p95 hoặc SLA release. Stage timings hiện có catalog/provider/validation (gồm compile)/execution/composition/server_processing; chưa tách độc lập prompt generation và compile, không bịa thời gian cho hai bước đó.
+
+### D. Hồi quy cuối
+
+| Nhóm | Tổng | PASS | FAIL | BLOCKED | NOT_RUN |
+|---|---:|---:|---:|---:|---:|
+| Backend unit | 106 | 106 | 0 | 0 | 0 |
+| PostgreSQL/API integration, provider mock | 24 | 24 | 0 | 0 | 0 |
+| SQL oracle bất biến | 25 | 25 | 0 | 0 | 0 |
+| Semantic gold SQL checks | 75 | 75 | 0 | 0 | 0 |
+| Manifest/Decimal/reader/quota/scorer/acceptance tests | 21 | 21 | 0 | 0 | 0 |
+| Semantic model scenarios cấu hình cuối | 90 | 22 | 4 | 64 | 0 |
+| Gemini transport/schema, toàn đợt, không phải semantic accuracy | 50 | 49 | 1 | 0 | 0 |
+| Negative/status, nhóm con của 90 | 10 | 6 | 1 | 3 | 0 |
+| Frontend SSR/DTO | 8 | 8 | 0 | 0 | 0 |
+| Browser scenarios | 20 | 18 | 0 | 2 | 0 |
+| Auth unit/integration + reader, nhóm con | 25 | 25 | 0 | 0 | 0 |
+| Docker/HTTP persistence | 1 luồng | 1 | 0 | 0 | 0 |
+
+Không cộng nhóm con thành tổng test độc lập. Unit tăng 94→106: 11 ca Setup/regression đa nguồn và 1 contract catalog schema. Evaluations 14→21: 2 quota/concurrency, 4 scoring semantics, 1 SQL aggregate equivalence. Frontend 7→8: giữ thống kê preview khi merge proposal. Lint/format/mypy 15 modules, frontend TypeScript/production build đều PASS; một cảnh báo deprecation Starlette/httpx, không skip. Hai plan và fixtures/gold/checksum khóa không đổi.
+
+### E. Usage, quota và điều kiện dừng
+
+Baseline PostgreSQL 30/10/2026 **02:17:55 UTC (09:17:55 giờ Việt Nam)**: tổng 13 reservations, Gemini 8/Knowledge 5. Cuối đợt: tổng **63**, Gemini **58**, Knowledge **5**; tăng **50 Gemini requests**, 0 Knowledge/LlamaParse/BGE. Mọi request mới có dispatch_count=1; 49 có response/usage hợp lệ, lượt cuối xác minh HTTP400 bằng Langfuse. Guard chặn retry thứ hai trước transport; không suy số HTTP lịch sử trước guard từ reservations cũ.
+
+Usage đã biết: **68,810 input / 15,050 output / 0 thought tokens**; estimated cost **0.0582680 USD**, tổng reserve **0.6671498 USD**. Lượt cuối thiếu usage/cost, vẫn tính một request và giữ reserve **0.0137353 USD**; tổng tiền thực không xác định. Không gọi estimated/reserved là hóa đơn hoặc coi lỗi HTTP400 miễn phí. Giá tham chiếu đã kiểm lại từ Google: 0.30/2.50 USD mỗi triệu input/output (gồm thought), https://ai.google.dev/gemini-api/docs/pricing.
+
+Quota PostgreSQL grant `4dd2754f-e80e-4aa5-a308-7e0a593ac313`: Codex cap95, budget bổ sung1.50 USD (tính tổng reserve, không mở thêm quota theo estimate). Trần quyền còn 45 lượt Codex/50 lượt tổng; giữ ít nhất 5 cho chủ dự án, **hiện không dispatch được vì USAGE_UNKNOWN**. Đã kiểm thực tế reserve tiếp bị chặn trước insert/network; không bỏ chặn, xóa/sửa usage hoặc retry.
+
+Cấu hình local được lưu giá trị trước thay đổi trong artifact quota: CLOUD_MAX_REQUESTS 20→113; GEMINI_MAX_REQUESTS chưa có→108; KNOWLEDGE_MAX_REQUESTS chưa có→5; CLOUD_GRANT_ID trỏ grant trên. CLOUD_BUDGET_USD=20 và mọi keys/flags giữ nguyên; giá trị20 không thay grant1.50. Default .env.example cloudOFF/max0/budget0, provider cap10, grant trống. DB advisory lock kiểm cap/budget trước reserve; test 8 luồng tranh 2 chỗ chỉ cấp2. Grant admin cấp, app chỉ SELECT và reader không được đọc grant. Lỗi/unknown usage dừng live; không tự tăng quyền để đạt 90 ca.
+
+### F. Browser và hướng dẫn kiểm thử thủ công
+
+18/20 luồng IAB PASS: logout, session restore, workspace, CSV, XLSX, sheet selection, consent, AI review, quota/local fallback, metadata edit, confirm/publish, ready selection, new chat, send, result table, source, history, reload/restart. Fresh Google login và hai phiên Google độc lập còn BLOCKED; lịch sử login live có manual+DB proof riêng. Sau logout, console IAB ghi `[GSI_LOGGER]: The given origin is not allowed for the given client ID.`; không có uncaught TypeError/ReferenceError được ghi nhận. Chưa đối chiếu được request origin thực tế với Google Console; không tự kết luận Client ID sai hoặc nới bảo vệ origin/backend. Cần chủ dự án đối chiếu Authorized JavaScript Origins với URL chính thức http://localhost:18181, không tạo OAuth client mới. Theo computer-use skill/guidance, không tự thao tác authentication dialog hoặc inject token để giả login. API owner A/B và auth security vẫn PASS, không đổi thành browser PASS.
+
+Đã quan sát layout và DOM không overflow ở widths390/768/1280/1440; sidebar mobile mở/đóng, Data Manager trong viewport tablet, Escape/focus/history search hoạt động. Không gọi đó là accessibility audit đầy đủ. Busy controls disable trong request; backend idempotency kiểm riêng, chưa có stress double-click browser. Screenshot chỉ local ignored vì có tên tài khoản; không public lên GitHub.
+
+Chủ dự án có thể đăng nhập lại `http://localhost:18181`, chọn workspace “Nghiệm thu giao diện 30-10”: hotel-ui.csv ready (4rows, quyền query chỉ Gemini), workbook-ui.xlsx ready (Data3rows, private chưa cấp cloud), fallback-ui.csv needs_review. Mở history “Tổng tiền phòng?” để xem 300.15/source mà không gọi model. Kiểm hai tài khoản, upload/local review/keyboard có thể tiếp tục độc lập. **Chưa gửi thêm câu hỏi/AI setup để nghiệm thu live cho đến khi usage/billing của lượt lỗi được xác định và quyền tiếp tục được làm rõ.** Không cần đổi keys/OAuth client.
+
+### G. Docker, GitHub và bằng chứng
+
+Một project chatsar, ba services healthy, volumes chatsar_database/chatsar_uploads giữ nguyên. Migration provider_grants additive, không DROP/rewrite dữ liệu cũ; rollback giữ columns/table grant, không hạ migration. Toàn app runtime hash khớp bản đã xác minh; frontend có regression thống kê. Dữ liệu Google thật2users giữ nguyên; workspace thật tăng1→2 do tạo workspace nghiệm thu synthetic có chủ đích, testusers0 sau cleanup. Có 3 file synthetic trong workspace nghiệm thu; không xóa dữ liệu Google owner qua harness. ShopQuery AI/shared Langfuse không bị restart/sửa, không prune hoặc xóa volumes/images; giữ các image rollback.
+
+Các commit của đợt: 649dbda (Setup/quota), 92580c7 (catalog/query grounding + harness), 6fd6534 (thử Predicate và UI), sau đó commit bỏ thí nghiệm HTTP400 và ghi báo cáo này. CI của hai mốc đầu PASS; CI exact SHA cuối và local/remote được cập nhật sau push. Giữ feature/sql-foundation, PR#1 Draft, main vẫn c05f26b1a301e91e8ea6ddaadedb0e1ed03b735d.
+
+Artifacts local: acceptance-stabilization.json (smoke), stabilization-results.json (90 case statuses/metrics/ledger), stabilization-browser.json (20 scenarios), stabilization-langfuse.json, predicate-schema-diagnostic.json, stabilization-app-fingerprints.json, stabilization-quota.json, browser-hotel-result.jpg/browser-logout.jpg. Bằng chứng cũ không ghi đè. Bộ model_live ghi app hashes/dirty-state cho lượt sau bổ sung; các lượt trước ghi rõ runtime tương ứng và so bytes cuối. Không công khai raw private content/keys/tokens.
+
+### H. Điều kiện còn thiếu
+
+Không chốt Phase1 đã hoàn thành. Cần giải quyết unknown usage của HTTP400 trước mọi live dispatch, xử lý các lỗi planning/output còn lại bằng thiết kế có căn cứ và regression đa domain, rồi đo lại tập hợp lệ/held-out còn thiếu trong quyền còn lại; không chỉ tăng prompt hoặc timeout. Fresh Google login có lỗi origin từ Google cần đối chiếu cấu hình; hai tài khoản cần thao tác người dùng. Các gate này ngăn READY_FOR_USER_ACCEPTANCE dù hạ tầng và deterministic tests đã PASS.
+
 ## Đợt ổn định mới — đang thực hiện, 30/10/2026
 
 Quyền mới: thêm tối đa 100 HTTP Gemini / dự phòng 1.50 USD, Codex dùng tối đa 95, giữ ít nhất 5 thủ công; Knowledge/LlamaParse/BGE mới = 0. Quyền này thay điều kiện không dùng hai lượt còn lại của lần cấp trước, không cộng hai lượt đó vào 100. Baseline lúc 02:17:55 UTC: tổng 13, Gemini 8/Knowledge 5, hai Google users và một workspace thật. HEAD/local/remote db38d1b92f3004c518d6f5736e989ba476cac9da, working tree sạch, PR #1 Draft/CLEAN, hai CI cuối SUCCESS.

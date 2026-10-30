@@ -1,5 +1,7 @@
 # Phạm vi năng lực và nghiệm thu
 
+**Cập nhật ổn định 30/10/2026:** AI Setup hotel live2/2 hợp lệ, hotel300.15/maintenance2.50 và browser CSV→AI review→publish→chat/source/restart đã chạy thật. Browser18/20 scenarios PASS, fresh Google login/hai tài khoản độc lập chưa lặp lại. Benchmark cuối in-scope16/19 (84.21%), negative6/7; còn64/90 chưa đo, không đạt gate chất lượng/95%. Schema nhánh Predicate HTTP400 đã bỏ; runtime backend khớp92580c7, UI giữ thống kê nguồn. Đã dùng50Gemini mới; một lượt thiếu usage khiến live BLOCKED_USAGE_UNKNOWN, không gọi thêm/reset ledger. Ledger63(Gemini58/Knowledge5). Phase1 NOT_ACCEPTED, chi tiết đầu PREFLIGHT; các đoạn bên dưới là lịch sử năng lực/bằng chứng trước đợt này.
+
 Đây là hợp đồng phạm vi trước triển khai, không phải danh sách chức năng đã chạy. Kết quả thực tế nằm tại `PREFLIGHT.md`.
 
 | Mốc | Phạm vi | Điều kiện để nghiệm thu |
