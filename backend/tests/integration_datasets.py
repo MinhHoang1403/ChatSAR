@@ -35,7 +35,7 @@ from app.tabular import wire
 
 class DatasetIntegration(unittest.TestCase):
     def test_chat_management_preserves_sources_and_other_owners(self) -> None:
-        revision = self.published(b"code,amount\n0007,0.10\n")
+        revision = self.published("code,Tổng\n0007,0.10\n".encode(), aliases={"Tổng": ["Phí"]})
         chat = self.client.post(
             "/api/conversations", json={"workspace_id": str(self.workspace_id), "title": "Before"}
         ).json()["id"]
@@ -56,6 +56,8 @@ class DatasetIntegration(unittest.TestCase):
                 headers={"Idempotency-Key": "management-request"},
             )
         self.assertEqual(response.json()["status"], "answered", response.text)
+        self.assertEqual(response.json()["facts"]["columns"][0]["label"], "Tổng · Phí")
+        self.assertEqual(response.json()["facts"]["rows"], [["0.10"]])
         result_id = response.json()["result_id"]
         self.assertEqual(
             self.client.patch(f"/api/conversations/{chat}", json={"title": "After"}).status_code,
@@ -678,11 +680,15 @@ class DatasetIntegration(unittest.TestCase):
             )
             self.assertEqual(response.status_code, status)
 
-    def published(self, content: bytes, kinds: dict | None = None) -> dict:
+    def published(
+        self, content: bytes, kinds: dict | None = None, aliases: dict | None = None
+    ) -> dict:
         uploaded = self.upload(content)
         preview = self.preview(uploaded["dataset_id"])
         review = self.publish_input(preview)
         for column in review["columns"]:
+            if aliases and column["name"] in aliases:
+                column["aliases"] = aliases[column["name"]]
             if kinds and column["name"] in kinds:
                 column["data_type"] = kinds[column["name"]]
             if column["data_type"] != "text":

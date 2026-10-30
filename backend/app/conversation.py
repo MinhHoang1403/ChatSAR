@@ -401,7 +401,13 @@ def send_message(
                     )
                     label = item["name"]
                     if original and source_id in catalog_labels:
-                        label = label.replace(original, catalog_labels[source_id])
+                        # Chỉ đổi nhãn cột, không đổi tên phép tính khi tên cột trùng
+                        # “Tổng”, “Đếm”… do chủ dữ liệu đặt.
+                        label = (
+                            label.removesuffix(original) + catalog_labels[source_id]
+                            if item["id"] in aggregate_columns
+                            else catalog_labels[source_id]
+                        )
                     output_columns.append({**item, "label": label.replace("_", " ")})
                 if not rows:
                     text = "Không có dòng nào khớp điều kiện đã chọn."
