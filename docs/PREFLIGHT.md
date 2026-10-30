@@ -1,5 +1,91 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Hoàn thiện chất lượng và giao diện — 30/10/2026
+
+### A. Tổng quan
+
+**NOT_ACCEPTED.** UI và các API quản lý chat/hồ sơ đã triển khai, kiểm browser thật và PostgreSQL; phần độc lập đã hoàn tất. Gate Text-to-SQL/model-live còn BLOCKED_USAGE_UNKNOWN. Không dùng UI PASS, mock hoặc oracle để thay nghiệm thu model. Giữ PR1 Draft, không merge/main hoặc Giai đoạn 2. Baseline đầu tác vụ cf882a2 sạch; ledger63 (58 Gemini/5 Knowledge). Không thêm generation trong tác vụ này.
+
+### B. Nghiên cứu và quyết định
+
+Nguồn/so sánh đầy đủ ở DECISIONS và CONTRACTS. RESDSQL hỗ trợ tách dạng truy vấn và schema linking; RAT-SQL nhấn mạnh liên kết metadata; BIRD nhấn mạnh giá trị nguồn/kiến thức thiếu; Spider2 cho thấy giới hạn khi ngoại suy benchmark. Không triển khai model/framework của các paper. Google structured output chỉ bảo đảm cấu trúc, có giới hạn recursion/branching và vẫn cần validation. WAI-ARIA làm căn cứ focus/menu/Escape; Google GIS là căn cứ origin/client/nonce, không nới bảo vệ.
+
+Candidate offline QueryRequest phân biệt record/list/list_all/scalar/group/ranking, kiểm projection cần có và identifier từ catalog, chuyển danh sách condition hậu thứ tự sang Predicate hiện hữu. Kiểm tree/depth/caps/Boolean operands, không bù filter thiếu. Phương án không chọn: anyOf đệ quy đã HTTP400; regex theo ngành; LLM loops/engine thứ hai. Schema candidate3422 bytes so với production3260 bytes khi chưa gắn catalog; không suy số byte thành token/latency/accuracy. Chi phí vẫn một lượt nếu được canary, nhưng chưa có số đo thật. Hai-stage fixture comparison chỉ kiểm internal structure (1 accept/7 reject), không chứng minh model quality.
+
+**Gate tương thích chưa đạt:** giữ candidate/tests offline; generate_proposal và INSTRUCTIONS production trở về đúng hợp đồng đã chạy thành công. Không có flag hoặc runtime cạnh tranh. AST của quota/dispatch/finish_call cũng không đổi. Cần canary hợp lệ trước đổi wire runtime, không ship contract unproven để đạt tiến độ. Compiler/query.py, parser/tabular.py, setup.py, datasets.py và observability.py giữ nguyên byte, hai plan và gold/checksum gốc không đổi.
+
+### C. Text-to-SQL
+
+Runtime vẫn question→grounded catalog→QueryPlan→binder/compiler SQLAlchemy Core→reader PostgreSQL→facts/answer tất định. Candidate không phải compiler hoặc đường SQL thứ hai. Guard không chứng minh mọi qualifier tiếng Việt; candidate chưa chứng minh giảm false refusal hoặc hết silent wrong answer.
+
+| Lỗi ban đầu | Xử lý có căn cứ | Trạng thái nghiệm thu |
+|---|---|---|
+| Lookup mã+phí thành SUM, mất mã | Candidate record/direct projection, required_columns và identifier catalog; regression trên shipment/asset/book | Offline đạt; chưa live, runtime cũ vẫn có lỗi đã đo |
+| MIN bị gắn top thiếu order | Candidate scalar tự bounded, ranking riêng cần order; MIN hours/weight/temperature | Offline đạt; chưa live |
+| COUNT+SUM thiếu timestamp/AND rỗng | Candidate condition tree không nhận AND rỗng/orphan/cycle/shared; bảo toàn hai mốc và hai metrics được khai | Offline đạt biểu diễn; chưa chứng minh model không bỏ qualifier/chọn sai COUNT |
+| Thiếu FX trả unsupported | Candidate fixture clarify không thực thi/không tự đổi tỷ giá; chỉ dẫn runtime cũ giữ an toàn | Chưa chứng minh model phân loại đúng, giữ lỗi lịch sử |
+
+Không có semantic accuracy mới trên runtime bàn giao (0 model calls). Baseline lịch sử22/26: in-scope16/19 (84.21%), negative6/7 (85.71%), false refusal2/19 (10.53%), một answered plan/output mismatch dù số trùng. Chưa thấy sai giá trị trong17 answers cũ đã execute không phải bằng chứng zero risk.64/90 cũ chưa đo; không tuyên bố90PASS hoặc đạt95%. Candidate cần chấm toàn bộ bộ thích hợp sau canary, không tái dùng điểm cũ.
+
+Latency lịch sử19 in-scope attempts: HTTP p50/p95=2170.08/5856.69ms; provider2108.47/5783.25ms; SQL17 samples3.72/51.51ms (nearest rank). Không là browser SLA/runtime mới. Không có token/cost/latency/held-out score mới. Maintenance MIN cũ đã được dùng phát triển, không còn blind held-out. Bộ thay thế printing khóa trước model run:6 scenarios,5 SQL gold đạt,1 clarify; model NOT_RUN. Người tạo biết labels, không gọi benchmark mù bên thứ ba.
+
+### D. UI/API và browser
+
+Trước: sidebar phẳng, logoC/tagline, composer nhiều hàng, fallback checkbox, refresh/history helper. Sau: chữ ChatSAR, sidebar thu gọn; new chat và menu hide/delete all; history nhóm theo revision có nhóm legacy; mỗi chat menu đổi tên/xóa, rename Save/Cancel; account menu/hồ sơ local; thin header/source; pill một hàng +/textarea/Gemini-Knowledge/send. Enter gửi, Shift+Enter xuống dòng và auto-grow, chặn trùng/pending. Dấu+ nối upload/workspace/Data Manager thật. AI model mặc định Gemini, controls chọn model thu gọn, consent giữ nguyên. Không ping provider, không fallback checkbox/helper dài. Kết quả có evidence mở rộng; nhãn đọc được, không sửa Decimal/NULL/TEXT values.
+
+API thêm PATCH/DELETE conversations, DELETE workspace conversations, GET/PATCH profile; migration additive chat_management thêm phone/interests/revision binding, backfill lịch sử một nguồn. Session/CSRF/owner bắt buộc; khóa workspace serialize send/delete, pending409; transaction results→messages→chat. Xóa lặp an toàn, giữ dữ liệu nguồn/workspace/provider ledger. Profile ChatSAR không sửa Google, không gửi preferences lên prompt/trace. UI cancel bỏ draft, lỗi trong dialog hiển thị được, đóng dialog bị chặn khi mutation đang chạy.
+
+Browser thật28 scenarios:26PASS/2BLOCKED (artifacts/quality-browser.json). Đã kiểm session hiện hữu, workspace, nhóm nguồn, hide/restore giữ active300.15, collapse, menu/focus/Escape, rename lưu/khôi phục giữ messages, profile đọc/lưu/khôi phục/hủy, plus tạo workspace/upload/local review/publish, privacy guard, Enter/ShiftEnter, pending, chọn model không ping, bốn widths, restart/history, single delete và bulk delete. Hai Google flow độc lập/fresh login chưa kiểm lại; session hiện hữu không thay fresh-login proof. API A/B vẫn PASS. Không automate Google auth dialog hoặc inject cookie.
+
+Chủ dự án xác nhận xóa đúng hai chat tổng hợp trong workspace kiểm thử. Browser thực hiện single rồi bulk; DB chứng minh test_chats0, test_source_ready1 (2rows), workspace1, original_acceptance_chats2, hotel result300.15 còn1, orphan messages/results0, ledger63. Không xóa lịch sử khác. Screenshots chỉ local ignored, không public PII. Width390/768/1280/1440 đều scrollWidth=viewport; pill khoảng52–54px khi một dòng, mobile menu truy cập được. Đây là QA theo kịch bản, không chứng nhận WCAG toàn diện.
+
+### E. Kiểm thử
+
+| Hạng mục | Tổng | PASS | FAIL | BLOCKED | NOT_RUN |
+|---|---:|---:|---:|---:|---:|
+| Backend unit |123|123|0|0|0|
+| API/PostgreSQL integration, provider mock |28|28|0|0|0|
+| SQL oracle gốc |25|25|0|0|0|
+| Semantic gold SQL cũ |75|75|0|0|0|
+| Gold thay thế |5|5|0|0|0|
+| Evaluation tests (reader/quota/scorer…) |21|21|0|0|0|
+| Semantic model-live trên bản bàn giao |90|0|0|90|0|
+| Negative NL, nhóm con90 |10|0|0|10|0|
+| Provider candidate adapter mock, nhóm con unit |2|2|0|0|0|
+| Candidate compatibility Gemini-live |1 canary|0|0|1|0|
+| Frontend SSR/DTO |10|10|0|0|0|
+| Browser E2E |28|26|0|2|0|
+| Auth/security, nhóm con (12unit+8integration+6reader) |26|26|0|0|0|
+| Docker/HTTP persistence |1 luồng|1|0|0|0|
+
+Không cộng nhóm con thành test độc lập; mới tăng unit gồm15 planning và2 adapter candidate. Integration thêm profile+3 chat CRUD/race; frontend thêm grouping và exact-value label. Ruff/format/mypy16 modules, TypeScript/production build đạt. Một deprecation Starlette/httpx, không skip. Runtime/prepare-only fidelity hotel/maintenance/logistics/library, persistence/restart đạt, không generation. Test concurrency giữ pending trong provider mock rồi thử delete/bulk/send kháckey đều409, chỉ một dispatch mock.
+
+### F. Usage và blocker
+
+Baseline grant13=Gemini8/Knowledge5; đầu và cuối tác vụ này63=58/5. Toàn grant đã dùng50 Gemini mới, tác vụ này0; Knowledge/LlamaParse/BGE mới0. Known tokens68810input/15050output/0thought, known estimate0.0582680USD; reserve0.6671498USD. HTTP400 d10d5f23-d15d-4c9e-8e21-37e67b510b1c vẫn usage/costNULL, dispatch1, reserve0.0137353USD; không coi miễn phí. Quota còn45Codex/50tổng về trần quyền, nhưng không dispatch được.
+
+Đã đọc lại PG và Langfuse trace974e3f15543b1b415e25f9fb3c8e5837: HTTP400/BadRequestError, schema_complexity=false; thuộc tính schema lỗi chính xác UNKNOWN. Không provider interaction ID/usage do phản hồi lỗi, store=false; API key không cấp quyền billing. Docs Google chỉ chỉ đường logs/AI Studio/Cloud Billing, không chứng minh charge0 theo request. Không tạo reconciliation record khi thiếu chứng cứ; audit riêng quality-usage-audit.json giữ BLOCKED. Kiểm guard grant thật trả USAGE_UNKNOWN trước insert/network, count63 không đổi. Không sửa .env/keys/flags/ledger/grant trong tác vụ này.
+
+### G. Docker/GitHub
+
+Một Compose chatsar, web/api/db healthy; volumes chatsar_database/chatsar_uploads giữ nguyên.7 migrations gồm chat_management; chạy lại additive migration an toàn. Langfuse hiện hữu đọc metadata thành công, không tạo stack khác. Main giữ c05f26b1a301e91e8ea6ddaadedb0e1ed03b735d. Feature/sql-foundation và PR1 Draft/open; SHA/CI exact-head báo trong bàn giao và GitHub. Source milestone cceb455 và a33d21d đã push/CI push+PR PASS; commit sau cùng giữ provider compatibility gate và báo cáo này. Secret scan tracked/changed/staged và assets trước push; .env/artifacts ignored. Không force/merge/prune volumes hoặc tác động ShopQuery. Ảnh cũ giữ rollback, không tự dọn tài nguyên chưa đủ căn cứ.
+
+### H. Nghiệm thu và checklist cho chủ dự án
+
+**NOT_ACCEPTED:** UI/API đủ để kiểm thử trực tiếp, nhưng không hạ gate SQL/model-live. Cần chứng cứ usage/billing thực hoặc quyết định riêng rõ ràng của chủ dự án; không tự bypass. Cần chủ dự án thực hiện Google fresh login và hai phiên Google độc lập. Không tự sang Giai đoạn 2.
+
+1. Mở localhost:18181, đăng nhập Google thủ công; đúng tài khoản/workspace, không lỗi origin.
+2. Dấu+ → tạo workspace/tải CSV/XLSX; kiểm sheet, TEXT zero đầu, Decimal/NULL; local review luôn dùng được.
+3. AI Setup/chat cloud hiện bị chặn; chưa thử thêm để nghiệm thu model khi chưa đối soát. Đọc lại hotel300.15 trong workspace nghiệm thu không phát sinh cloud.
+4. Confirm/publish rồi chọn source: hiện đúng filename, revision giữ nhất quán với lịch sử. Đổi source của chat cũ cần chat mới.
+5. Chat mới: composer một hàng; Enter gửi, Shift+Enter xuống dòng; đang xử lý không gửi trùng. Private chưa cấp quyền phải báo rõ, không gửi provider.
+6. Mở nguồn/cách tính; kiểm giá trị và điều kiện. Đổi tên giữ messages; hủy không đổi; hide/restore giữ chat active.
+7. Xóa single/bulk chỉ trên chat test được phép; xác nhận phải nói đúng workspace, nguồn vẫn còn. Hai luồng đã kiểm bằng browser+DB.
+8. Account → hồ sơ: lưu hiện lại sau reload; hủy bỏ draft; Google profile giữ nguyên. Đăng xuất rồi đăng nhập thủ công lại.
+9. Hai tài khoản độc lập: không thấy workspace/chat/profile/source/result của nhau. Báo lỗi dễ đọc, không cần script/DB/raw JSON.
+
+---
+
 ## Kết quả ổn định cuối ngày 30/10/2026
 
 ### A. Tổng quan và gates

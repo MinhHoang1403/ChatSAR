@@ -2,6 +2,8 @@
 
 ## Hoàn thiện chất lượng và UI — 30/10/2026
 
+Kết luận gate trước bàn giao: không đủ chứng cứ Gemini compatibility cho QueryRequest do usage bị chặn. Đã giữ candidate và tests offline, phục hồi INSTRUCTIONS/generate_proposal production đúng hợp đồng đã chạy thành công. Không thêm feature flag hoặc hai runtime, không thử generation để mở gate. UI/API mới vẫn triển khai độc lập. Các mô tả candidate dưới đây không phải runtime đã nghiệm thu. Bốn lỗi model cũ chưa được tuyên bố khắc phục live.
+
 Phạm vi mới do chủ dự án giao: hoàn thiện SQL, lịch sử theo revision, đổi tên/xóa chat, hồ sơ local và composer tối giản. Không sửa hai plan gốc, compiler, parser, Setup/publish, OAuth core hoặc quyền cloud. Baseline cf882a2 sạch, PR1 draft, CI đạt. Ledger vẫn 63 (58 Gemini/5 Knowledge); HTTP400 d10d5f23-d15d-4c9e-8e21-37e67b510b1c thiếu usage, không reconciliation bằng giả định. Chưa có chứng cứ billing theo request nên giữ USAGE_UNKNOWN, không generation mới.
 
 Nghiên cứu trước thay đổi: [RESDSQL](https://ojs.aaai.org/index.php/AAAI/article/view/26535) tách schema linking và skeleton; [RAT-SQL](https://aclanthology.org/2020.acl-main.677/) nhấn mạnh liên kết câu hỏi/catalog; [BIRD](https://proceedings.neurips.cc/paper_files/paper/2023/hash/83fc8fab1710363050bbd1d4b8cc0021-Abstract-Datasets_and_Benchmarks.html) nhấn mạnh giá trị nguồn và kiến thức ngoài; [Spider2](https://proceedings.iclr.cc/paper_files/paper/2025/hash/46c10f6c8ea5aa6f267bcdabcb123f97-Abstract-Conference.html) cho thấy benchmark đơn giản không đủ chứng minh tác vụ thực. Không lấy số paper làm accuracy ChatSAR, không tích hợp model/framework từ các repo nghiên cứu.

@@ -48,6 +48,10 @@ def test_lookup_preserves_identifier_and_requested_value(identifier: str, value:
     assert request(**data).to_plan().select_columns == [identifier, value]
     with pytest.raises(ValueError, match="missing"):
         request(**{**data, "select_columns": [value]}).to_plan()
+    with pytest.raises(ValueError, match="identifier"):
+        request(**{**data, "required_columns": [value], "select_columns": [value]}).to_plan(
+            identifier_columns={identifier}
+        )
     with pytest.raises(ValueError, match="projection"):
         request(
             **{

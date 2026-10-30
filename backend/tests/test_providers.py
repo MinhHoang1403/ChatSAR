@@ -15,6 +15,7 @@ from pydantic import SecretStr
 from app import providers
 from app.config import Settings
 from app.errors import AppError
+from app.planning import QueryRequest
 from app.query import QueryPlan
 
 
@@ -53,32 +54,7 @@ def test_knowledge_no_auth_header_and_unknown_usage_stays_null(
         captured.append(request)
         assert "Authorization" not in request.headers
         return httpx.Response(
-            200,
-            json={
-                "choices": [
-                    {
-                        "message": {
-                            "content": json.dumps(
-                                {
-                                    "task": "CLARIFY",
-                                    "table_id": "",
-                                    "source_revision_id": "",
-                                    "result_shape": "scalar",
-                                    "required_columns": [],
-                                    "raw_user_spans": [],
-                                    "select_columns": [],
-                                    "aggregations": [],
-                                    "conditions": [],
-                                    "group_by": [],
-                                    "order_by": [],
-                                    "limit": 100,
-                                    "unresolved": ["Missing context"],
-                                }
-                            )
-                        }
-                    }
-                ]
-            },
+            200, json={"choices": [{"message": {"content": '{"task":"CLARIFY"}'}}]}
         )
 
     factory = httpx.Client
@@ -91,6 +67,54 @@ def test_knowledge_no_auth_header_and_unknown_usage_stays_null(
     assert result.input_tokens is None and result.output_tokens is None
     assert len(captured) == reserve.call_count == finish.call_count == 1
     assert str(captured[0].url) == "https://ai.inetcloud.vn/memochat/v1/chat/completions"
+
+
+@pytest.mark.parametrize("provider", ["gemini", "knowledge"])
+def test_candidate_wire_uses_same_adapter_without_switching_runtime_contract(
+    adapter: tuple, monkeypatch: pytest.MonkeyPatch, provider: str
+) -> None:
+    _, revision, reserve, finish = adapter
+    payload = {
+        "task": "SQL",
+        "table_id": "d",
+        "source_revision_id": "r",
+        "result_shape": "scalar",
+        "required_columns": [],
+        "raw_user_spans": ["?"],
+        "select_columns": [],
+        "aggregations": [{"operator": "MIN", "column_id": "duration", "output_id": "minimum"}],
+        "conditions": [],
+        "group_by": [],
+        "order_by": [],
+        "limit": 100,
+        "unresolved": [],
+    }
+    text = json.dumps(payload)
+    create = Mock(return_value=SimpleNamespace(output_text=text, id="offline", usage=None))
+    monkeypatch.setattr(
+        providers.genai,
+        "Client",
+        lambda **kw: nullcontext(SimpleNamespace(interactions=SimpleNamespace(create=create))),
+    )
+    factory = httpx.Client
+    monkeypatch.setattr(
+        providers.httpx,
+        "Client",
+        lambda **kw: factory(
+            **kw,
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(
+                    200, json={"choices": [{"message": {"content": text}}]}
+                )
+            ),
+        ),
+    )
+    reply = providers.generate_structured({"question": "?"}, revision, provider, QueryRequest)
+    plan = reply.plan.to_plan()
+    assert plan.aggregations[0].operator == "MIN" and plan.result_mode == "bounded"
+    assert reserve.call_count == finish.call_count == 1
+    assert "filters" in providers.response_schema()["properties"]
+    assert "conditions" not in providers.response_schema()["properties"]
 
 
 def test_knowledge_403_one_call_and_classified(
@@ -120,27 +144,7 @@ def test_gemini_interactions_contract_and_no_automatic_extra_calls(
 ) -> None:
     _, revision, reserve, _ = adapter
     create = Mock(
-        return_value=SimpleNamespace(
-            output_text=json.dumps(
-                {
-                    "task": "CLARIFY",
-                    "table_id": "",
-                    "source_revision_id": "",
-                    "result_shape": "scalar",
-                    "required_columns": [],
-                    "raw_user_spans": [],
-                    "select_columns": [],
-                    "aggregations": [],
-                    "conditions": [],
-                    "group_by": [],
-                    "order_by": [],
-                    "limit": 100,
-                    "unresolved": ["Missing context"],
-                }
-            ),
-            id="offline",
-            usage=None,
-        )
+        return_value=SimpleNamespace(output_text='{"task":"CLARIFY"}', id="offline", usage=None)
     )
 
     def client(**kw: object) -> object:

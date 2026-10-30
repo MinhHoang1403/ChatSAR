@@ -1,4 +1,4 @@
-"""Hợp đồng provider phẳng, chuyển đúng một lần sang typed plan hiện hữu."""
+"""Ứng viên offline: hợp đồng phẳng chuyển lossless sang typed plan hiện hữu."""
 
 from typing import Literal
 
@@ -35,7 +35,7 @@ class QueryRequest(Contract):
     limit: int = Field(ge=1, le=500)
     unresolved: list[str] = Field(max_length=30)
 
-    def to_plan(self) -> QueryPlan:
+    def to_plan(self, *, identifier_columns: set[str] | None = None) -> QueryPlan:
         nodes: list[Predicate] = []
         depths: list[int] = []
         references: list[int] = [0] * len(self.conditions)
@@ -87,6 +87,12 @@ class QueryRequest(Contract):
             if self.result_shape in {"record", "list", "list_all"}:
                 if self.aggregations or self.group_by or not self.select_columns:
                     raise ValueError("Record/list requires direct projection")
+                if (
+                    self.result_shape == "record"
+                    and identifier_columns
+                    and not identifier_columns.intersection(selected)
+                ):
+                    raise ValueError("Record output lacks its catalog identifier")
             elif self.result_shape == "scalar":
                 if not self.aggregations or selected or self.group_by or self.order_by:
                     raise ValueError("Scalar requires aggregates without grouping or ranking")
