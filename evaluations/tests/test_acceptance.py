@@ -62,7 +62,9 @@ class AcceptanceStopTests(unittest.TestCase):
         ]
         baseline = {"gemini": 7, "knowledge": 5}
         after = {"gemini": 8, "knowledge": 5}
-        with TemporaryDirectory(dir=acceptance.ROOT / "artifacts") as temporary:
+        artifacts = acceptance.ROOT / "artifacts"
+        artifacts.mkdir(parents=True, exist_ok=True)
+        with TemporaryDirectory(dir=artifacts) as temporary:
             target = Path(temporary).resolve()
             self.assertTrue(
                 target.is_relative_to((acceptance.ROOT / "artifacts").resolve())
@@ -89,7 +91,8 @@ class AcceptanceStopTests(unittest.TestCase):
                         "12",
                     ],
                 ),
-                patch("builtins.print"),self.assertRaises(SystemExit) as error
+                patch("builtins.print"),
+                self.assertRaises(SystemExit) as error,
             ):
                 acceptance.main()
             self.assertEqual(error.exception.code, 1)
