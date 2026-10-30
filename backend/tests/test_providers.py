@@ -53,7 +53,32 @@ def test_knowledge_no_auth_header_and_unknown_usage_stays_null(
         captured.append(request)
         assert "Authorization" not in request.headers
         return httpx.Response(
-            200, json={"choices": [{"message": {"content": '{"task":"CLARIFY"}'}}]}
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": json.dumps(
+                                {
+                                    "task": "CLARIFY",
+                                    "table_id": "",
+                                    "source_revision_id": "",
+                                    "result_shape": "scalar",
+                                    "required_columns": [],
+                                    "raw_user_spans": [],
+                                    "select_columns": [],
+                                    "aggregations": [],
+                                    "conditions": [],
+                                    "group_by": [],
+                                    "order_by": [],
+                                    "limit": 100,
+                                    "unresolved": ["Missing context"],
+                                }
+                            )
+                        }
+                    }
+                ]
+            },
         )
 
     factory = httpx.Client
@@ -95,7 +120,27 @@ def test_gemini_interactions_contract_and_no_automatic_extra_calls(
 ) -> None:
     _, revision, reserve, _ = adapter
     create = Mock(
-        return_value=SimpleNamespace(output_text='{"task":"CLARIFY"}', id="offline", usage=None)
+        return_value=SimpleNamespace(
+            output_text=json.dumps(
+                {
+                    "task": "CLARIFY",
+                    "table_id": "",
+                    "source_revision_id": "",
+                    "result_shape": "scalar",
+                    "required_columns": [],
+                    "raw_user_spans": [],
+                    "select_columns": [],
+                    "aggregations": [],
+                    "conditions": [],
+                    "group_by": [],
+                    "order_by": [],
+                    "limit": 100,
+                    "unresolved": ["Missing context"],
+                }
+            ),
+            id="offline",
+            usage=None,
+        )
     )
 
     def client(**kw: object) -> object:

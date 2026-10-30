@@ -1,5 +1,11 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## Hoàn thiện chất lượng/UI 30/10/2026
+
+Provider query wire dùng QueryRequest: task/table/revision, result_shape=record/list/scalar/group/ranking, required_columns, spans, projection/aggregations, conditions, group/order/limit/unresolved. Conditions là node hậu thứ tự, children là chỉ số; root cuối, một cây không orphan/shared/cycle, <=100 nodes/depth8. Chuyển sang QueryPlan/Predicate nội bộ, không thêm literal/filter. History QueryPlan cũ vẫn đọc được. Scalar sinh bounded, ranking sinh top và cần order; record/list không aggregate, required_columns phải xuất hiện, record giữ identifier nếu catalog có. Compiler không sửa. Guard chỉ kiểm nhất quán, không chứng minh model hiểu đầy đủ; compatibility/accuracy model thật còn BLOCKED_USAGE_UNKNOWN.
+
+API UI bổ sung: PATCH `/api/conversations/{id}` `{title}`, DELETE cùng URL; DELETE `/api/workspaces/{id}/conversations` chỉ workspace đang chọn. Mutations có session/CSRF/owner, transaction khóa workspace rồi conversation, pending trả409, delete lặp lại trả204. Xóa results/messages/chat, giữ datasets/workspaces/provider usage. Revision binding conversation bất biến sau message đầu; list trả revision_id/dataset_name để nhóm lịch sử, legacy không rõ vào nhóm riêng. GET/PATCH `/api/profile` chỉ principal hiện tại; PATCH `{display_name,phone,interests}`, local ChatSAR, không sửa Google, không gửi tracing/provider.
+
 ## Ổn định được phê duyệt 30/10/2026
 
 Schema QueryPlan gửi provider ràng buộc table/revision và select/group/aggregate/predicate column IDs bằng enum từ catalog đã kiểm quyền. raw_user_spans chỉ cho nguyên văn question hiện tại, không tự chia/chép thiếu từ hỏi. Đây là constrained output, không thay compiler/guards hoặc chứng nhận semantics. Hướng dẫn scalar aggregate không tự thêm GROUP BY/projection khi chỉ lọc; mọi qualifier/literal/readonly/owner checks vẫn giữ. Backend vẫn từ chối tên cột ở vị trí ID hoặc giá trị ngoài catalog, không tự map tên.

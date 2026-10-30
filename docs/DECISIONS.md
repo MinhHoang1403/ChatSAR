@@ -1,5 +1,19 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+## Hoàn thiện chất lượng và UI — 30/10/2026
+
+Phạm vi mới do chủ dự án giao: hoàn thiện SQL, lịch sử theo revision, đổi tên/xóa chat, hồ sơ local và composer tối giản. Không sửa hai plan gốc, compiler, parser, Setup/publish, OAuth core hoặc quyền cloud. Baseline cf882a2 sạch, PR1 draft, CI đạt. Ledger vẫn 63 (58 Gemini/5 Knowledge); HTTP400 d10d5f23-d15d-4c9e-8e21-37e67b510b1c thiếu usage, không reconciliation bằng giả định. Chưa có chứng cứ billing theo request nên giữ USAGE_UNKNOWN, không generation mới.
+
+Nghiên cứu trước thay đổi: [RESDSQL](https://ojs.aaai.org/index.php/AAAI/article/view/26535) tách schema linking và skeleton; [RAT-SQL](https://aclanthology.org/2020.acl-main.677/) nhấn mạnh liên kết câu hỏi/catalog; [BIRD](https://proceedings.neurips.cc/paper_files/paper/2023/hash/83fc8fab1710363050bbd1d4b8cc0021-Abstract-Datasets_and_Benchmarks.html) nhấn mạnh giá trị nguồn và kiến thức ngoài; [Spider2](https://proceedings.iclr.cc/paper_files/paper/2025/hash/46c10f6c8ea5aa6f267bcdabcb123f97-Abstract-Conference.html) cho thấy benchmark đơn giản không đủ chứng minh tác vụ thực. Không lấy số paper làm accuracy ChatSAR, không tích hợp model/framework từ các repo nghiên cứu.
+
+Lựa chọn nội bộ: một request có result_shape (record/list/scalar/group/ranking) và required_columns, cộng điều kiện dạng danh sách node hậu thứ tự với child indexes. Chuyển lossless sang Predicate/QueryPlan hiện hữu; không suy/bổ sung literal hoặc filter. Kiểm cây dùng mỗi node đúng một lần, con đứng trước cha, không orphan, sâu <=8, <=100 nodes. Scalar không còn trường result_mode độc lập để model gắn nhầm top; ranking bắt buộc order. Record giữ identifier và đủ required_columns, không aggregate. Các guard này chỉ kiểm nhất quán, không chứng minh model đã khai đủ ý định. Compiler/binder vẫn là nguồn kiểm quyền/kiểu/SQL duy nhất.
+
+Không chọn: schema anyOf đệ quy đã HTTP400; parser bằng regex ngành; thêm lượt LLM hoặc engine khác. [Gemini structured output](https://ai.google.dev/gemini-api/docs/structured-output) chỉ bảo đảm cấu trúc, yêu cầu app kiểm nghĩa và cảnh báo branching/depth. Dạng phẳng giảm recursion nhưng tương thích model thật vẫn BLOCKED tới khi usage được đối soát. Bốn lỗi lookup/MIN/time COUNT+SUM/FX là lỗi planning; chưa có bằng chứng compiler sai. Không đổi gold để hợp thức hóa.
+
+UI dùng React/CSS và native dialog hiện hữu, không dependency mới. Menu button theo [WAI-ARIA](https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/), có focus, Escape, touch. API bổ sung chỉ owner/session/CSRF, xóa phạm vi workspace hiện tại, transaction xóa results→messages→conversations; khóa workspace trước mutation, chặn pending. Không xóa dataset/workspace/ledger. Hồ sơ chỉ ChatSAR, không gửi sang Google/provider/tracing. Migration additive, bảo toàn lịch sử; rollback code giữ cột mới.
+
+Đối soát usage: [Interactions](https://ai.google.dev/gemini-api/docs/interactions-overview) và [logs](https://ai.google.dev/gemini-api/docs/logs-datasets) mô tả lưu/retrieve khi store=true; app đã gửi store=false, không có interaction ID cho lỗi. [Billing](https://ai.google.dev/gemini-api/docs/billing) chỉ đường AI Studio/Cloud Billing, không chứng minh HTTP400 miễn phí. Không đổi ledger, không mở guard; cần chứng cứ usage/billing thực từ project hoặc quyết định riêng của chủ dự án trước live.
+
 ## Quyền và thiết kế ổn định hiện hành — 30/10/2026
 
 Chủ dự án cấp tối đa 100 HTTP Gemini bổ sung, Codex tối đa 95, dành ít nhất 5 cho kiểm thử thủ công, dự phòng 1.50 USD; Knowledge/LlamaParse/BGE = 0. Baseline PostgreSQL 02:17:55 UTC là 13 reservations (Gemini 8/Knowledge 5), không đổi lịch sử. Được điều chỉnh quota local cần thiết nhưng không API keys; mỗi reservation vẫn chặn dispatch thứ hai. Chưa gọi live trong baseline.
