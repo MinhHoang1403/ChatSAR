@@ -20,7 +20,8 @@ test('workspace exposes one data manager, history and account without internal I
   assert.match(html, /aria-haspopup="menu"/);
   assert.doesNotMatch(html, /brand-mark|Trợ lý dữ liệu/);
   assert.doesNotMatch(html, /never-render-token|private-user-id|RAG|Hybrid/);
-  assert.ok(html.indexOf('workspace-switch') < html.indexOf('class="search"'));
+  assert.ok(html.indexOf('workspace-switch') > html.indexOf('workspace-header'));
+  assert.doesNotMatch(html.split('</aside>')[0], /workspace-switch/);
   assert.equal((html.match(/class="workspace-switch"/g) ?? []).length, 1);
 });
 test('composer requires a ready source and Gemini is the default', async () => {
@@ -57,11 +58,11 @@ test('friendly headings preserve underscores inside exact values and answer text
 test('answer tools are collapsed and never expose SQL or source identifiers by default', async () => {
   const html = await render('Result', { value: { status:'answered',display_text:'Có 2 bản ghi.',display_rows:[],facts:{},limitations:[],
     processing:{source:{revision_id:'private-revision'},sql:{compiled:true,statement:'SELECT secret_column FROM private_table',execution_status:'succeeded'}} } });
-  assert.match(html,/Nguồn &amp; xử lý/); assert.match(html,/Xem SQL/);
+  assert.match(html,/Nguồn &amp; xử lý/); assert.match(html,/Truy vấn SQL/);
   assert.equal((html.match(/aria-expanded="false"/g) ?? []).length,2);
   assert.doesNotMatch(html,/private-revision|private_table|secret_column/);
   const error = await render('Result',{value:{status:'provider_unavailable',display_text:'Chưa thể gọi mô hình.',display_rows:[],facts:{},limitations:[],processing:{sql:{compiled:false,statement:null}}}});
-  assert.match(error,/Chi tiết lỗi/);assert.match(error,/SQL chưa tạo/);
+  assert.match(error,/Nguồn &amp; xử lý/);assert.match(error,/Truy vấn SQL/);
   assert.doesNotMatch(error,/SELECT/);
 });
 test('SQL formatting changes only whitespace and preserves quoted identifiers and binds', async () => {

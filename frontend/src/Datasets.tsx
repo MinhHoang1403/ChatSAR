@@ -15,6 +15,7 @@ export default function Datasets({ workspaceId, csrf, onReady, onBusy }: {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
   const [grain, setGrain] = useState('Một dòng dữ liệu');
   const [timezone, setTimezone] = useState('Asia/Ho_Chi_Minh');
@@ -34,7 +35,7 @@ export default function Datasets({ workspaceId, csrf, onReady, onBusy }: {
   }, [workspaceId]);
 
   async function open(datasetId: string, sheet?: string) {
-    setBusy(true); setError('');
+    setBusy(true); setError(''); setNotice('');
     try {
       const query = sheet ? `?sheet_name=${encodeURIComponent(sheet)}` : '';
       const result = parsePreview(await api(`/datasets/${datasetId}/preview${query}`));
@@ -85,6 +86,19 @@ export default function Datasets({ workspaceId, csrf, onReady, onBusy }: {
     finally { setBusy(false); }
   }
 
+  async function saveSharing() {
+    if (!preview || busy) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await api(`/datasets/${preview.dataset_id}/sharing`, { method: 'PATCH', body: JSON.stringify({
+        revision_id: preview.revision_id, sharing_providers: sharing,
+      }) }, csrf);
+      setPreview({ ...preview, sharing_providers: sharing });
+      setNotice('Đã lưu quyền hỏi đáp. Quyền mới áp dụng cho các lượt hỏi tiếp theo.');
+    } catch (e: unknown) { setError(message(e)); }
+    finally { setBusy(false); }
+  }
+
   return <section className="dataset-panel">
     <ol className="setup-steps"><li>1. Tải file</li><li>2. Kiểm tra đề xuất</li><li>3. Xác nhận và sử dụng</li></ol>
     <form onSubmit={upload} className="upload-form">
@@ -94,6 +108,7 @@ export default function Datasets({ workspaceId, csrf, onReady, onBusy }: {
       <button disabled={busy || !file}>Tải lên và xem trước</button>
     </form>
     {error && <p role="alert" className="error">{error}</p>}
+    {notice && <p role="status" className="success">{notice}</p>}
     {busy && <p role="status">Đang xử lý yêu cầu…</p>}
     {!list.length && <p>Chưa có bảng dữ liệu. File tải lên được lưu riêng trong không gian này.</p>}
     <div className="dataset-list">{list.map((dataset) => <button key={dataset.id}
@@ -152,13 +167,20 @@ export default function Datasets({ workspaceId, csrf, onReady, onBusy }: {
         </details>
         <div className="table-scroll"><table><thead><tr>{preview.columns.map((c) => <th key={c.id}>{c.name}</th>)}</tr></thead>
           <tbody>{preview.rows.map((row, i) => <tr key={i}>{row.map((value, j) => <td key={j}>{display(value)}</td>)}</tr>)}</tbody></table></div>
-        {preview.status !== 'ready' ? <div className="publish-fields">
+        <div className="publish-fields">
+          <h3>Quyền hỏi đáp với mô hình</h3>
           <p>Cho phép gửi tên cột, thống kê, một số giá trị giới hạn và câu hỏi tới mô hình để hỏi dữ liệu. File gốc không được gửi.</p>
+          <p className="muted">Đồng ý phân tích AI trước đó chỉ có hiệu lực cho lượt chuẩn bị dữ liệu, không tự cấp quyền hỏi đáp.</p>
           {['gemini', 'knowledge'].map((provider) => <label className="check" key={provider}><input type="checkbox" checked={sharing.includes(provider)}
+            disabled={busy}
             onChange={(e) => setSharing((old) => e.target.checked ? [...old, provider] : old.filter((p) => p !== provider))} />{provider === 'gemini' ? 'Gemini (Google)' : 'Knowledge (dịch vụ công ty)'}</label>)}
-          <p className="muted">Xác nhận nghĩa các cột và cách xử lý ô trống trước khi sử dụng. Bạn có thể giữ dữ liệu riêng tư và chỉ xem trước local.</p>
-          <button disabled={busy || !grain.trim()} onClick={publish}>Xác nhận và sử dụng dữ liệu</button>
-        </div> : <p role="status" className="success">Dữ liệu đã sẵn sàng. Đóng cửa sổ để bắt đầu hỏi.</p>}
+          {preview.data_classification === 'synthetic' && <p className="muted">Nguồn được xác nhận là dữ liệu tổng hợp; chính sách kiểm thử AI hiện cho phép dùng với mô hình đã bật.</p>}
+          {preview.status !== 'ready' ? <>
+            <p className="muted">Xác nhận nghĩa các cột và cách xử lý ô trống trước khi sử dụng. Dữ liệu riêng tư vẫn giữ nguyên phân loại khi cấp quyền.</p>
+            <button disabled={busy || !grain.trim()} onClick={publish}>Xác nhận và sử dụng dữ liệu</button>
+          </> : <button className="secondary" disabled={busy || [...sharing].sort().join(',') === [...preview.sharing_providers].sort().join(',')} onClick={saveSharing}>Lưu quyền hỏi đáp</button>}
+        </div>
+        {preview.status === 'ready' && <p role="status" className="success">Dữ liệu đã sẵn sàng. Đóng cửa sổ để bắt đầu hỏi.</p>}
       </>}
     </div>}
   </section>;

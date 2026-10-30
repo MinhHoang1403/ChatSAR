@@ -118,6 +118,7 @@ provider_usage = Table(
     Column("created_at", DateTime(timezone=True)),
     Column("grant_id", Uuid),
     Column("dispatch_count", Integer),
+    Column("http_status", Integer),
 )
 
 provider_grants = Table(
@@ -128,5 +129,29 @@ provider_grants = Table(
     Column("baseline", JSONB),
     Column("max_requests", Integer),
     Column("budget_usd", Numeric),
+    Column("created_at", DateTime(timezone=True)),
+)
+
+provider_usage_reviews = Table(
+    "provider_usage_reviews",
+    metadata,
+    Column("usage_id", Uuid, primary_key=True),
+    Column("policy", String),
+    Column("accounted_reserve_usd", Numeric),
+    Column("usage_snapshot", JSONB),
+    Column("evidence", JSONB),
+    Column("authority", String),
+    Column("created_at", DateTime(timezone=True)),
+)
+
+dataset_sharing_events = Table(
+    "dataset_sharing_events",
+    metadata,
+    Column("id", Uuid, primary_key=True),
+    Column("revision_id", Uuid),
+    Column("owner_id", Uuid),
+    Column("previous_providers", JSONB),
+    Column("sharing_providers", JSONB),
+    Column("request_id", String),
     Column("created_at", DateTime(timezone=True)),
 )

@@ -51,7 +51,6 @@ export default function Result({ value }: { value: Answer }) {
   const visibleLabel = columns.length === 1 ? cell(columns[0].label ?? columns[0].name).replace(/_/g,' ') : '';
   const displayText = originalLabel && value.display_text.startsWith(`${originalLabel}: `)
     ? visibleLabel + value.display_text.slice(originalLabel.length) : value.display_text;
-  const sqlTitle = compiled ? 'Xem SQL' : processing && sql ? 'SQL chưa tạo' : 'SQL / trạng thái SQL';
   const sqlDuration = sql?.duration_ms;
   return <>
     <p>{displayText}</p>
@@ -61,9 +60,9 @@ export default function Result({ value }: { value: Answer }) {
     </table></div>}
     <div className="answer-details" onKeyDown={(e) => { if (e.key === 'Escape' && panel) { const old=panel;setPanel(null);(old==='source'?sourceButton:sqlButton).current?.focus();e.stopPropagation(); } }}>
       <div className="answer-tools"><button ref={sourceButton} type="button" className="detail-button" aria-expanded={panel==='source'} aria-controls={`${id}-source`}
-        onClick={() => setPanel(panel==='source'?null:'source')}>{failed?'Chi tiết lỗi':'Nguồn & xử lý'}</button>
+        onClick={() => setPanel(panel==='source'?null:'source')}>Nguồn & xử lý</button>
         <button ref={sqlButton} type="button" className="detail-button" aria-expanded={panel==='sql'} aria-controls={`${id}-sql`}
-          onClick={() => setPanel(panel==='sql'?null:'sql')}>{sqlTitle}</button></div>
+          onClick={() => setPanel(panel==='sql'?null:'sql')}>Truy vấn SQL</button></div>
       {panel==='source' && <section id={`${id}-source`} className="answer-panel" aria-label={failed?'Chi tiết lỗi':'Nguồn & xử lý'}>
         <dl><dt>Nguồn dữ liệu</dt><dd>{cell(source.name ?? scope.dataset_name)}</dd>
           <dt>Model thực tế</dt><dd>{typeof provider.name==='string' ? `${provider.name==='gemini'?'Gemini':provider.name==='knowledge'?'Knowledge':provider.name}${typeof provider.model==='string'?` · ${provider.model}`:''}` : 'Chưa có bằng chứng gọi mô hình'}</dd>
@@ -91,7 +90,7 @@ export default function Result({ value }: { value: Answer }) {
         {compiled?<><p>SQL PostgreSQL đã biên dịch cho lượt này. Giá trị tham số được giữ riêng.</p><pre className="sql-statement" tabIndex={0}><code>{formatSql(String(sql?.statement))}</code></pre>
           <p>{sql && typeof sql.execution_status==='string'?executions[sql.execution_status] ?? 'Chưa xác định trạng thái':'Chưa xác định trạng thái'}.</p>
           <p className="muted">LIMIT trong SQL bao gồm dòng kiểm tra cắt kết quả. Mở panel không chạy lại truy vấn.</p></>
-          : <p>{processing && sql && sql.compiled===false?'SQL chưa được tạo cho lượt này.':'Câu lệnh SQL của lượt trả lời này chưa được lưu.'}</p>}
+          : <p>{processing && sql && sql.compiled===false?'Chưa có câu lệnh SQL cho lượt trả lời này.':'Câu lệnh SQL của lượt trả lời này chưa được lưu.'}</p>}
       </section>}
     </div>
     {value.limitations.filter((text)=>text!==value.display_text).map((text,i)=><p className="limitation" key={i}>{text}</p>)}

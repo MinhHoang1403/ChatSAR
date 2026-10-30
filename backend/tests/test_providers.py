@@ -15,8 +15,26 @@ from pydantic import SecretStr
 from app import providers
 from app.config import Settings
 from app.errors import AppError
-from app.planning import QueryRequest
 from app.query import QueryPlan
+
+
+def request_payload(task: str = "CLARIFY", **changes: object) -> dict:
+    return {
+        "task": task,
+        "table_id": "d",
+        "source_revision_id": "r",
+        "result_shape": "scalar",
+        "required_columns": [],
+        "raw_user_spans": ["?"],
+        "select_columns": [],
+        "aggregations": [],
+        "conditions": [],
+        "group_by": [],
+        "order_by": [],
+        "limit": 100,
+        "unresolved": [],
+        **changes,
+    }
 
 
 @pytest.fixture
@@ -54,7 +72,7 @@ def test_knowledge_no_auth_header_and_unknown_usage_stays_null(
         captured.append(request)
         assert "Authorization" not in request.headers
         return httpx.Response(
-            200, json={"choices": [{"message": {"content": '{"task":"CLARIFY"}'}}]}
+            200, json={"choices": [{"message": {"content": json.dumps(request_payload())}}]}
         )
 
     factory = httpx.Client
@@ -70,7 +88,7 @@ def test_knowledge_no_auth_header_and_unknown_usage_stays_null(
 
 
 @pytest.mark.parametrize("provider", ["gemini", "knowledge"])
-def test_candidate_wire_uses_same_adapter_without_switching_runtime_contract(
+def test_runtime_typed_request_uses_same_adapter_and_existing_plan(
     adapter: tuple, monkeypatch: pytest.MonkeyPatch, provider: str
 ) -> None:
     _, revision, reserve, finish = adapter
@@ -109,12 +127,45 @@ def test_candidate_wire_uses_same_adapter_without_switching_runtime_contract(
             ),
         ),
     )
-    reply = providers.generate_structured({"question": "?"}, revision, provider, QueryRequest)
-    plan = reply.plan.to_plan()
+    reply = providers.generate_proposal("?", revision, provider)
+    plan = reply.plan
     assert plan.aggregations[0].operator == "MIN" and plan.result_mode == "bounded"
     assert reserve.call_count == finish.call_count == 1
     assert "filters" in providers.response_schema()["properties"]
     assert "conditions" not in providers.response_schema()["properties"]
+
+
+def test_invalid_result_shape_is_not_silently_repaired_after_model(
+    adapter: tuple, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, revision, reserve, _ = adapter
+    payload = request_payload(
+        task="SQL",
+        result_shape="record",
+        required_columns=["amount"],
+        select_columns=["amount"],
+        conditions=[
+            {
+                "operator": "EQ",
+                "column_id": "code",
+                "literal": {"raw_phrase": "0007", "value_type": "text", "candidate_value": "0007"},
+                "values": [],
+                "children": [],
+            }
+        ],
+    )
+    create = Mock(
+        return_value=SimpleNamespace(output_text=json.dumps(payload), id="offline", usage=None)
+    )
+    monkeypatch.setattr(
+        providers.genai,
+        "Client",
+        lambda **kw: nullcontext(SimpleNamespace(interactions=SimpleNamespace(create=create))),
+    )
+    with pytest.raises(AppError) as error:
+        providers.generate_proposal("?", revision, "gemini")
+    assert error.value.code == "QUERY_CLARIFY" and error.value.stage == "semantic_validation"
+    assert reserve.call_count == create.call_count == 1
 
 
 def test_knowledge_403_one_call_and_classified(
@@ -145,7 +196,9 @@ def test_gemini_interactions_contract_and_no_automatic_extra_calls(
 ) -> None:
     _, revision, reserve, _ = adapter
     create = Mock(
-        return_value=SimpleNamespace(output_text='{"task":"CLARIFY"}', id="offline", usage=None)
+        return_value=SimpleNamespace(
+            output_text=json.dumps(request_payload()), id="offline", usage=None
+        )
     )
 
     def client(**kw: object) -> object:
@@ -169,6 +222,52 @@ def test_private_dataset_denied_before_reserving_or_network(adapter: tuple) -> N
     assert error.value.code == "DATA_PERMISSION_REQUIRED"
     assert error.value.stage == "provider_preparation"
     reserve.assert_not_called()
+
+
+def test_gemini_usage_before_invalid_json_keeps_its_cost(
+    adapter: tuple, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, revision, _, finish = adapter
+    create = Mock(
+        return_value=SimpleNamespace(
+            output_text="invalid json",
+            id="offline",
+            usage=SimpleNamespace(
+                total_input_tokens=100, total_output_tokens=10, total_thought_tokens=0
+            ),
+        )
+    )
+    monkeypatch.setattr(
+        providers.genai,
+        "Client",
+        lambda **kw: nullcontext(SimpleNamespace(interactions=SimpleNamespace(create=create))),
+    )
+    with pytest.raises(AppError):
+        providers.generate_proposal("?", revision, "gemini")
+    assert finish.call_args.args[3:6] == (100, 10, 0)
+    assert finish.call_args.kwargs["cost"] == Decimal("0.000055")
+
+
+def test_private_permission_is_specific_to_selected_provider(
+    adapter: tuple, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, revision, reserve, _ = adapter
+    revision.update(data_classification="private", sharing_providers=["gemini"])
+    create = Mock(
+        return_value=SimpleNamespace(
+            output_text=json.dumps(request_payload()), id="offline", usage=None
+        )
+    )
+    monkeypatch.setattr(
+        providers.genai,
+        "Client",
+        lambda **kw: nullcontext(SimpleNamespace(interactions=SimpleNamespace(create=create))),
+    )
+    assert providers.generate_proposal("?", revision, "gemini").plan.task == "CLARIFY"
+    with pytest.raises(AppError) as error:
+        providers.generate_proposal("?", revision, "knowledge")
+    assert error.value.code == "DATA_PERMISSION_REQUIRED"
+    assert reserve.call_count == 1
 
 
 def test_schema_projection_preserves_runtime_caps() -> None:

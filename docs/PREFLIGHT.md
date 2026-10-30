@@ -1,5 +1,83 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Usage/Data Permission, SQL runtime & UI acceptance — 30/10/2026
+
+### A. Tổng quan
+
+**NOT_ACCEPTED.** Usage không còn khóa vô hạn, quyền nguồn ready có luồng cấp/thu hồi, SQL thật đã hiện qua browser/Gemini/reload/restart và UI đã chỉnh. Chất lượng NL còn4FAIL; 57/90 tình huống gốc chưa đo trên contract mới; fresh Google và hai tài khoản browser độc lập chưa nghiệm thu. Không merge main hoặc Giai đoạn2. Baseline source `69850b0c936addb77ebc502076832228faee84a3`, feature/sql-foundation sạch trước sửa. Báo cáo này thay trạng thái hiện hành phía dưới; giữ lịch sử, không nâng số cũ thành PASS mới.
+
+### B. Usage / Gemini / quyền dữ liệu
+
+Root cause USAGE_UNKNOWN: guard grant cũ đếm mọi dispatch đã hoàn tất mà estimated_costNULL rồi khóa toàn grant; HTTP400 d10d5f23-d15d-4c9e-8e21-37e67b510b1c không usage/interaction ID. Đã có PG+Langfuse HTTP400/BadRequestError/trace974e3f15543b1b415e25f9fb3c8e5837, nhưng không billing theo request. Yêu cầu mới cho phép chính sách dự phòng có audit: admin thêm đúng1 provider_usage_reviews/retain_full_reserve, snapshot lỗi + evidence + authority, giữ nguyên tokens/costNULL và reserve0.0137353USD. Đây **không phải đối soát ra chi phí thật hoặc kết luận miễn phí**. 63 ledger rows đầu và .env byte-identical. App chỉ SELECT reviews; không tự duyệt mới. Pending dispatch/unknown mới/mismatch/503 vẫn chặn; các cap/request/reserve không bỏ. Migration usage_review additive còn lưu http_status cho lượt mới. Nhánh lỗi JSON nay giữ estimate nếu tokens đã nhận thật, không biến parse error thành usage unknown giả tạo.
+
+Đợt này **41 Gemini**,0 Knowledge/LlamaParse/BGE. Bao gồm1pilot FAIL projection trước chỉnh,39 semantic attempts của contract cuối và1browser positive; cả41 có usage,1dispatch/lượt, không unknown mới. Input61,168/output13,680, known estimated0.0525504USD, reserve0.5618696USD. Không gọi estimate/reserve là hóa đơn. Ledger104=Gemini99/Knowledge5. Grant bổ sung dùng91/100 (50cũ+41mới), reserved1.2290194/1.50USD; còn9 lượt tổng, ngân sách dự phòng0.2709806USD, Codex đã dùng91/95 và dừng generation. Giữ ít nhất5 cho chủ dự án; đã chuyển cap grant95→100 khi bàn giao toàn9lượt còn lại cho chủ dự án, không tăng tổng quyền/ngân sách; Codex không generation sau bàn giao. Không thay keys/flags/.env hoặc reset usage.
+
+Root cause DATA_PERMISSION_REQUIRED: private ready chưa có sharing_providers; consent AI Setup chỉ cho1lượt metadata, không cấp query; UI trước chỉ sửa sharing ở confirm, trong khi ready revision không confirm lại. Thêm PATCH sharing owner/session/CSRF cho đúng nguồn ready; audit trước/sau/request_id, không đổi classification/schema/rows/checksum. Khóa revision đồng nhất với send/pending để tránh thu hồi giữa snapshot/dispatch. Integration chứng minh ownerB404, CSRF403, provider lạ/đổi classification422, Gemini riêng chạy với transport mock, Knowledge bị chặn trước reserve, thu hồi lại chặn. Browser grant→Gemini thật→restart→revoke thành công trên workbook-ui.xlsx tổng hợp; nguồn vẫn private/3rows, sharing cuối[] như ban đầu, Knowledge luôn tắt quyền. Không mở hàng loạt hoặc sửa lịch sử.
+
+### C. Text-to-SQL
+
+Một pipeline: question/catalog → QueryRequest typed/shape/flat condition tree → semantic conversion → QueryPlan → binder/compiler SQLAlchemy Core → PostgreSQL reader → facts → composer. Không raw SQL, engine/LLM call thứ hai hoặc tự vá filter/projection sau model. Candidate trong process harness dùng cùng adapter/guard/API/PG, chỉ khác wire; wrapper đã bỏ sau chuyển runtime. QueryPlan history còn đọc được. Compiler/query.py và parser/tabular.py giữ byte baseline. Không sửa gold/oracle/manifests/checksums/hai plan.
+
+Pilot đầu lookup có phí nhưng thiếu mã: FAIL/dừng. Một lần sửa tổng quát yêu cầu record project cột EQ nhận diện, kể cả chưa có role; required_columns và shape có regression đa schema, không hardcode câu hỏi/ngành. Sau đó4canary đạt: lookup đủ mã+phí, MIN scalar, COUNT_ROWS+SUM giữ2mốc timestamp, thiếu tỷ giá CLARIFY. Cùng26ca baseline: cũ22/26 → mới26/26; in-scope16/19 →19/19, negative6/7 →7/7, false refusal2/19 →0/19. Đây là tập regression đã biết, không accuracy toàn sản phẩm. Printing thay thế6/6 (5SQL+1clarify) đã khóa trước, chưa dùng model trước đợt; author biết labels, không gọi benchmark mù bên thứ ba. Maintenance MIN đã dùng phát triển nên không gọi blind held-out nữa.
+
+Mở rộng trên runtime thật qua HTTP:7ca đã chạy,3PASS/4FAIL, nhóm dừng khi FAIL. Tổng contract cuối39ca:35PASS/4FAIL; in-scope27/31=87.10%, negative8/8, false refusal3/31=9.68%,1answered output/plan mismatch. Riêng bộ90gốc:33đã chạy29PASS/4FAIL,57NOT_RUN; bộ thay thế6PASS báo riêng. Không sửa prompt sau xem kết quả held-out. Các ca contextual/security trong90 chưa qua model không được suy PASS từ API. Không có bằng chứng zero silent error; top shape mismatch vẫn tính FAIL dù hai booking/giá trị đúng.
+
+| FAIL còn lại | Bằng chứng/root cause | Giới hạn xử lý |
+|---|---|---|
+| basic_agriculture_sum | model raw lúa→candidate rice, không mapping owner | Guard chặn trước SQL; giữ false refusal theo gold, không tự thêm mapping để qua test |
+| basic_agriculture_boolean | raw chưa thu hoạch→false, không mapping xác nhận | Guard không cho tự đổi literal; giữ FAIL |
+| basic_hotel_top | Trả5cột thay2cột gold, thiếu order phụ booking_ref | Hai booking/tiền đúng nhưng shape/order không đạt; không sửa scorer/gold |
+| followup_02 | Câu mới 3 nhưng candidate quận3 do context trước | Guard chặn literal đổi nghĩa; không trả fact sai, vẫn false refusal |
+
+Provider latency31in-scope attempts: p50=2473.83ms/p95=3385.80ms (nearest rank); SQL28executed samples: p50=1.43ms/p95=4.98ms. Không gộp HTTP của process canary với HTTP runtime hoặc gọi đó browser latency. Các phép đo khác mẫu baseline nên không tuyên bố cải thiện tốc độ tổng quát. Runtime expanded HTTP có nêu riêng trong artifacts. Không dùng chỉ số accuracy để bỏ gate critical.
+
+### D. Câu trả lời tự nhiên
+
+Giữ composer tất định, không thêm LLM.20regressions hiện hữu chạy lại trong148unit: Decimal exact, NULL/zero/empty/partial, mã zero đầu, projection, aggregate/ranking/group. Before legacy browser: `Tổng · room charge: 300.15`; lượt browser mới: `Tổng amount trong dữ liệu đã chọn là 0,3.` Rows vẫn0.3, không ép float hoặc tự thêm scale/đơn vị. Với aliases được owner xác nhận, prose dùng tên nghiệp vụ; thiếu aliases có thể còn tên tiếng Anh, không tự dịch/bịa ý nghĩa. Composer không sửa model plan sai và không che bốn FAIL.
+
+### E. Nguồn & Truy vấn SQL
+
+Không hiện SQL trước đây có2nguồn xác minh: history cũ chưa lưu SQL; lượt private/usage blocked dừng trước compiler nên không có SQL. Processing persistence/UI mapping của lượt mới đã có từ baseline; không giả tạo câu SQL cho lịch sử đó. Đổi nhãn thống nhất2nút Nguồn & xử lý/Truy vấn SQL cả lỗi; chưa compile nói Chưa có câu lệnh SQL cho lượt trả lời này; legacy nói chưa lưu. Panel dùng SQL parameterized từ chính Select, không params values, không regenerate/query khi mở.
+
+Browser positive mới workbook-ui.xlsx: private cấp riêng Gemini, SUM0.3 đúng oracle0.1+0.2; model gemini-3.5-flash-lite, backend1864ms/provider1822ms/SQL1.38ms. Đã thấy SELECT/FROM/LIMIT placeholder, succeeded, model/source/time thật. DB plan/envelope/statement trước-sau restart **bằng nhau chính xác**; browser reload/chọn history vẫn hiện SQL, không generation lại. Source panel/SQL một panel mỗi message, Escape/focus, SQL monospace/cuộn trong panel. API ownerB không đọc result/SQL nguồn khác. Không dùng mock thay positive E2E này.
+
+### F. Giao diện
+
+Workspace selector duy nhất thành dòng context nhỏ dưới title trong header chat, không ở sidebar. New chat/menu cùng nền bo mềm, bỏ vách chia cứng; search nhỏ có icon; account avatar/tên/subtitle/menu profile giữ logic. Dấu+ giữ3icon/3tác vụ; model selector cùng composer, Gemini mặc định, Knowledge chọn tay theo quyền/cap. Không dependency/framework mới. Profile popup/cancel, hide/restore, search, rename chat vừa tạo, menus/Escape và Shift+Enter đã kiểm browser. Không xóa chat hoặc dữ liệu thật trong đợt này.
+
+Browser30checks PASS/2BLOCKED: header/newchat/create/history menu/hide-restore/search/account/profile cancel/plus-data/ready-sharing/Gemini-only/live answer/two tools/SQL/source timing/panel-Escape/legacySQL/rename/reload/restart/sharing persistence/revoke/mobile sidebar/ShiftEnter/busy/4widths/console. Chưa retest upload/AI Setup positive ở browser trong đợt này, không lấy bằng chứng cũ làm PASS mới. Width390/768/1280/1440: document.scrollWidth=viewport, SQL cuộn nội bộ, không tràn toàn trang. Không phải audit WCAG toàn diện. Console không error. Fresh Google và hai phiên tài khoản độc lập BLOCKED do cần thao tác auth của chủ dự án; existing session/API A/B không thay hai bằng chứng đó. Không nới OAuth/CSRF hoặc inject cookie vào browser.
+
+Ảnh local ignored: permission-sql-desktop.png, permission-sql-mobile.png, permission-sharing-restored.png. Chat mới giữ lại tên Nghiệm thu quyền và SQL — 30-10 trong workspace Nghiệm thu giao diện 30-10; nguồn kiểm thử đã thu hồi cloud như trước. Reset viewport sau QA, giữ tablocalhost cho user xem.
+
+### G. Kiểm thử
+
+| Nhóm | Kết quả đợt này | Giới hạn |
+|---|---:|---|
+| Backend unit |148PASS|Gồm20composer, guards/adapters offline; không phải model accuracy|
+| API/PG integration |34PASS|8auth+26datasets/chat; transport mock khi gọi provider|
+| SQL oracle |25PASS|PostgreSQL độc lập, gold bất biến|
+| Semantic SQL gold |75+5PASS|Không là90NL PASS|
+| Evaluation/reader/quota/scorer |25PASS|PG thật, không skip|
+| Frontend SSR/DTO |12PASS|Types/build PASS, không thay browser|
+| Semantic model cuối |35/39PASS,4FAIL|33gốc+6thay thế;57/90gốc NOT_RUN|
+| Browser |30PASS/2BLOCKED|Fresh Google/hai tài khoản chưa nghiệm thu|
+| Security/ownership |PASS trong phạm vi unit/API/reader|Không suy thành hai Google browser PASS|
+| Persistence |2luồng PASS|HTTP/provider mock0.30→0,30; và browser/Gemini thật0.3+SQL qua restart|
+
+Sau live chỉ chỉnh capture HTTP status trực tiếp từ response hook (không mặc định successful=200);6quota/30provider tests mock-PG và mypy đạt, không generation lại. Prepare-only lần đầu trùng thời gian quota fixtures nên assertion ledger bị nhiễu; chạy lại tuần tự PASS với ledger104→104/0generation, không sửa số liệu. Ruff/format/mypy18app modules, TypeScript/production build đạt.1Starlette/httpx deprecation warning, không skip. Secret scan103tracked files +2served assets không trùng secrets local; kiểm staged/migration mới trước commit. .env/artifacts ignored; không public PII/ảnh/raw model output/keys. Bằng chứng local permission-*.json/png, tests và CI exact SHA sau push.
+
+### H. GitHub / Docker / CI
+
+Feature/sql-foundation, PR#1 Draft/open, không merge/main/Phase2. Commit/SHA local=remote và CI exact HEAD xác nhận trong bàn giao cuối. Một Compose chatsar/web-api-db healthy,8migrations gồm usage_review, volumes database/uploads giữ nguyên. Không stack mới, không restart/dọn ShopQuery hoặc shared Langfuse, không prune. Giữ images rollback. Source app/container hash đối chiếu trước chốt. Không force push/reset.
+
+### I. Kết luận
+
+**NOT_ACCEPTED.** Usage và data permission đã có cơ chế hợp lệ và bằng chứng chạy; SQL transparency/UI/backend/security/persistence đã cải thiện. Chưa đủ qua Giai đoạn2 vì4lỗi chất lượng,57/90gốc chưa đo, fresh Google/hai tài khoản browser chưa có bằng chứng hiện hành, owner chưa xác nhận acceptance. Không sử dụng hết quota chỉ để tăng số test sau các lỗi đã phân loại.
+
+Checklist chủ dự án: mở localhost:18181 → Google login mới bằng tay/hai tài khoản độc lập; xem chat Nghiệm thu quyền và SQL — 30-10 và2panel; trong Data Manager cấp quyền Gemini riêng cho nguồn private muốn hỏi, không đổi synthetic; kiểm NULL/mã/ngày/đơn vị; phản hồi4FAIL nêu trên trước quyết định acceptance. Không cần DB/scripts/raw JSON để kiểm UI. Giữ quyền phê duyệt merge và chuyển giai đoạn ở chủ dự án.
+
+---
+
 ## Natural Answers, SQL Transparency & Final UX — 30/10/2026
 
 ### A. Tổng quan

@@ -22,6 +22,7 @@ from app.providers import Proposal
 from app.query import Predicate, QueryPlan, compile_query, execute_query
 from app.schema import (
     conversations,
+    dataset_sharing_events,
     datasets,
     jobs,
     messages,
@@ -34,6 +35,133 @@ from app.tabular import wire
 
 
 class DatasetIntegration(unittest.TestCase):
+    def test_ready_private_permission_can_be_granted_and_revoked_without_republish(self) -> None:
+        revision = self.published(b"code,amount\n0007,0.10\n")
+        with db.get_engine().begin() as connection:
+            connection.execute(
+                update(revisions)
+                .where(revisions.c.id == revision["id"])
+                .values(data_classification="private", sharing_providers=[])
+            )
+        dataset_id = str(revision["dataset_id"])
+        before = self.preview(dataset_id)
+        path = f"/api/datasets/{dataset_id}/sharing"
+        body = {"revision_id": str(revision["id"]), "sharing_providers": ["gemini"]}
+        self.as_user(self.token_b)
+        self.assertEqual(self.client.patch(path, json=body).status_code, 404)
+        self.as_user(self.token_a)
+        csrf = self.client.headers.pop("X-CSRF-Token")
+        self.assertEqual(self.client.patch(path, json=body).status_code, 403)
+        self.client.headers["X-CSRF-Token"] = csrf
+        self.assertEqual(
+            self.client.patch(path, json={**body, "sharing_providers": ["unknown"]}).status_code,
+            422,
+        )
+        self.assertEqual(
+            self.client.patch(path, json={**body, "data_classification": "synthetic"}).status_code,
+            422,
+        )
+        self.assertEqual(self.client.patch(path, json=body).status_code, 200)
+        self.assertEqual(self.client.patch(path, json=body).status_code, 200)
+        allowed = self.preview(dataset_id)
+        self.assertEqual(allowed, {**before, "sharing_providers": ["gemini"]})
+        # Adapter thật, transport mock; kiểm quyền mới được đọc từ catalog ở HTTP.
+        from app import providers
+        from app.planning import QueryRequest
+
+        plan = QueryRequest(
+            task="SQL",
+            table_id=str(revision["dataset_id"]),
+            source_revision_id=str(revision["id"]),
+            result_shape="scalar",
+            required_columns=[],
+            raw_user_spans=["Tổng"],
+            select_columns=[],
+            aggregations=[
+                {"operator": "SUM", "column_id": revision["columns"][1]["id"], "output_id": "total"}
+            ],
+            conditions=[],
+            group_by=[],
+            order_by=[],
+            limit=100,
+            unresolved=[],
+        )
+        chat = self.client.post(
+            "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+        ).json()["id"]
+        query = {
+            "question": "Tổng",
+            "dataset_revision_id": str(revision["id"]),
+            "provider": "knowledge",
+        }
+        with patch.object(providers, "reserve_call", return_value=None) as reserve:
+            denied = self.client.post(
+                f"/api/conversations/{chat}/messages",
+                json=query,
+                headers={"Idempotency-Key": uuid4().hex},
+            ).json()
+            self.assertEqual(denied["error_code"], "DATA_PERMISSION_REQUIRED")
+            reserve.assert_not_called()
+        # Không sửa provider/key/config runtime để test đường được phép.
+        from types import SimpleNamespace
+
+        from pydantic import SecretStr
+
+        settings = get_settings().model_copy(
+            update={"gemini_enabled": True, "gemini_api_key": SecretStr("offline-placeholder")}
+        )
+        with (
+            patch.object(providers, "get_settings", return_value=settings),
+            patch.object(providers, "reserve_call", return_value=None) as reserve,
+            patch.object(providers, "finish_call"),
+            patch.object(
+                providers.genai,
+                "Client",
+                return_value=nullcontext(
+                    SimpleNamespace(
+                        interactions=SimpleNamespace(
+                            create=lambda **kw: SimpleNamespace(
+                                output_text=plan.model_dump_json(), id="offline", usage=None
+                            )
+                        )
+                    )
+                ),
+            ),
+        ):
+            reply = self.client.post(
+                f"/api/conversations/{chat}/messages",
+                json={**query, "provider": "gemini"},
+                headers={"Idempotency-Key": uuid4().hex},
+            ).json()
+            self.assertEqual(reply["status"], "answered", reply)
+            self.assertEqual(reply["display_rows"], [["0.10"]])
+            self.assertEqual(reserve.call_count, 1)
+        self.assertEqual(
+            self.client.patch(path, json={**body, "sharing_providers": []}).status_code, 200
+        )
+        self.assertEqual(self.preview(dataset_id), before)
+        with patch.object(providers, "reserve_call") as reserve:
+            denied = self.client.post(
+                f"/api/conversations/{chat}/messages",
+                json={**query, "provider": "gemini"},
+                headers={"Idempotency-Key": uuid4().hex},
+            ).json()
+            self.assertEqual(denied["error_code"], "DATA_PERMISSION_REQUIRED")
+            reserve.assert_not_called()
+        with db.get_engine().connect() as connection:
+            events = (
+                connection.execute(
+                    select(dataset_sharing_events)
+                    .where(dataset_sharing_events.c.revision_id == revision["id"])
+                    .order_by(dataset_sharing_events.c.created_at)
+                )
+                .mappings()
+                .all()
+            )
+        self.assertEqual(len(events), 2)
+        self.assertEqual(events[0]["previous_providers"], [])
+        self.assertEqual(events[1]["sharing_providers"], [])
+
     def test_chat_management_preserves_sources_and_other_owners(self) -> None:
         revision = self.published("code,Tổng\n0007,0.10\n".encode(), aliases={"Tổng": ["Phí"]})
         chat = self.client.post(
@@ -151,6 +279,13 @@ class DatasetIntegration(unittest.TestCase):
             try:
                 self.assertTrue(started.wait(5))
                 self.assertEqual(self.client.delete(f"/api/conversations/{chat}").status_code, 409)
+                self.assertEqual(
+                    self.client.patch(
+                        f"/api/datasets/{revision['dataset_id']}/sharing",
+                        json={"revision_id": str(revision["id"]), "sharing_providers": []},
+                    ).status_code,
+                    409,
+                )
                 self.assertEqual(
                     self.client.delete(
                         f"/api/workspaces/{self.workspace_id}/conversations"

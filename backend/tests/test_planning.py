@@ -148,3 +148,24 @@ def test_missing_conversion_context_remains_clarify_not_fake_sql() -> None:
 def test_full_list_keeps_all_mode_for_existing_truncation_guard() -> None:
     plan = request(result_shape="list_all", select_columns=["code"], aggregations=[]).to_plan()
     assert plan.result_mode == "all"
+
+
+@pytest.mark.parametrize("identifier,value", [("serial", "cost"), ("reference", "weight")])
+def test_record_keeps_lookup_column_even_without_catalog_role(identifier: str, value: str) -> None:
+    condition = {**leaf(identifier), "operator": "EQ"}
+    with pytest.raises(ValueError, match="lookup column"):
+        request(
+            result_shape="record",
+            select_columns=[value],
+            required_columns=[value],
+            aggregations=[],
+            conditions=[condition],
+        ).to_plan()
+    plan = request(
+        result_shape="record",
+        select_columns=[identifier, value],
+        required_columns=[identifier, value],
+        aggregations=[],
+        conditions=[condition],
+    ).to_plan()
+    assert plan.select_columns == [identifier, value]

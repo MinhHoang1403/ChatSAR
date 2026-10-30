@@ -10,7 +10,7 @@ from typing import Annotated, Any, Literal, cast
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, File, Form, Query, UploadFile
+from fastapi import APIRouter, File, Form, Query, Request, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import (
     DDL,
@@ -38,7 +38,7 @@ from app import database as db
 from app.auth import MutationDependency, Principal, PrincipalDependency
 from app.config import get_settings
 from app.errors import AppError
-from app.schema import datasets, jobs, revisions, workspaces
+from app.schema import dataset_sharing_events, datasets, jobs, messages, revisions, workspaces
 from app.tabular import (
     MAX_BYTES,
     ColumnReview,
@@ -66,6 +66,57 @@ class PublishInput(BaseModel):
     sharing_providers: list[Literal["gemini", "knowledge"]] = Field(
         default_factory=list, max_length=2
     )
+
+
+class SharingInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
+    revision_id: str
+    sharing_providers: list[Literal["gemini", "knowledge"]] = Field(max_length=2)
+
+
+@router.patch("/datasets/{dataset_id}/sharing")
+def update_sharing(
+    dataset_id: UUID, body: SharingInput, principal: MutationDependency, request: Request
+) -> dict[str, Any]:
+    try:
+        revision_id = UUID(body.revision_id)
+    except ValueError:
+        raise AppError(422, "INVALID_REQUEST", "Phiên bản dữ liệu không hợp lệ.") from None
+    with db.get_engine().begin() as connection:
+        revision = owned_revision(connection, dataset_id, principal, revision_id, lock=True)
+        if revision["status"] != "ready":
+            raise AppError(409, "REVISION_STATE", "Xác nhận dữ liệu trước khi đổi quyền hỏi đáp.")
+        # Send giữ khóa revision đến khi ghi pending. Không thu hồi quyền giữa
+        # snapshot của lượt hỏi và dispatch; owner thử lại sau khi lượt đó kết thúc.
+        if connection.execute(
+            select(messages.c.id)
+            .where(messages.c.revision_id == revision_id, messages.c.status == "pending")
+            .limit(1)
+        ).first():
+            raise AppError(409, "REQUEST_PENDING", "Hãy đợi lượt hỏi hoàn tất trước khi đổi quyền.")
+        sharing = sorted(set(body.sharing_providers))
+        previous = sorted(revision["sharing_providers"])
+        if sharing != previous:
+            connection.execute(
+                update(revisions)
+                .where(revisions.c.id == revision_id)
+                .values(sharing_providers=sharing)
+            )
+            connection.execute(
+                insert(dataset_sharing_events).values(
+                    id=uuid4(),
+                    revision_id=revision_id,
+                    owner_id=principal.user_id,
+                    previous_providers=previous,
+                    sharing_providers=sharing,
+                    request_id=request.state.request_id,
+                )
+            )
+    return {
+        "revision_id": str(body.revision_id),
+        "sharing_providers": sharing,
+        "data_classification": revision["data_classification"],
+    }
 
 
 def owned_revision(

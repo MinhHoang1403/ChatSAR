@@ -108,10 +108,7 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
           { label: hidden ? 'Hiện tất cả đoạn chat' : 'Ẩn tất cả đoạn chat', action: () => setHidden(!hidden) },
           { label: 'Xóa tất cả đoạn chat', danger: true, action: () => setAction({ kind: 'bulk' }) },
         ]} /></div>
-      <label className="workspace-switch">Không gian làm việc<select value={selected?.id ?? ''} disabled={unavailable} onChange={(e) => {
-        const item = workspaces.find((w) => w.id === e.target.value); if (item) onSelect(item);
-      }}>{!selected && <option value="">Chưa có không gian</option>}{workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
-      <label className="search"><span className="sr-only">Tìm đoạn chat</span><input type="search" value={search} placeholder="Tìm đoạn chat…" onChange={(e) => setSearch(e.target.value)} /></label>
+      <label className="search"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span className="sr-only">Tìm đoạn chat</span><input type="search" value={search} placeholder="Tìm đoạn chat…" onChange={(e) => setSearch(e.target.value)} /></label>
       <nav className="history" aria-label="Lịch sử cuộc trò chuyện">
         {hidden ? <button className="quiet" onClick={() => setHidden(false)}>Hiện tất cả đoạn chat</button> : <>
           {!groups.length && <p className="muted">Chưa có đoạn chat.</p>}
@@ -127,14 +124,18 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
         </>}
       </nav>
 
-      <div className="account"><Menu label="Tài khoản ChatSAR" text={savedName} className="account-menu" disabled={unavailable} items={[
+      <div className="account"><Menu label="Tài khoản ChatSAR" text={<><span className="account-avatar" aria-hidden="true">{savedName.trim().slice(0,1).toLocaleUpperCase('vi')}</span><span className="account-identity"><strong>{savedName}</strong><span>Tài khoản cá nhân</span></span><span className="account-chevron" aria-hidden="true">⌃</span></>} className="account-menu" disabled={unavailable} items={[
         { label: 'Hồ sơ ChatSAR', action: () => { setDraftProfile(profile); setLocalError(''); setProfileOpen(true); } },
         { label: 'Đăng xuất', action: () => void onLogout() },
       ]} /></div>
     </aside>
     <main className="workspace-main">
       <header className="workspace-header"><button className="quiet open-sidebar" aria-label="Mở điều hướng" onClick={() => { setCollapsed(false); setMobileOpen(true); }}>☰</button>
-        <strong>{conversations.find((c) => c.id === conversationId)?.title ?? 'Đoạn chat mới'}</strong>
+        <div className="chat-context"><strong>{conversations.find((c) => c.id === conversationId)?.title ?? 'Đoạn chat mới'}</strong>
+          <label className="workspace-switch"><span className="sr-only">Không gian làm việc</span><select aria-label="Không gian làm việc" value={selected?.id ?? ''} disabled={unavailable} onChange={(e) => {
+            const item = workspaces.find((w) => w.id === e.target.value); if (item) onSelect(item);
+          }}>{!selected && <option value="">Chưa có không gian</option>}{workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
+        </div>
         <label className="source-select"><span className="sr-only">Nguồn dữ liệu</span><select aria-label="Nguồn dữ liệu" value={scope?.revision_id ?? ''} disabled={unavailable} onChange={(e) => setScope(datasets.find((d) => d.revision_id === e.target.value) ?? null)}>
           <option value="">Chọn dữ liệu</option>{datasets.filter((d) => d.status === 'ready').map((d) => <option key={d.revision_id} value={d.revision_id}>{d.name}</option>)}</select></label>
         <span className="health" role="status">{health}</span></header>

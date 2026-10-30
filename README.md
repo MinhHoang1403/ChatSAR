@@ -6,9 +6,9 @@ ChatSAR là MVP demo hỏi đáp dữ liệu bằng tiếng Việt, hướng đ�
 - **RAG:** tìm nội dung trong PDF/DOCX/TXT/Markdown rồi trả lời kèm trích dẫn nguồn.
 - **Hybrid:** kết hợp số liệu SQL với tài liệu giải thích hoặc đánh giá quy tắc ngưỡng đơn giản.
 
-**Trạng thái: PARTIALLY_READY.** Giai đoạn 1 trên `feature/sql-foundation` có Google/workspaces, CSV/XLSX, Smart Data Setup (local hoặc AI metadata có consent), catalog nghiệp vụ, SQL một bảng, chat/history/source và giao diện sáng xanh dương. Kết quả bị cắt được báo rõ; Decimal/NULL/TEXT ID được giữ nguyên. Gemini mặc định, Knowledge dự phòng theo opt-in/quyền dữ liệu/kết nối/hạn mức.
+**Trạng thái: NOT_ACCEPTED — chưa qua Giai đoạn 2.** Giai đoạn 1 trên `feature/sql-foundation` có Google/workspaces, CSV/XLSX/Smart Setup, catalog, QueryRequest → QueryPlan/compiler SQLAlchemy Core, chat/history, câu trả lời tất định và SQL thật theo từng lượt. Nguồn private ready có cấp/thu hồi quyền riêng từng provider; usage review giữ dự phòng có audit, không sửa chi phí chưa biết. Giao diện sáng xanh dương, workspace context ở header, hai nút Nguồn & xử lý / Truy vấn SQL.
 
-94 unit, 24 integration, 25 SQL oracle gốc, 14 manifest/quyền DB/acceptance guard, 75 phép kiểm gold SQL của bộ 90 tình huống và 7 frontend SSR/DTO đã PASS local. Đây không phải accuracy model. Một lượt Gemini AI Setup mới đã nhận JSON hợp lệ nhưng bị backend từ chối; đã dừng, hai ca SQL còn NOT_RUN. Chi tiết nguyên nhân UNKNOWN vì harness cũ chưa lưu notes trước cleanup; không tự coi FAIL là PASS. Browser sau đăng nhập bị chặn bởi công cụ Cốc Cốc. Google live trước đó đã có bằng chứng thủ công + DB. Chưa nghiệm thu cuối, chưa merge main; RAG/Hybrid chưa triển khai. Xem [bằng chứng và blockers](docs/PREFLIGHT.md).
+Kiểm hiện hành:148unit/34integration/25oracle/75gold+5replacement/25evaluation/12frontend PASS; browser30checks PASS/2BLOCKED (Google mới/hai tài khoản). Cùng26ca model baseline cải thiện22→26PASS; tập mở rộng tổng39ca35PASS/4FAIL, in-scope27/31, còn57/90ca gốc chưa đo. SQL/provenance/restart đã kiểm qua browser/Gemini thật. Không coi tests offline là model accuracy hoặc tự nghiệm thu. Xem [bằng chứng, chi phí và lỗi còn lại](docs/PREFLIGHT.md). PR#1 còn Draft, chưa merge; RAG/Hybrid chưa triển khai.
 
 ## Thiết kế dự kiến
 

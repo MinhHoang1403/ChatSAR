@@ -1,3 +1,13 @@
+# Vận hành ChatSAR
+
+**Hiện hành 30/10/2026:** Phase1 NOT_ACCEPTED. QueryRequest đã vào một runtime sau canary/so sánh/printing;4FAIL mở rộng còn giữ. Usage review admin theo từng usage_id giữ toàn reserve cho HTTP400 lịch sử, không sửa tokens/costNULL. Unknown mới vẫn chặn; app không tự approve. .env/keys/flags không đổi. Migration usage_review additive, app chỉ đọc provider_usage_reviews; không cấp INSERT/UPDATE/DELETE cho app/reader. Không tự thêm review vì chỉ thấyHTTP400: phải có chứng cứ/snapshot/quyền chủ dự án. Đây là dự phòng được chấp thuận, không là hóa đơn.
+
+Đợt này41Gemini, tổng grant91/100, reserved1.2290194/1.50USD. Codex dừng generation tại91/95. Còn9lượt tổng, ít nhất5dành chủ dự án; đã chuyển cap grant95→100 khi bàn giao toàn9lượt cho chủ dự án trong đúng quyền100đã cấp; budget1.50USD/baseline/ledger giữ nguyên, Codex không gọi thêm sau bàn giao. Không dùng9lượt đó làm quyền tự test ở nhiệm vụ sau. Ledger104=Gemini99/Knowledge5; Knowledge/LlamaParse/BGE mới0.
+
+Nguồn ready: Data Manager → chọn đúng file → Quyền hỏi đáp với mô hình → chỉ đánh dấu provider muốn cấp → Lưu quyền hỏi đáp; bỏ dấu và lưu để thu hồi cho lượt sau. Private giữ private. AI Setup consent không tự cấp query. Pending thì đợi hoàn tất trước đổi quyền. Nguồn synthetic vẫn theo chính sách kiểm thử đã xác nhận. Workbook-ui.xlsx kiểm thử đã trở lại sharing[]; chat Nghiệm thu quyền và SQL — 30-10 giữ result0.3và SQL thật sau restart, xem history không gọi model.
+
+**Các mục bên dưới là lịch sử vận hành trước cập nhật này.** Dùng báo cáo đầu PREFLIGHT và CONTRACTS cho gate/usage hiện hành.
+
 # Vận hành nền tảng ChatSAR
 
 ## Natural Answers/SQL evidence — 30/10/2026
@@ -35,7 +45,7 @@ npm.cmd ci --ignore-scripts --prefix frontend
 
 # Khởi động DB duy nhất và áp dụng migration.
 docker compose up -d --wait db
-foreach ($name in @('foundation','identity','datasets','conversation','catalog','provider_grants','chat_management')) {
+foreach ($name in @('foundation','identity','datasets','conversation','catalog','provider_grants','chat_management','usage_review')) {
   Get-Content "backend/migrations/$name.sql" -Raw -Encoding UTF8 | docker compose exec -T db psql -X -q -U chatsar_admin -d chatsar -v ON_ERROR_STOP=1
   if ($LASTEXITCODE -ne 0) { throw "Migration thất bại: $name" }
 }

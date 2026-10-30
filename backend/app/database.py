@@ -48,6 +48,7 @@ def database_ready() -> bool:
             "catalog",
             "provider_grants",
             "chat_management",
+            "usage_review",
         } <= versions
     except SQLAlchemyError:
         # Không trả URL, credential hoặc thông báo DB ra endpoint công khai.

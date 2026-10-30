@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 
 type Item = { label: string; action: () => void; danger?: boolean; icon?: 'upload'|'workspace'|'data' };
 function ActionIcon({ kind }: { kind: NonNullable<Item['icon']> }) {
@@ -9,7 +10,7 @@ function ActionIcon({ kind }: { kind: NonNullable<Item['icon']> }) {
   </svg>;
 }
 export default function Menu({ label, text = '···', items, disabled = false, className = '' }: {
-  label: string; text?: string; items: Item[]; disabled?: boolean; className?: string;
+  label: string; text?: ReactNode; items: Item[]; disabled?: boolean; className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ top: 0, left: 0 });

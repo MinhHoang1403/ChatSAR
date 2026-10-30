@@ -75,6 +75,8 @@ SOURCES.update(
                 "state": "text",
             },
         ),
+        "printing": ("print_jobs", {"job_code": "text", "sheets": "integer",
+                                   "minutes": "numeric", "fee": "numeric", "completed_on": "date"}),
     }
 )
 
@@ -211,6 +213,28 @@ def semantics_match(actual: dict, expected: dict) -> bool:
 
 def run_semantic(args) -> None:
     manifest = load_scenarios()
+    if args.replacement:
+        # Chỉ dùng cho chấm held-out sau khi candidate đã khóa; không đưa gold
+        # vào payload model hoặc đổi fixture/checksum khi nhận kết quả.
+        locked = json.loads((EVALUATIONS / "holdout_checksums.json").read_text(encoding="utf-8"))
+        for name, expected in locked.items():
+            assert hashlib.sha256((EVALUATIONS / name).read_bytes()).hexdigest() == expected
+        manifest = json.loads((EVALUATIONS / "holdout.json").read_text(encoding="utf-8"))
+        expectations = [
+            {"selection": ["job_code", "fee"], "filters": {"operator": "EQ", "column": "job_code", "value": "0004"}},
+            {"metrics": [{"operator": "MIN", "column": "minutes"}]},
+            {"metrics": [{"operator": "COUNT_ROWS", "column": None}, {"operator": "SUM", "column": "fee"}],
+             "filters": {"operator": "AND", "children": [
+                 {"operator": "GTE", "column": "completed_on", "value": "2026-04-01"},
+                 {"operator": "LT", "column": "completed_on", "value": "2026-05-01"}]}},
+            {"metrics": [{"operator": "COUNT_NON_NULL", "column": "sheets"}]},
+            {"metrics": [{"operator": "SUM", "column": "fee"}], "filters": {"operator": "EQ", "column": "job_code", "value": "0999"}},
+            {"execution_allowed": False},
+        ]
+        manifest["cases"] = [{**c, "domain": "printing", "group": "replacement", "split": "held-out",
+                              "expected_status": c.get("expected_status", "answered"),
+                              "expected_semantics": expectation}
+                             for c, expectation in zip(manifest["cases"], expectations, strict=True)]
     selected = [
         next(c for c in manifest["cases"] if c["case_id"] == name)
         for name in args.cases
@@ -234,8 +258,9 @@ def run_semantic(args) -> None:
         (EVALUATIONS / n).read_text(encoding="utf-8") for n in manifest["fixtures"]
     ]
     for domain in domains:
+        table_name = SOURCES[domain][0] if domain == "printing" else "oracle_fixture." + SOURCES[domain][0]
         statements.append(
-            f"SELECT json_build_object('domain','{domain}','rows',json_agg(row_to_json(t))) FROM oracle_fixture.{SOURCES[domain][0]} t;"
+            f"SELECT json_build_object('domain','{domain}','rows',json_agg(row_to_json(t))) FROM {table_name} t;"
         )
     statements.append("ROLLBACK;")
     fixtures = {
@@ -249,6 +274,8 @@ def run_semantic(args) -> None:
     session = TestSession()
     report = {
         "mode": "semantic_model_live",
+        "provider_contract": "QueryRequest -> QueryPlan",
+        "transport": "HTTP proxy",
         "code_sha": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
         ).strip(),
@@ -489,6 +516,7 @@ def main() -> None:
     )
     parser.add_argument("--cases", nargs="+", required=True)
     parser.add_argument("--semantic", action="store_true")
+    parser.add_argument("--replacement", action="store_true", help="Bộ held-out thay thế đã khóa")
     parser.add_argument("--max-requests", type=int, default=0)
     parser.add_argument("--output", default="artifacts/semantic-live.json")
     parser.add_argument("--restart", action="store_true")

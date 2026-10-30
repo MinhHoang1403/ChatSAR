@@ -247,7 +247,7 @@ def send_message(
             ).scalar_one_or_none()
             if dataset_id is None:
                 raise AppError(404, "NOT_FOUND", "Không tìm thấy dữ liệu.")
-            revision = owned_revision(connection, dataset_id, principal, revision_id)
+            revision = owned_revision(connection, dataset_id, principal, revision_id, lock=True)
             if revision["workspace_id"] != conversation["workspace_id"]:
                 raise AppError(
                     404, "NOT_FOUND", "Dữ liệu không thuộc không gian của cuộc trò chuyện."

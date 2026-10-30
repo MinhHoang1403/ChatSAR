@@ -20,6 +20,7 @@ class QuotaTests(unittest.TestCase):
     def tearDown(self):
         # Chỉ test reservations thuộc grant UUID do setUp này tạo; không xóa ledger cũ.
         postgres(
+            f"DELETE FROM app.provider_usage_reviews WHERE usage_id IN (SELECT id FROM app.provider_usage WHERE grant_id='{self.grant}');"
             f"DELETE FROM app.provider_usage WHERE grant_id='{self.grant}';"
             f"DELETE FROM app.provider_grants WHERE id='{self.grant}';"
         )
@@ -79,4 +80,59 @@ with providers.request_client(httpx.MockTransport(lambda r: sent.append(r) or ht
         assert error.code=='PROVIDER_RETRY_BLOCKED'
 assert len(sent)==1
 providers.finish_call(UUID(identifier),'error',1,error='PROVIDER_TEMPORARY')
+with get_engine().connect() as c:
+    assert c.execute(select(provider_usage.c.http_status).where(provider_usage.c.id==UUID(identifier))).scalar_one()==503
+assert reserve()=='USAGE_UNKNOWN'""")
+
+    def seed_review(self, *, status="error", evidence_status=400, snapshot_model=None):
+        import json
+
+        identifier = str(uuid4())
+        model = "gemini-3.5-flash-lite"
+        snapshot = json.dumps({"status": status, "error_code": "PROVIDER_SCHEMA",
+                               "model": snapshot_model or model, "dispatch_count": 1})
+        evidence = json.dumps({"http_status": evidence_status, "reference": "offline_test"})
+        postgres(
+            f"INSERT INTO app.provider_usage(id,provider,model,status,reserved_cost_usd,grant_id,dispatch_count,error_code) "
+            f"VALUES ('{identifier}','gemini','{model}','{status}',0.01,'{self.grant}',1,'PROVIDER_SCHEMA');"
+            f"INSERT INTO app.provider_usage_reviews(usage_id,policy,accounted_reserve_usd,usage_snapshot,evidence,authority) "
+            f"VALUES ('{identifier}','retain_full_reserve',0.01,'{snapshot}','{evidence}','Offline test authority');"
+        )
+        return identifier
+
+    def test_review_retains_reserve_and_does_not_invent_usage(self):
+        identifier = self.seed_review()
+        self.run_quota("""assert reserve('0.025')=='GRANT_BUDGET_REACHED'
+assert reserve() not in ('USAGE_UNKNOWN','GRANT_BUDGET_REACHED')
+assert reserve()=='GRANT_LIMIT_REACHED'""")
+        row = postgres(f"SELECT input_tokens IS NULL AND output_tokens IS NULL AND estimated_cost_usd IS NULL, reserved_cost_usd,status,dispatch_count FROM app.provider_usage WHERE id='{identifier}';")
+        self.assertEqual(row.strip(), "t|0.01|error|1")
+
+    def test_review_cannot_cover_inflight_mismatched_or_other_http_errors(self):
+        for options in ({"status": "reserved"}, {"snapshot_model": "different"}, {"evidence_status": 503}):
+            identifier = self.seed_review(**options)
+            self.run_quota("assert reserve()=='USAGE_UNKNOWN'")
+            postgres(f"DELETE FROM app.provider_usage_reviews WHERE usage_id='{identifier}'; DELETE FROM app.provider_usage WHERE id='{identifier}';")
+
+    def test_runtime_cannot_self_approve_or_rewrite_reviews(self):
+        identifier = self.seed_review()
+        self.run_quota("""from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
+for sql in ["INSERT INTO app.provider_usage_reviews SELECT * FROM app.provider_usage_reviews",
+            "UPDATE app.provider_usage_reviews SET authority='forged'",
+            "DELETE FROM app.provider_usage_reviews"]:
+    try:
+        with get_engine().begin() as c:
+            c.execute(text(sql))
+        raise AssertionError('Runtime must not mutate reviews')
+    except DBAPIError as error:
+        assert error.orig.sqlstate=='42501'""")
+
+    def test_new_unknown_error_still_stops_after_old_review(self):
+        self.seed_review()
+        self.run_quota("""identifier=reserve()
+from uuid import UUID
+from sqlalchemy import update
+with get_engine().begin() as c:
+    c.execute(update(provider_usage).where(provider_usage.c.id==UUID(identifier)).values(dispatch_count=1,status='error',error_code='PROVIDER_SCHEMA'))
 assert reserve()=='USAGE_UNKNOWN'""")
