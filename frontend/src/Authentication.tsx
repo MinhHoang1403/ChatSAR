@@ -53,7 +53,7 @@ export default function Authentication({ onLogin }: { onLogin: (me: Identity) =>
 
 
   return <main className="login"><div className="login-card">
-    <div className="brand"><span className="brand-mark">C</span> ChatSAR</div>
+    <div className="brand">ChatSAR</div>
     <h1>Không gian dữ liệu của bạn</h1>
     <p>Đặt câu hỏi, xem số liệu và kiểm tra nguồn trong cùng một nơi.</p>
     {error && <p className="error" role="alert">{error}</p>}

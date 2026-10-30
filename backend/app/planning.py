@@ -21,8 +21,11 @@ class QueryRequest(Contract):
     task: Literal["SQL", "CLARIFY", "UNSUPPORTED"]
     table_id: str
     source_revision_id: str
-    result_shape: Literal["record", "list", "scalar", "group", "ranking"]
-    required_columns: list[str] = Field(max_length=30)
+    result_shape: Literal["record", "list", "list_all", "scalar", "group", "ranking"]
+    required_columns: list[str] = Field(
+        max_length=30,
+        description="Requested direct projection columns, excluding aggregate inputs.",
+    )
     raw_user_spans: list[str] = Field(max_length=100)
     select_columns: list[str] = Field(max_length=30)
     aggregations: list[Aggregate] = Field(max_length=20)
@@ -81,7 +84,7 @@ class QueryRequest(Contract):
             selected = set(self.select_columns)
             if not set(self.required_columns) <= selected:
                 raise ValueError("Requested output columns are missing")
-            if self.result_shape in {"record", "list"}:
+            if self.result_shape in {"record", "list", "list_all"}:
                 if self.aggregations or self.group_by or not self.select_columns:
                     raise ValueError("Record/list requires direct projection")
             elif self.result_shape == "scalar":
@@ -104,6 +107,10 @@ class QueryRequest(Contract):
             group_by=self.group_by,
             order_by=self.order_by,
             limit=self.limit,
-            result_mode="top" if self.result_shape == "ranking" else "bounded",
+            result_mode="top"
+            if self.result_shape == "ranking"
+            else "all"
+            if self.result_shape == "list_all"
+            else "bounded",
             unresolved=self.unresolved,
         )

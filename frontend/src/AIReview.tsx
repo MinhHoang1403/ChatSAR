@@ -54,7 +54,7 @@ export default function AIReview({ preview, csrf, onBusy, onProposal }: Props) {
     <div><h3>Chuẩn bị dữ liệu thông minh</h3><p>Phân tích local giữ dữ liệu trên máy. AI có thể đề xuất tên gọi và ý nghĩa cột để bạn xem lại.</p></div>
     <button className="secondary" disabled={busy} onClick={() => void analyze(false)}>Phân tích local</button>
     {saved && <button className="secondary" disabled={busy} onClick={() => { try { applyProposal(saved); setNotice('Đã mở đề xuất đã lưu. Không gọi lại AI; hãy xem lại trước khi xác nhận.'); } catch (e: unknown) { setNotice(e instanceof Error ? e.message : 'Chưa mở được đề xuất.'); } }}>Mở đề xuất đã lưu</button>}
-    <label>Mô hình đề xuất<select value={provider} disabled={busy} onChange={(e) => setProvider(e.target.value)}><option value="gemini">Gemini</option><option value="knowledge">Knowledge</option></select></label>
+    <details className="setup-model"><summary>Mô hình đề xuất: {provider === 'gemini' ? 'Gemini' : 'Knowledge'}</summary><label>Chọn mô hình<select value={provider} disabled={busy} onChange={(e) => setProvider(e.target.value)}><option value="gemini">Gemini</option><option value="knowledge">Knowledge</option></select></label></details>
     <label className="check"><input type="checkbox" checked={consent} disabled={busy} onChange={(e) => setConsent(e.target.checked)} />Cho phép gửi tên cột và thống kê tới {provider === 'gemini' ? 'Gemini' : 'Knowledge'} cho lượt phân tích này; không gửi dòng dữ liệu.</label>
     <button disabled={busy || !consent} onClick={() => void analyze(true)}>{busy ? 'Đang phân tích dữ liệu…' : 'Nhận đề xuất AI'}</button>
     {busy && <p role="status">Đang xử lý yêu cầu. Có thể mất tối đa khoảng một phút.</p>}

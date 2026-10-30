@@ -34,6 +34,139 @@ from app.tabular import wire
 
 
 class DatasetIntegration(unittest.TestCase):
+    def test_chat_management_preserves_sources_and_other_owners(self) -> None:
+        revision = self.published(b"code,amount\n0007,0.10\n")
+        chat = self.client.post(
+            "/api/conversations", json={"workspace_id": str(self.workspace_id), "title": "Before"}
+        ).json()["id"]
+        plan = self.plan(
+            revision,
+            "Tổng",
+            aggregations=[
+                {"operator": "SUM", "column_id": revision["columns"][1]["id"], "output_id": "total"}
+            ],
+        )
+        with patch(
+            "app.conversation.generate_proposal",
+            return_value=Proposal(plan, "offline", "offline", None, None, 0, None),
+        ):
+            response = self.client.post(
+                f"/api/conversations/{chat}/messages",
+                json={"question": "Tổng", "dataset_revision_id": str(revision["id"])},
+                headers={"Idempotency-Key": "management-request"},
+            )
+        self.assertEqual(response.json()["status"], "answered", response.text)
+        result_id = response.json()["result_id"]
+        self.assertEqual(
+            self.client.patch(f"/api/conversations/{chat}", json={"title": "After"}).status_code,
+            200,
+        )
+        listed = self.client.get(f"/api/conversations?workspace_id={self.workspace_id}").json()[0]
+        self.assertEqual(listed["revision_id"], str(revision["id"]))
+        self.assertTrue(listed["dataset_name"])
+        self.assertEqual(len(self.client.get(f"/api/conversations/{chat}").json()["messages"]), 1)
+        self.as_user(self.token_b)
+        self.assertEqual(self.client.delete(f"/api/conversations/{chat}").status_code, 404)
+        self.assertEqual(
+            self.client.patch(f"/api/conversations/{chat}", json={"title": "Spoof"}).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.delete(f"/api/workspaces/{self.workspace_id}/conversations").status_code,
+            404,
+        )
+        self.as_user(self.token_a)
+        for title in [" ", "x" * 121, "bad\nname"]:
+            self.assertEqual(
+                self.client.patch(f"/api/conversations/{chat}", json={"title": title}).status_code,
+                422,
+            )
+        self.assertEqual(self.client.delete(f"/api/conversations/{chat}").status_code, 204)
+        self.assertEqual(self.client.delete(f"/api/conversations/{chat}").status_code, 204)
+        self.assertEqual(self.client.get(f"/api/results/{result_id}").status_code, 404)
+        self.assertEqual(self.client.get(f"/api/conversations/{chat}").status_code, 404)
+        self.assertEqual(self.preview(str(revision["dataset_id"]))["status"], "ready")
+
+    def test_bulk_delete_scope_and_csrf(self) -> None:
+        other = self.client.post("/api/workspaces", json={"name": "Other"}).json()["id"]
+        other_chat = self.client.post("/api/conversations", json={"workspace_id": other}).json()[
+            "id"
+        ]
+        try:
+            for _ in range(2):
+                self.client.post(
+                    "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+                )
+            path = f"/api/workspaces/{self.workspace_id}/conversations"
+            csrf = self.client.headers.pop("X-CSRF-Token")
+            self.assertEqual(self.client.delete(path).status_code, 403)
+            self.client.headers["X-CSRF-Token"] = csrf
+            self.assertEqual(self.client.delete(path).status_code, 204)
+            self.assertEqual(self.client.delete(path).status_code, 204)
+            self.assertEqual(
+                self.client.get(f"/api/conversations?workspace_id={self.workspace_id}").json(), []
+            )
+            self.assertEqual(self.client.get(f"/api/conversations/{other_chat}").status_code, 200)
+        finally:
+            self.client.delete(f"/api/workspaces/{other}/conversations")
+            with db.get_engine().begin() as connection:
+                connection.execute(delete(workspaces).where(workspaces.c.id == UUID(other)))
+
+    def test_pending_send_blocks_delete_and_duplicate_dispatch(self) -> None:
+        from concurrent.futures import ThreadPoolExecutor
+        from threading import Event
+
+        started, release = Event(), Event()
+        revision = self.published(b"code,amount\n0007,0.10\n")
+        chat = self.client.post(
+            "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+        ).json()["id"]
+        plan = self.plan(
+            revision,
+            "Tổng",
+            aggregations=[
+                {"operator": "SUM", "column_id": revision["columns"][1]["id"], "output_id": "total"}
+            ],
+        )
+
+        def blocked(*args):
+            started.set()
+            if not release.wait(10):
+                raise AssertionError("Test release timed out")
+            return Proposal(plan, "offline", "offline", None, None, 0, None)
+
+        body = {"question": "Tổng", "dataset_revision_id": str(revision["id"])}
+        with (
+            patch("app.conversation.generate_proposal", side_effect=blocked) as calls,
+            ThreadPoolExecutor(max_workers=1) as pool,
+        ):
+            future = pool.submit(
+                self.client.post,
+                f"/api/conversations/{chat}/messages",
+                json=body,
+                headers={"Idempotency-Key": "pending-request-key"},
+            )
+            try:
+                self.assertTrue(started.wait(5))
+                self.assertEqual(self.client.delete(f"/api/conversations/{chat}").status_code, 409)
+                self.assertEqual(
+                    self.client.delete(
+                        f"/api/workspaces/{self.workspace_id}/conversations"
+                    ).status_code,
+                    409,
+                )
+                duplicate = self.client.post(
+                    f"/api/conversations/{chat}/messages",
+                    json=body,
+                    headers={"Idempotency-Key": "another-request-key"},
+                )
+                self.assertEqual(duplicate.status_code, 409)
+            finally:
+                release.set()
+            self.assertEqual(future.result(timeout=10).json()["status"], "answered")
+            self.assertEqual(calls.call_count, 1)
+        self.assertEqual(self.client.delete(f"/api/conversations/{chat}").status_code, 204)
+
     def test_provider_fallback_and_timing_do_not_bypass_semantic_refusals(self) -> None:
         from app.errors import AppError
 

@@ -20,7 +20,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from google.auth.exceptions import GoogleAuthError, TransportError
 from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2 import id_token
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import and_, insert, select, update
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
@@ -49,6 +49,27 @@ class LoginInput(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
     credential: str = Field(min_length=1, max_length=16384)
     g_csrf_token: str = Field(min_length=20, max_length=128)
+
+
+class ProfileInput(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, hide_input_in_errors=True)
+    display_name: str = Field(min_length=1, max_length=200)
+    phone: str = Field(max_length=40, pattern=r"^[0-9+(). \-]*$")
+    interests: str = Field(max_length=1000)
+
+    @field_validator("display_name", "phone", "interests")
+    @classmethod
+    def clean_profile(cls, value: str) -> str:
+        if any(ord(c) < 32 and c not in "\n\t" for c in value):
+            raise ValueError("Invalid profile text")
+        return value.strip()
+
+    @field_validator("display_name")
+    @classmethod
+    def require_name(cls, value: str) -> str:
+        if not value or "\n" in value or "\t" in value:
+            raise ValueError("Invalid display name")
+        return value
 
 
 def digest(value: str) -> str:
@@ -265,3 +286,27 @@ def logout(principal: MutationDependency, response: Response) -> None:
             .values(revoked_at=datetime.now(UTC))
         )
     response.delete_cookie(SESSION_COOKIE)
+
+
+@router.get("/profile")
+def get_profile(principal: PrincipalDependency) -> dict[str, str]:
+    with db.get_engine().connect() as connection:
+        row = (
+            connection.execute(
+                select(users.c.display_name, users.c.phone, users.c.interests).where(
+                    users.c.id == principal.user_id
+                )
+            )
+            .mappings()
+            .one()
+        )
+    return dict(row)
+
+
+@router.patch("/profile")
+def update_profile(body: ProfileInput, principal: MutationDependency) -> dict[str, str]:
+    with db.get_engine().begin() as connection:
+        connection.execute(
+            update(users).where(users.c.id == principal.user_id).values(**body.model_dump())
+        )
+    return body.model_dump()

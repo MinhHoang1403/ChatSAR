@@ -59,8 +59,10 @@ jobs:
           docker compose exec -T db psql -X -q -U chatsar_admin -d chatsar -v ON_ERROR_STOP=1 < backend/migrations/conversation.sql
           docker compose exec -T db psql -X -q -U chatsar_admin -d chatsar -v ON_ERROR_STOP=1 < backend/migrations/catalog.sql
           docker compose exec -T db psql -X -q -U chatsar_admin -d chatsar -v ON_ERROR_STOP=1 < backend/migrations/provider_grants.sql
+          docker compose exec -T db psql -X -q -U chatsar_admin -d chatsar -v ON_ERROR_STOP=1 < backend/migrations/chat_management.sql
           python -m evaluations.oracle
           python -m evaluations.semantic
+          python -m evaluations.semantic --replacement
       - name: Build and check exact containers
         run: |
           docker compose build

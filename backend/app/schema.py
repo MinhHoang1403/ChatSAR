@@ -11,6 +11,8 @@ users = Table(
     Column("provider", String),
     Column("provider_subject", String),
     Column("display_name", String),
+    Column("phone", String),
+    Column("interests", String),
 )
 sessions = Table(
     "sessions",
@@ -74,6 +76,7 @@ conversations = Table(
     Column("id", Uuid, primary_key=True),
     Column("workspace_id", Uuid),
     Column("title", String),
+    Column("revision_id", Uuid),
     Column("created_at", DateTime(timezone=True)),
 )
 messages = Table(

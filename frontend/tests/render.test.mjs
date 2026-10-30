@@ -16,20 +16,41 @@ test('workspace exposes one data manager, history and account without internal I
   const html = await render('Workspace', { me: { id: 'private-user-id', display_name: 'QA', csrf_token: 'never-render-token' }, workspaces: [{ id: 'private-workspace-id', name: 'Kiểm thử' }], selected: { id: 'private-workspace-id', name: 'Kiểm thử' }, onSelect: noop, onCreate: noop, onLogout: noop, busy: false, error: '' });
   assert.match(html, /Lịch sử cuộc trò chuyện/);
   assert.match(html, /Quản lý dữ liệu/);
-  assert.match(html, /Đăng xuất/);
+  assert.match(html, /aria-label="Tài khoản ChatSAR"/);
+  assert.match(html, /aria-haspopup="menu"/);
+  assert.doesNotMatch(html, /brand-mark|Trợ lý dữ liệu/);
   assert.doesNotMatch(html, /never-render-token|private-user-id|RAG|Hybrid/);
 });
 test('composer requires a ready source and Gemini is the default', async () => {
   const html = await render('Chat', { workspaceId: 'workspace', csrf: 'csrf', scope: null, selected: '', onSelect: noop, onList: noop, onBusy: noop, onManageData: noop });
   assert.match(html, /value="gemini" selected=""/);
-  assert.match(html, /send-button" disabled=""/);
-  assert.match(html, /Tải dữ liệu lên/);
+  assert.match(html, /send-button"[^>]*disabled=""/);
+  assert.match(html, /aria-label="Thêm dữ liệu và không gian"/);
+  assert.match(html, /rows="1"/);
+  assert.doesNotMatch(html, /Cập nhật lịch sử|fallback-choice|composer-note|empty-symbol/);
+});
+test('history groups by immutable revision, including equal filenames and legacy records', async () => {
+  const { historyGroups } = await vite.ssrLoadModule('/src/Workspace.tsx');
+  const { conversation } = await vite.ssrLoadModule('/src/Chat.tsx');
+  const items = [{ id: 'a', title: 'A', revision_id: 'r1', dataset_name: 'same.csv' },
+    { id: 'b', title: 'B', revision_id: 'r2', dataset_name: 'same.csv' },
+    { id: 'c', title: 'C', revision_id: 'r1', dataset_name: 'same.csv' }, { id: 'legacy', title: 'Old' }].map(conversation);
+  const groups = historyGroups(items);
+  assert.equal(groups.length, 3); assert.deepEqual(groups[0].items.map((c) => c.id), ['a', 'c']);
+  assert.equal(groups[2].label, 'Chưa xác định nguồn');
+  assert.throws(() => conversation({ id: 'x', title: 'X', revision_id: 7 }));
 });
 test('result preserves exact numeric text, NULL and escapes untrusted text', async () => {
   const html = await render('Result', { value: { status: 'partial', display_text: 'Đang hiển thị một phần', display_rows: [['9007199254740993', '300.15', null, '<script>attack</script>']], facts: { columns: [{ name: 'Mã' }, { name: 'Tiền' }, { name: 'Trống' }, { name: 'Văn bản' }] }, limitations: ['Còn kết quả chưa hiển thị'] } });
   assert.match(html, /9007199254740993/); assert.match(html, /300\.15/);
   assert.match(html, /Chưa có giá trị/); assert.doesNotMatch(html, /<script>/);
   assert.match(html, /Còn kết quả chưa hiển thị/);
+});
+test('friendly headings preserve underscores inside exact values and answer text', async () => {
+  const html = await render('Result', { value: { status: 'answered', display_text: 'job_code: A_0007',
+    display_rows: [['A_0007']], facts: { columns: [{ name: 'job_code', label: 'Mã lệnh' }] }, limitations: [] } });
+  assert.match(html, /Mã lệnh: A_0007/); assert.match(html, /<td>A_0007<\/td>/);
+  assert.doesNotMatch(html, /A 0007/);
 });
 test('private AI setup starts with explicit consent and disabled cloud action', async () => {
   const html = await render('AIReview', { preview, csrf: 'never-render-token', onBusy: noop, onProposal: noop });

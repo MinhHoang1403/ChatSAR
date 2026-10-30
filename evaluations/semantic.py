@@ -32,7 +32,17 @@ def normalize(rows: list[dict], types: dict) -> list:
 
 
 def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--replacement", action="store_true")
+    args = parser.parse_args()
     manifest = load_scenarios()
+    if args.replacement:
+        locked = json.loads((EVALUATIONS / "holdout_checksums.json").read_text(encoding="utf-8"))
+        for name, expected in locked.items():
+            assert hashlib.sha256((EVALUATIONS / name).read_bytes()).hexdigest() == expected, name
+        manifest = json.loads((EVALUATIONS / "holdout.json").read_text(encoding="utf-8"))
     executable = [c for c in manifest["cases"] if "oracle_sql" in c]
     statements = ["BEGIN;"] + [
         (EVALUATIONS / n).read_text(encoding="utf-8") for n in manifest["fixtures"]
@@ -59,7 +69,7 @@ def main() -> None:
         ), case["case_id"]
     report = {
         "scenarios": len(manifest["cases"]),
-        "groups": dict(Counter(c["group"] for c in manifest["cases"])),
+        "groups": dict(Counter(c.get("group", "replacement") for c in manifest["cases"])),
         "gold_sql_checks": len(executable),
         "gold_sql_status": "PASS",
         "non_sql_scenarios": len(manifest["cases"]) - len(executable),
@@ -71,7 +81,7 @@ def main() -> None:
         "p50_model_latency_ms": None,
         "p95_model_latency_ms": None,
         "per_domain_model": {
-            d: "NOT_RUN" for d in sorted({c["domain"] for c in manifest["cases"]})
+            d: "NOT_RUN" for d in sorted({c.get("domain", "printing") for c in manifest["cases"]})
         },
     }
     print(json.dumps(report, ensure_ascii=False, indent=2))

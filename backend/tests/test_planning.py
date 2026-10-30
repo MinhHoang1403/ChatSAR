@@ -139,3 +139,8 @@ def test_provider_schema_is_non_recursive_and_catalog_bound() -> None:
 def test_missing_conversion_context_remains_clarify_not_fake_sql() -> None:
     plan = request(task="CLARIFY", aggregations=[], unresolved=["Missing exchange rate"]).to_plan()
     assert plan.task == "CLARIFY" and not plan.aggregations
+
+
+def test_full_list_keeps_all_mode_for_existing_truncation_guard() -> None:
+    plan = request(result_shape="list_all", select_columns=["code"], aggregations=[]).to_plan()
+    assert plan.result_mode == "all"

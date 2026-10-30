@@ -12,6 +12,8 @@ Không chọn: schema anyOf đệ quy đã HTTP400; parser bằng regex ngành; 
 
 UI dùng React/CSS và native dialog hiện hữu, không dependency mới. Menu button theo [WAI-ARIA](https://www.w3.org/WAI/ARIA/apg/patterns/menu-button/), có focus, Escape, touch. API bổ sung chỉ owner/session/CSRF, xóa phạm vi workspace hiện tại, transaction xóa results→messages→conversations; khóa workspace trước mutation, chặn pending. Không xóa dataset/workspace/ledger. Hồ sơ chỉ ChatSAR, không gửi sang Google/provider/tracing. Migration additive, bảo toàn lịch sử; rollback code giữ cột mới.
 
+Tham khảo read-only [README Shopquery-AI](https://github.com/MinhHoang1403/Shopquery-AI/blob/main/README.md) (maintenance-ended 29/10/2026) và [Sidebar](https://github.com/MinhHoang1403/Shopquery-AI/blob/main/frontend/src/components/Sidebar.tsx) để đối chiếu vị trí history/account/menu. Không copy code, không dùng backend/runtime của ShopQuery hoặc nhận các tests của dự án đó thành bằng chứng ChatSAR. Không tích hợp thư viện OSS mới, không tải weights. Dạng list_all giữ result_mode=all để không làm hồi quy guard/truncation danh sách đầy đủ.
+
 Đối soát usage: [Interactions](https://ai.google.dev/gemini-api/docs/interactions-overview) và [logs](https://ai.google.dev/gemini-api/docs/logs-datasets) mô tả lưu/retrieve khi store=true; app đã gửi store=false, không có interaction ID cho lỗi. [Billing](https://ai.google.dev/gemini-api/docs/billing) chỉ đường AI Studio/Cloud Billing, không chứng minh HTTP400 miễn phí. Không đổi ledger, không mở guard; cần chứng cứ usage/billing thực từ project hoặc quyết định riêng của chủ dự án trước live.
 
 ## Quyền và thiết kế ổn định hiện hành — 30/10/2026

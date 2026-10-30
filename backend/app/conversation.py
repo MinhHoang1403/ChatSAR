@@ -7,9 +7,9 @@ from time import perf_counter
 from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Header, Query, Request
-from pydantic import Field
-from sqlalchemy import and_, insert, select, update
+from fastapi import APIRouter, Header, Query, Request, Response
+from pydantic import Field, field_validator
+from sqlalchemy import and_, delete, insert, select, update
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
@@ -20,7 +20,7 @@ from app.errors import AppError
 from app.observability import annotate, current_trace_id, observation
 from app.providers import can_fallback, generate_proposal
 from app.query import Contract, compile_query, execute_query, ground_catalog
-from app.schema import conversations, messages, results, revisions, workspaces
+from app.schema import conversations, datasets, messages, results, revisions, workspaces
 from app.workspace import owned_workspace
 
 router = APIRouter(prefix="/api")
@@ -38,13 +38,97 @@ class MessageInput(Contract):
     allow_fallback: bool = False
 
 
+class ConversationTitle(Contract):
+    title: str = Field(min_length=1, max_length=120)
+
+    @field_validator("title")
+    @classmethod
+    def valid_title(cls, value: str) -> str:
+        value = value.strip()
+        if not value or any(ord(c) < 32 for c in value):
+            raise ValueError("Invalid title")
+        return value
+
+
+def lock_workspace(connection: Connection, workspace_id: UUID, principal: Principal) -> None:
+    # Cùng thứ tự khóa cho send/create/rename/delete, kể cả bulk trong workspace.
+    found = connection.execute(
+        select(workspaces.c.id)
+        .where(and_(workspaces.c.id == workspace_id, workspaces.c.owner_id == principal.user_id))
+        .with_for_update()
+    ).scalar_one_or_none()
+    if found is None:
+        raise AppError(404, "NOT_FOUND", "Không tìm thấy không gian làm việc.")
+
+
+def delete_chats(connection: Connection, ids: list[UUID]) -> None:
+    if not ids:
+        return
+    pending = connection.execute(
+        select(messages.c.id)
+        .where(and_(messages.c.conversation_id.in_(ids), messages.c.status == "pending"))
+        .limit(1)
+    ).first()
+    if pending:
+        raise AppError(409, "REQUEST_PENDING", "Hãy đợi lượt hỏi hoàn tất trước khi xóa.")
+    message_ids = select(messages.c.id).where(messages.c.conversation_id.in_(ids))
+    connection.execute(delete(results).where(results.c.message_id.in_(message_ids)))
+    connection.execute(delete(messages).where(messages.c.conversation_id.in_(ids)))
+    connection.execute(delete(conversations).where(conversations.c.id.in_(ids)))
+
+
+@router.delete("/workspaces/{workspace_id}/conversations", status_code=204)
+def delete_workspace_chats(workspace_id: UUID, principal: MutationDependency) -> Response:
+    with db.get_engine().begin() as connection:
+        lock_workspace(connection, workspace_id, principal)
+        ids = list(
+            connection.execute(
+                select(conversations.c.id)
+                .where(conversations.c.workspace_id == workspace_id)
+                .with_for_update()
+            ).scalars()
+        )
+        delete_chats(connection, ids)
+    return Response(status_code=204)
+
+
+@router.patch("/conversations/{conversation_id}")
+def rename_conversation(
+    conversation_id: UUID, body: ConversationTitle, principal: MutationDependency
+) -> dict[str, Any]:
+    with db.get_engine().begin() as connection:
+        row = owned_conversation(connection, conversation_id, principal)
+        lock_workspace(connection, row["workspace_id"], principal)
+        row = owned_conversation(connection, conversation_id, principal)
+        connection.execute(
+            update(conversations)
+            .where(conversations.c.id == conversation_id)
+            .values(title=body.title)
+        )
+    return {**row, "title": body.title}
+
+
+@router.delete("/conversations/{conversation_id}", status_code=204)
+def delete_conversation(conversation_id: UUID, principal: MutationDependency) -> Response:
+    with db.get_engine().begin() as connection:
+        row = connection.execute(
+            select(conversations.c.workspace_id).where(conversations.c.id == conversation_id)
+        ).first()
+        if row:
+            lock_workspace(connection, row.workspace_id, principal)
+            delete_chats(connection, [conversation_id])
+    return Response(status_code=204)
+
+
 def owned_conversation(
     connection: Connection, conversation_id: UUID, principal: Principal
 ) -> dict[str, Any]:
     row = (
         connection.execute(
-            select(conversations)
+            select(conversations, datasets.c.name.label("dataset_name"))
             .join(workspaces, conversations.c.workspace_id == workspaces.c.id)
+            .outerjoin(revisions, conversations.c.revision_id == revisions.c.id)
+            .outerjoin(datasets, revisions.c.dataset_id == datasets.c.id)
             .where(
                 and_(
                     conversations.c.id == conversation_id,
@@ -66,8 +150,10 @@ def list_conversations(
 ) -> list[dict[str, Any]]:
     with db.get_engine().connect() as connection:
         query = (
-            select(conversations)
+            select(conversations, datasets.c.name.label("dataset_name"))
             .join(workspaces, conversations.c.workspace_id == workspaces.c.id)
+            .outerjoin(revisions, conversations.c.revision_id == revisions.c.id)
+            .outerjoin(datasets, revisions.c.dataset_id == datasets.c.id)
             .where(workspaces.c.owner_id == principal.user_id)
         )
         if workspace_id:
@@ -89,7 +175,7 @@ def create_conversation(body: ConversationInput, principal: MutationDependency) 
         raise AppError(422, "INVALID_REQUEST", "Không gian làm việc chưa hợp lệ.") from None
     conversation_id = uuid4()
     with db.get_engine().begin() as connection:
-        owned_workspace(connection, workspace_id, principal)
+        lock_workspace(connection, workspace_id, principal)
         connection.execute(
             insert(conversations).values(
                 id=conversation_id,
@@ -152,6 +238,8 @@ def send_message(
     try:
         with db.get_engine().begin() as connection:
             conversation = owned_conversation(connection, conversation_id, principal)
+            lock_workspace(connection, conversation["workspace_id"], principal)
+            conversation = owned_conversation(connection, conversation_id, principal)
             dataset_id = connection.execute(
                 select(revisions.c.dataset_id).where(revisions.c.id == revision_id)
             ).scalar_one_or_none()
@@ -184,6 +272,36 @@ def send_message(
                 if existing["envelope"]:
                     return {**existing["envelope"], "request_id": request.state.request_id}
                 raise AppError(409, "REQUEST_PENDING", "Yêu cầu đang được xử lý; vui lòng đợi.")
+            if connection.execute(
+                select(messages.c.id)
+                .where(
+                    and_(
+                        messages.c.conversation_id == conversation_id,
+                        messages.c.status == "pending",
+                    )
+                )
+                .limit(1)
+            ).first():
+                raise AppError(409, "REQUEST_PENDING", "Cuộc trò chuyện đang xử lý một lượt hỏi.")
+            if conversation["revision_id"] and conversation["revision_id"] != revision_id:
+                raise AppError(409, "STALE_CONTEXT", "Nguồn đã đổi. Hãy tạo đoạn chat mới.")
+            if not conversation["revision_id"]:
+                old_sources = set(
+                    connection.execute(
+                        select(messages.c.revision_id).where(
+                            messages.c.conversation_id == conversation_id
+                        )
+                    ).scalars()
+                )
+                if old_sources and old_sources != {revision_id}:
+                    raise AppError(
+                        409, "STALE_CONTEXT", "Lịch sử dùng nguồn khác. Hãy tạo chat mới."
+                    )
+                connection.execute(
+                    update(conversations)
+                    .where(conversations.c.id == conversation_id)
+                    .values(revision_id=revision_id)
+                )
             previous = (
                 connection.execute(
                     select(messages.c.question, messages.c.query_plan, messages.c.revision_id)
@@ -270,13 +388,28 @@ def send_message(
                     annotate(execution, output={"row_count": len(rows), "latency_ms": latency})
                     timings["execution"] = latency
                 composition_started = perf_counter()
+                output_columns = []
+                catalog_labels = {
+                    c["id"]: (c.get("aliases") or [c.get("description") or c["name"]])[0]
+                    for c in revision["columns"]
+                }
+                aggregate_columns = {a.output_id: a.column_id for a in plan.aggregations}
+                for item in compiled.columns:
+                    source_id = aggregate_columns.get(item["id"], item["id"])
+                    original = next(
+                        (c["name"] for c in revision["columns"] if c["id"] == source_id), None
+                    )
+                    label = item["name"]
+                    if original and source_id in catalog_labels:
+                        label = label.replace(original, catalog_labels[source_id])
+                    output_columns.append({**item, "label": label.replace("_", " ")})
                 if not rows:
                     text = "Không có dòng nào khớp điều kiện đã chọn."
                 elif len(rows) == 1 and len(rows[0]) == 1:
                     value = rows[0][0]
                     unit = compiled.columns[0].get("unit")
                     text = (
-                        compiled.columns[0]["name"]
+                        output_columns[0]["label"]
                         + ": "
                         + (str(value) if value is not None else "Chưa có giá trị")
                         + (" " + unit if unit and value is not None else "")
@@ -289,7 +422,7 @@ def send_message(
                 answer = {
                     "status": "partial" if partial else "answered",
                     "facts": {
-                        "columns": compiled.columns,
+                        "columns": output_columns,
                         "rows": rows,
                         "filters": compiled.filters,
                         "scope": {

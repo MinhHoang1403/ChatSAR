@@ -31,7 +31,7 @@ export default function App() {
       const data = await api('/workspaces', { method: 'POST', body: JSON.stringify({ name }) }, me.csrf_token);
       const created = workspaceList([data])[0];
       setWorkspaces((items) => [...items, created]); setSelected(created);
-    } catch (e: unknown) { setError(message(e)); }
+    } catch (e: unknown) { setError(message(e)); throw e; }
     finally { setBusy(false); }
   }
   async function logout() {

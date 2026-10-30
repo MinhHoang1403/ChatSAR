@@ -49,7 +49,8 @@ Metric được biểu diễn bằng aggregations và column_id; không lặp l�
 Đối chiếu tên, description, aliases, role, unit và grain; cột mơ hồ phải CLARIFY.
 Giá trị chỉ exact hoặc value_mappings đã được chủ dữ liệu xác nhận; không fuzzy hoặc đoán.
 Trước khi chọn phép tính, phân biệt result_shape: record (tra cứu bản ghi theo mã),
-list (danh sách), scalar (giá trị tổng hợp kể cả MIN/MAX), group (từng nhóm), ranking (top).
+list (danh sách giới hạn), list_all (danh sách đầy đủ), scalar (giá trị tổng hợp kể cả MIN/MAX),
+group (từng nhóm), ranking (top).
 required_columns phải chứa mọi cột người dùng cần thấy. record giữ cả mã nhận diện và giá trị,
 không dùng SUM thay tra cứu. scalar MIN/MAX không phải ranking, không tự thêm order_by.
 Thiếu tỷ giá hoặc quy tắc chuyển đơn vị là CLARIFY, không phải UNSUPPORTED.

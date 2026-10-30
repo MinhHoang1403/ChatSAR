@@ -5,10 +5,14 @@ export default function Result({ value }: { value: Answer }) {
   const columns = Array.isArray(value.facts.columns) ? value.facts.columns.filter(record) : [];
   const scope = record(value.facts.scope) ? value.facts.scope : null;
   const filters = Array.isArray(value.facts.filters) ? value.facts.filters.filter(record) : [];
+  const originalLabel = columns.length === 1 ? cell(columns[0].name) : '';
+  const visibleLabel = columns.length === 1 ? cell(columns[0].label ?? columns[0].name).replace(/_/g, ' ') : '';
+  const displayText = originalLabel && value.display_text.startsWith(`${originalLabel}: `)
+    ? visibleLabel + value.display_text.slice(originalLabel.length) : value.display_text;
   return <>
-    <p>{value.display_text}</p>
+    <p>{displayText}</p>
     {value.display_rows.length > 0 && <div className="table-scroll"><table>
-      <thead><tr>{columns.map((c, i) => <th key={i}>{cell(c.name)}{c.unit ? ` (${cell(c.unit)})` : ''}</th>)}</tr></thead>
+      <thead><tr>{columns.map((c, i) => <th key={i}>{cell(c.label ?? c.name).replace(/_/g, ' ')}{c.unit ? ` (${cell(c.unit)})` : ''}</th>)}</tr></thead>
       <tbody>{value.display_rows.map((row, i) => <tr key={i}>{row.map((v, j) => <td key={j}>{cell(v)}</td>)}</tr>)}</tbody>
     </table></div>}
     {scope && <details><summary>Nguồn và cách tính</summary>
@@ -20,7 +24,7 @@ export default function Result({ value }: { value: Answer }) {
       <p>Mã đối chiếu nguồn: <code>{cell(scope.checksum)}</code></p>
       <p>Kết quả lấy từ dữ liệu đã xác nhận. Cần kiểm tra điều kiện lọc khi câu hỏi có nhiều nghĩa.</p>
     </details>}
-    {value.limitations.map((text, i) => <p className="limitation" key={i}>{text}</p>)}
+    {value.limitations.filter((text) => text !== value.display_text).map((text, i) => <p className="limitation" key={i}>{text}</p>)}
   </>;
 }
 

@@ -16,7 +16,7 @@ export async function api(path: string, options: RequestInit = {}, csrf?: string
   try {
     response = await fetch(`/api${path}`, { ...options, headers, credentials: 'same-origin', signal: controller.signal });
   } catch {
-    throw new Error('Chưa nhận được phản hồi. Hãy cập nhật lịch sử trước khi thử gửi lại; yêu cầu có thể vẫn đang được xử lý.');
+    throw new Error('Chưa nhận được phản hồi. Lịch sử sẽ được đọc lại; yêu cầu có thể vẫn đang xử lý.');
   } finally { window.clearTimeout(deadline); }
   if (response.status === 204) return null;
   const data: unknown = await response.json();

@@ -17,6 +17,27 @@ ORIGIN = "http://localhost:18181"
 
 
 class AuthIntegration(unittest.TestCase):
+    def test_profile_is_local_validated_and_owner_scoped(self) -> None:
+        body = {"display_name": "Tên ChatSAR", "phone": "+84 (123) 456", "interests": "Đọc sách"}
+        self.assertEqual(self.client.patch("/api/profile", json=body).status_code, 200)
+        self.assertEqual(self.client.get("/api/profile").json(), body)
+        self.assertEqual(self.client.get("/api/me").json()["display_name"], body["display_name"])
+        self.as_user(self.token_b)
+        self.assertEqual(self.client.get("/api/profile").json()["display_name"], "Test B")
+        for change in [
+            {"owner_id": str(self.owner_a)},
+            {"phone": "bad<script>"},
+            {"interests": "x" * 1001},
+            {"display_name": "  "},
+        ]:
+            self.assertEqual(
+                self.client.patch("/api/profile", json={**body, **change}).status_code, 422
+            )
+        del self.client.headers["X-CSRF-Token"]
+        self.assertEqual(self.client.patch("/api/profile", json=body).status_code, 403)
+        self.client.cookies.clear()
+        self.assertEqual(self.client.get("/api/profile").status_code, 401)
+
     def setUp(self) -> None:
         self.owner_a, self.owner_b = uuid4(), uuid4()
         self.subject = "test:" + uuid4().hex

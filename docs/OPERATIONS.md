@@ -1,5 +1,9 @@
 # Vận hành nền tảng ChatSAR
 
+## Bổ sung quản lý chat/hồ sơ 30/10/2026
+
+Migration `chat_management` chạy sau provider_grants: thêm phone/interests và conversation.revision_id, backfill chỉ lịch sử có một revision. Không DROP hay thay bảng vật lý; rollback code giữ cột mới. API xóa chỉ chat/messages/results trong workspace được chọn, giữ nguồn/workspace/ledger. Chặn pending tại server; không dùng delete trên lịch sử thật để nghiệm thu. Hồ sơ chỉ principal hiện tại, không thay Google và không đưa vào prompt/trace. Composer dấu+ mở upload/tạo workspace/quản lý dữ liệu; model mặc định Gemini, Knowledge chọn tay, fallback UI đã bỏ. Không tự gọi model để kiểm giao diện khi USAGE_UNKNOWN.
+
 ## Trạng thái vận hành sau ổn định 30/10/2026
 
 Runtime healthy, Phase1 NOT_ACCEPTED do chất lượng model còn thiếu, model-live BLOCKED_USAGE_UNKNOWN sau một HTTP400 không usage. Không gửi thêm model request để test health, không reset hoặc sửa usage/dispatch counter. Các đoạn quota cũ bên dưới là lịch sử; quyền mới tối đa100Gemini/1.50USD, Codex95, Knowledge mới0. Đã dùng50, còn trần45Codex/50tổng nhưng guard dừng live. .env giữ keys/flags/global budget20; globalcap113, Geminicap108, Knowledgecap5, active grant cap95/1.50USD. Giá trị trước thay đổi nằm trong artifacts/stabilization-quota.json; không coi global budget20 là quyền bổ sung.
@@ -25,7 +29,7 @@ npm.cmd ci --ignore-scripts --prefix frontend
 
 # Khởi động DB duy nhất và áp dụng migration.
 docker compose up -d --wait db
-foreach ($name in @('foundation','identity','datasets','conversation','catalog','provider_grants')) {
+foreach ($name in @('foundation','identity','datasets','conversation','catalog','provider_grants','chat_management')) {
   Get-Content "backend/migrations/$name.sql" -Raw -Encoding UTF8 | docker compose exec -T db psql -X -q -U chatsar_admin -d chatsar -v ON_ERROR_STOP=1
   if ($LASTEXITCODE -ne 0) { throw "Migration thất bại: $name" }
 }

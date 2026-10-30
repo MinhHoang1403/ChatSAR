@@ -8,8 +8,8 @@ import type { Column, Dataset, Preview, Kind } from './data';
 export { datasetList } from './data';
 export type { Column, Dataset, Preview } from './data';
 
-export default function Datasets({ workspaceId, csrf, onReady }: {
-  workspaceId: string; csrf: string; onReady?: (dataset: Dataset) => void;
+export default function Datasets({ workspaceId, csrf, onReady, onBusy }: {
+  workspaceId: string; csrf: string; onReady?: (dataset: Dataset) => void; onBusy?: (busy: boolean) => void;
 }) {
   const [list, setList] = useState<Dataset[]>([]);
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -22,6 +22,7 @@ export default function Datasets({ workspaceId, csrf, onReady }: {
   const [description, setDescription] = useState('');
   const [sharing, setSharing] = useState<string[]>([]);
   const [mappingDraft, setMappingDraft] = useState<Record<string, string>>({});
+  useEffect(() => { onBusy?.(busy); }, [busy, onBusy]);
 
   async function refresh() {
     const data = await api(`/workspaces/${workspaceId}/datasets`);
