@@ -27,6 +27,59 @@ def request(**changes: object) -> QueryRequest:
     )
 
 
+def test_refinement_cannot_silently_drop_an_unrelated_filter() -> None:
+    old = {
+        "operator": "EQ",
+        "column_id": "enabled",
+        "literal": {"raw_phrase": "false", "value_type": "boolean"},
+        "values": [],
+        "children": [],
+    }
+    new = {
+        "operator": "EQ",
+        "column_id": "color",
+        "literal": {"raw_phrase": "blue", "value_type": "text"},
+        "values": [],
+        "children": [],
+    }
+    previous = request(conditions=[old]).to_plan()
+    with pytest.raises(ValueError, match="omitted"):
+        request(context_scope="refine", conditions=[new]).to_plan(verified_plan=previous)
+    complete = request(
+        context_scope="refine",
+        conditions=[
+            old,
+            new,
+            {
+                "operator": "AND",
+                "column_id": None,
+                "literal": None,
+                "values": [],
+                "children": [0, 1],
+            },
+        ],
+    )
+    assert complete.to_plan(verified_plan=previous).filters.operator == "AND"
+    replacement = {**old, "literal": {"raw_phrase": "true", "value_type": "boolean"}}
+    assert (
+        request(context_scope="refine", conditions=[replacement])
+        .to_plan(verified_plan=previous)
+        .filters.literal.raw_phrase
+        == "true"
+    )
+    for scope in ("independent", "reset"):
+        assert (
+            request(context_scope=scope, conditions=[new])
+            .to_plan(verified_plan=previous)
+            .filters.column_id
+            == "color"
+        )
+    with pytest.raises(ValueError, match="verified context"):
+        complete.to_plan()
+    with pytest.raises(ValueError, match="same source"):
+        complete.to_plan(verified_plan=previous.model_copy(update={"source_revision_id": "other"}))
+
+
 @pytest.mark.parametrize("column", ["hours", "weight", "temperature"])
 def test_scalar_min_is_not_a_ranking(column: str) -> None:
     plan = request(

@@ -1,5 +1,7 @@
 # ChatSAR — Quy tắc phát triển và quản lý repository
 
+**Quyền tự chủ 01/11/2026:** Chủ dự án yêu cầu các bước hợp lý, cần thiết thì tự làm, không hỏi lại. Áp dụng trong phạm vi Giai đoạn 1 và trần tổng 500 Gemini / 10 USD, giữ ít nhất 5 lượt manual, ledger/keys/dữ liệu/lịch sử và feature branch. Owner đã duyệt thêm tối đa 3 review verified429/503 (gồm 1a9b1aaf-f50f-499f-a2ff-7965339e9df5), tổng tối đa 5/grant; giữ UNKNOWN/fullreserve/count, operator CLI ngoài API, dừng khi lỗi liên tiếp. `--review-limit 5` chỉ cho grant >400 requests, default3; không auto retry/auto approve trong API.
+
 **Quyền owner mới nhất31/10/2026:** tổng500Gemini requests trong grant hiện hữu, tối đa10USD dự phòng; Codex đến495, giữ5manual. Được mở CHECK/migrate và chỉnh caps local có audit, giữ ledger/keys/flags/baseline, Knowledge/LlamaParse/BGE mới0. UI upload→AIauto→before/after→Save thay yêu cầu checkbox consent trước đây; guard owner/CSRF/quota/provider vẫn giữ. Các quyền100/1.50 bên dưới là lịch sử. Không merge/main hoặc Phase2.
 
 **Quyền tác vụ mới nhất (30/10/2026):** “PHASE 1 FINAL STABILIZATION & ACCEPTANCE” cấp thêm tối đa 100 HTTP Gemini, Codex tối đa 95 và ít nhất 5 dành kiểm thử thủ công, dự phòng bổ sung 1.50 USD. Cho phép điều chỉnh quota local có kiểm soát và per-provider cap; giữ PostgreSQL ledger/guard trước dispatch, không đổi keys/reset lịch sử. Knowledge/LlamaParse/BGE mới = 0. Các giới hạn 10/provider và không sửa .env phía dưới là lịch sử, được quyền mới thay thế trong đúng tác vụ này.

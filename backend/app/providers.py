@@ -23,7 +23,7 @@ from app.config import get_settings
 from app.errors import AppError
 from app.observability import annotate, observation
 from app.planning import REQUEST_INSTRUCTIONS, QueryRequest
-from app.query import QueryPlan, explicit_text_mentions, mentioned_phrases
+from app.query import Predicate, QueryPlan, explicit_text_mentions, mentioned_phrases
 from app.schema import provider_grants, provider_usage, provider_usage_reviews
 
 Provider = Literal["gemini", "knowledge"]
@@ -361,6 +361,62 @@ def response_schema(
     return schema
 
 
+def verified_query_context(context: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not context or not isinstance(context.get("question"), str):
+        return None
+    try:
+        plan = QueryPlan.model_validate(context.get("plan"))
+    except ValueError:
+        return None
+    if plan.task != "SQL":
+        return None
+    # Chỉ mô tả cấu trúc plan đã xác minh; không suy yêu cầu mới từ câu hỏi.
+    shape = (
+        "ranking"
+        if plan.result_mode == "top"
+        else "group"
+        if plan.group_by
+        else "scalar"
+        if plan.aggregations and not plan.select_columns
+        else "list_all"
+        if plan.result_mode == "all"
+        else "record_or_list"
+    )
+    # Context lưu cây QueryPlan; model nhận danh sách hậu thứ tự QueryRequest.
+    # Đổi cách trình bày cùng một cây, không thêm/bớt hay bind lại điều kiện.
+    conditions: list[dict[str, Any]] = []
+
+    def visit(node: Predicate) -> int:
+        children = [visit(child) for child in node.children]
+        conditions.append(
+            {
+                "operator": node.operator,
+                "column_id": node.column_id,
+                "literal": node.literal.model_dump(exclude={"candidate_value"})
+                if node.literal
+                else None,
+                "values": [v.model_dump(exclude={"candidate_value"}) for v in node.values],
+                "children": children,
+            }
+        )
+        return len(conditions) - 1
+
+    if plan.filters:
+        visit(plan.filters)
+    return {
+        "question": context["question"],
+        "plan": {
+            "result_shape": shape,
+            "conditions": conditions,
+            "select_columns": plan.select_columns,
+            "aggregations": [item.model_dump() for item in plan.aggregations],
+            "group_by": plan.group_by,
+            "order_by": [item.model_dump() for item in plan.order_by],
+            "limit": plan.limit,
+        },
+    }
+
+
 def query_payload(
     question: str,
     revision: dict[str, Any],
@@ -405,7 +461,7 @@ def query_payload(
             for column_id, values in revision.get("grounding_values", {}).items()
             if mentioned_phrases(question, values)
         },
-        "verified_context": context,
+        "verified_context": verified_query_context(context) or context,
     }
 
 
@@ -424,7 +480,10 @@ def generate_proposal(
         if column.get("primary_key") or column.get("role") == "identifier"
     }
     try:
-        plan = reply.plan.to_plan(identifier_columns=identifiers)
+        plan = reply.plan.to_plan(
+            identifier_columns=identifiers,
+            verified_plan=QueryPlan.model_validate(context["plan"]) if context else None,
+        )
     except ValueError:
         raise ProviderError(
             "QUERY_CLARIFY",
@@ -469,11 +528,15 @@ def generate_structured(
     if provider == "gemini" and not settings.gemini_api_key.get_secret_value():
         raise provider_error("PROVIDER_NOT_CONFIGURED", "Chưa hoàn tất cấu hình mô hình.")
     schema = response_schema(contract, revision, payload.get("question"))
+    instructions = payload.get("instructions", "")
     prompt = json.dumps(
-        {**payload, **({"response_contract": schema} if provider == "knowledge" else {})},
+        {
+            **{key: value for key, value in payload.items() if key != "instructions"},
+            **({"response_contract": schema} if provider == "knowledge" else {}),
+        },
         ensure_ascii=False,
     )
-    size = len((prompt + json.dumps(schema)).encode())
+    size = len((instructions + prompt + json.dumps(schema)).encode())
     if size > 30000:
         raise provider_error("PROMPT_LIMIT", "Ngữ cảnh quá lớn cho phạm vi kiểm thử hiện tại.")
     # Dự trữ theo byte đầu vào và cap output; không bật tools, caching hay tự nối tiếp.
@@ -509,6 +572,7 @@ def generate_structured(
                 ):
                     response: Any = client.interactions.create(
                         model=model,
+                        system_instruction=instructions,
                         input=prompt,
                         response_format={
                             "type": "text",
@@ -536,7 +600,10 @@ def generate_structured(
                         settings.knowledge_base_url.rstrip("/") + "/chat/completions",
                         json={
                             "model": model,
-                            "messages": [{"role": "user", "content": prompt}],
+                            "messages": [
+                                {"role": "system", "content": instructions},
+                                {"role": "user", "content": prompt},
+                            ],
                             "max_tokens": MAX_OUTPUT_TOKENS,
                             "temperature": 0,
                             "response_format": {

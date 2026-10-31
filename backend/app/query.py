@@ -43,7 +43,15 @@ class Contract(BaseModel):
 
 
 class QueryLiteral(Contract):
-    raw_phrase: str = Field(min_length=1, max_length=500)
+    raw_phrase: str = Field(
+        min_length=1,
+        max_length=500,
+        description=(
+            "Verbatim literal from the current question or verified_context.question. "
+            "For an inherited filter, copy its previous raw_phrase even when that text "
+            "does not appear in the current question."
+        ),
+    )
     value_type: Literal["text", "integer", "numeric", "boolean", "date", "timestamp"]
     candidate_value: str | None = Field(default=None, max_length=500)
 

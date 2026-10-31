@@ -58,13 +58,20 @@ def review(
     *,
     apply: bool = False,
     http_status: int = 503,
+    review_limit: int = 3,
 ) -> dict:
     usage_id, grant_id = str(UUID(usage_id)), str(UUID(grant_id))
     if not 10 <= len(authority) <= 1000 or not reserve.is_finite() or reserve <= 0:
         raise ValueError("Cần quyền cụ thể và reserve dương hữu hạn")
     errors = {503: "PROVIDER_TEMPORARY", 429: "PROVIDER_RATE_LIMIT"}
     if http_status not in errors:
-        raise ValueError("Chỉ nhận response trực tiếp 429/503 đã được cấp quyền đối soát")
+        raise ValueError(
+            "Chỉ nhận response trực tiếp 429/503 đã được cấp quyền đối soát"
+        )
+    if review_limit not in (3, 5):
+        raise ValueError(
+            "Trần review phải là 3 hoặc 5; mức 5 cần quyền riêng cho grant 500"
+        )
     row = json.loads(
         postgres(
             "SELECT row_to_json(u) FROM app.provider_usage u WHERE id="
@@ -122,16 +129,19 @@ def review(
             + " AND to_jsonb(u)="
             + snapshot
             + " AND g.provider='gemini' AND g.max_requests<=500 AND g.budget_usd<=10 "
-            "AND (SELECT count(*) FROM app.provider_usage WHERE grant_id=g.id)<=g.max_requests "
+            + ("AND g.max_requests>400 " if review_limit == 5 else "")
+            + "AND (SELECT count(*) FROM app.provider_usage WHERE grant_id=g.id)<=g.max_requests "
             "AND (SELECT sum(reserved_cost_usd) FROM app.provider_usage "
             "WHERE grant_id=g.id)<=g.budget_usd "
             "AND (SELECT count(*) FROM app.provider_usage_reviews r JOIN app.provider_usage p "
-            "ON p.id=r.usage_id WHERE p.grant_id=g.id AND p.http_status IN (429,503))<3 "
+            "ON p.id=r.usage_id WHERE p.grant_id=g.id AND p.http_status IN (429,503))<"
+            + str(review_limit)
+            + " "
             "RETURNING usage_id; COMMIT;"
         )
         if usage_id not in output.splitlines():
             raise ValueError(
-                "Snapshot đổi, hết hạn mức hoặc đã đạt giới hạn 3 review 429/503 mỗi grant"
+                "Snapshot đổi, hết hạn mức hoặc đã đạt giới hạn review 429/503 của grant"
             )
         payload["applied"] = True
     return payload
@@ -146,6 +156,7 @@ def main() -> None:
     parser.add_argument("--authority", required=True)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--http-status", type=int, choices=[429, 503], default=503)
+    parser.add_argument("--review-limit", type=int, choices=[3, 5], default=3)
     args = parser.parse_args()
     print(
         json.dumps(
@@ -157,6 +168,7 @@ def main() -> None:
                 args.authority,
                 apply=args.apply,
                 http_status=args.http_status,
+                review_limit=args.review_limit,
             ),
             ensure_ascii=False,
             indent=2,

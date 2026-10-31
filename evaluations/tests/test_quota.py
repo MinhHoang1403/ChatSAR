@@ -234,3 +234,18 @@ assert reserve()=='USAGE_UNKNOWN'""")
         # Toàn snapshot phải khớp, cả grant/provider/reserve và NULL usage.
         postgres(f"DELETE FROM app.provider_usage WHERE id='{identifier}'; UPDATE app.provider_usage SET reserved_cost_usd=0.02 WHERE grant_id='{self.grant}';")
         self.run_quota("assert reserve()=='USAGE_UNKNOWN'")
+
+    def test_owner_extended_review_cap_is_only_for_large_grant_and_still_bounded(self):
+        identifier=self.seed_503(age=360)
+        with self.assertRaises(ValueError):
+            self.approve(identifier,review_limit=4)
+        with self.assertRaises(ValueError):
+            self.approve(identifier,review_limit=5)  # Grant nhỏ không tự dùng trần mới.
+        postgres(f"UPDATE app.provider_grants SET max_requests=495,budget_usd=10 WHERE id='{self.grant}';")
+        self.approve(identifier,review_limit=5)
+        for _ in range(4):
+            self.approve(self.seed_503(age=360),review_limit=5)
+        identifier=self.seed_503(age=360)
+        with self.assertRaises(ValueError):
+            self.approve(identifier,review_limit=5)
+        self.run_quota("assert reserve()=='USAGE_UNKNOWN'")

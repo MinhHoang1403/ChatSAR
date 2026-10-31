@@ -1,5 +1,15 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Ngữ cảnh truy vấn và đối soát 01/11/2026 — đang kiểm bản sửa
+
+Bộ rộng trên app source 4eb38a2 (19 module vẫn cùng bytes tại 9a7413b) đạt 77/77 ca không tranh chấp. Ca empty-sum mơ hồ đo riêng vẫn FAIL về nghĩa dù cùng NULL; gold gốc giữ nguyên. Bộ observatory/recycling mới phát hiện scalar bị chia nhóm và một ca tháng chia theo ngày; không gộp điểm từ các phiên bản hoặc gọi các ca đã quan sát là held-out sau khi dùng sửa runtime.
+
+Candidate hiện đổi cách trình bày verified QueryPlan sang cùng dạng conditions hậu thứ tự của QueryRequest, giữ shape/filter/literal nguyên văn; compiler/binder/SQL reader vẫn một đường. QueryRequest khai báo context_scope independent/refine/reset ngay trước nội dung truy vấn. Refine thiếu ngữ cảnh cùng revision hoặc bỏ hẳn cột lọc cũ bị chặn trước SQL, không tự thêm filter. Đây là guard cấu trúc, không chứng minh mọi quyết định ngữ nghĩa của model đều đúng. Grouping chỉ cho breakdown được hỏi, câu tiếp thêm lọc giữ dạng đầu ra. Chỉ dẫn được truyền system_instruction/system role thay vì trộn với dữ liệu; ngân sách input vẫn tính cả chỉ dẫn.
+
+Các vòng canary trước sửa còn bỏ Boolean filter được giữ làm FAIL, không nâng thành PASS. Ca ngắn cuối với context SQL đã compile/execute offline (COUNT2/SUM0.40) và một HTTP model follow-up đã đạt COUNT1/SUM0.30, đủ cả Boolean+TEXT3 và không group; chưa coi đây là nghiệm thu rộng. Hai schema ceramics/marine, 8 ca với SQL/rows viết tay được khóa và oracle kiểm trước mọi model call; sửa typo key order_by→order khi review offline trước call, không đổi SQL/rows. Đây là held-out nội bộ tác giả biết nhãn, không phải blind bên ngoài. Clarified2 giữ SQL/rows của hai ca tháng, báo tách khỏi câu gốc.
+
+Owner cho tổng5 review verified429/503 trong grant500/10USD; CLI --review-limit5 chỉ cho grant lớn, default3 và đủ snapshot/count/reserve. Đã dùng đủ5, gồm fcace1fa-833d-493b-83bc-0612a3f6e634 HTTP503/reserve0.0152857USD/UNKNOWN, không sửa original row hoặc coi billing0. Chờ300s có chủ đích rồi mới kiểm tiếp; không retry tự động. Browser tool hiện bị tắt trong Work settings; kiểm mới qua HTTP/PG tiếp tục, không nhận browser mới là PASS. Chưa READY/ACCEPTED, chưa merge hoặc Phase2.
+
 ## CI false positive do UUID chứa chuỗi literal —31/10/2026
 
 4eb38a2 CIpushPASS nhưng CI PRFAIL tại privacy assertion: chuỗi0007 xuất hiện bên trong UUID cột, SQL vẫnWHERE c_id=%(bind)s::VARCHAR; không phải giá trị inline. Sửa test so literal cóquote, kiểm đúng0007 trong private bound parameters và evidence chỉ chứa tên tham số. Setup privacy test cũng so tokenJSON quote thay substringUUID và kiểm không cóobserved_values khi chưaconsent. Unit tái hiện dùng identifier có0007 và2API integration liên quan đạt;51queryunit/ruff đạt. Không đổi app/gold hoặc bỏ kiểm privacy. Đợt model đang chạy giữ nguyên19appmodule fingerprints, không cần gọi lại model vì sửa harness kiểm thử.

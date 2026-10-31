@@ -1,5 +1,7 @@
 # Chỉ dẫn Codex cho ChatSAR
 
+**Quyền tự chủ 01/11/2026:** Chủ dự án yêu cầu các bước hợp lý, cần thiết thì tự làm, không hỏi lại. Áp dụng trong phạm vi Giai đoạn 1 và trần tổng 500 Gemini / 10 USD, giữ ít nhất 5 lượt manual, ledger/keys/dữ liệu/lịch sử và feature branch. Owner đã duyệt thêm tối đa 3 review verified429/503 (gồm 1a9b1aaf-f50f-499f-a2ff-7965339e9df5), tổng tối đa 5/grant; giữ UNKNOWN/fullreserve/count, operator CLI ngoài API, dừng khi lỗi liên tiếp. `--review-limit 5` chỉ cho grant >400 requests, default3; không auto retry/auto approve trong API.
+
 ## Browser ingestion thật và đổi nguồn — 31/10/2026
 
 CSV acceptance-reviewed.csv4rows: AI tự chuẩn bị→gốc/sau→Save→Gemini trả0.35 không tự gánVND. XLSX acceptance-auto.xlsx(Hướng dẫn/Dữ liệu): chỉ chọnsheetDữ liệu→AIauto→preview3rows→Save→Gemini0.40; NULL/Boolean/ID0007giữ, private/bothproviders, setup complete/ai_proposal và SQLsucceeded. Đã snapshot revision/setup/plan/envelope/SQL để kiểm restart. File trùng checksum được mở source đã lưu/cached0call, không lấy đó làm AI-call mới. Các source/chat cũ giữ nguyên.

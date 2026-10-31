@@ -71,6 +71,10 @@ def test_knowledge_no_auth_header_and_unknown_usage_stays_null(
     def handler(request: httpx.Request) -> httpx.Response:
         captured.append(request)
         assert "Authorization" not in request.headers
+        body = json.loads(request.content)
+        assert body["messages"][0] == {"role": "system", "content": providers.INSTRUCTIONS}
+        assert body["messages"][1]["role"] == "user"
+        assert "instructions" not in json.loads(body["messages"][1]["content"])
         return httpx.Response(
             200, json={"choices": [{"message": {"content": json.dumps(request_payload())}}]}
         )
@@ -212,6 +216,8 @@ def test_gemini_interactions_contract_and_no_automatic_extra_calls(
     assert create.call_args.kwargs["store"] is False
     assert create.call_args.kwargs["automatic_continuation"] is False
     assert create.call_args.kwargs["response_format"]["mime_type"] == "application/json"
+    assert create.call_args.kwargs["system_instruction"] == providers.INSTRUCTIONS
+    assert "instructions" not in json.loads(create.call_args.kwargs["input"])
 
 
 def test_private_dataset_denied_before_reserving_or_network(adapter: tuple) -> None:
@@ -590,3 +596,91 @@ def test_current_value_evidence_does_not_rewrite_verified_context(
     assert payload["current_value_mentions"] == {"column": expected}
     assert payload["verified_context"] is context
     assert payload["catalog"]["grounding_values"] == {"column": values}
+
+
+@pytest.mark.parametrize(
+    ("changes", "expected"),
+    [
+        ({"aggregations": [{"operator": "SUM", "column_id": "c", "output_id": "total"}]}, "scalar"),
+        ({"select_columns": ["category"], "group_by": ["category"]}, "group"),
+        ({"select_columns": ["sensor"], "result_mode": "top"}, "ranking"),
+        ({"select_columns": ["book"], "result_mode": "all"}, "list_all"),
+        ({"select_columns": ["parcel"]}, "record_or_list"),
+    ],
+)
+def test_verified_shape_describes_plan_without_mutating_context(
+    changes: dict, expected: str
+) -> None:
+    plan = QueryPlan(
+        task="SQL",
+        table_id="d",
+        source_revision_id="r",
+        raw_user_spans=["previous"],
+        coverage=["previous"],
+        **changes,
+    ).model_dump(mode="json")
+    context = {"question": "previous", "plan": plan}
+    snapshot = json.dumps(context, sort_keys=True)
+    revision = {"id": "r", "dataset_id": "d", "timezone": "UTC", "grain": "row", "columns": []}
+    payload = providers.query_payload("Only the blue ones?", revision, context)
+    assert payload["verified_context"]["plan"]["result_shape"] == expected
+    assert payload["verified_context"]["plan"]["conditions"] == []
+    assert payload["verified_context"]["question"] == "previous"
+    assert json.dumps(context, sort_keys=True) == snapshot
+
+
+@pytest.mark.parametrize("context", [None, {}, {"plan": {}}, {"plan": {"task": "CLARIFY"}}])
+def test_unverified_context_has_no_shape_hint(context: dict | None) -> None:
+    assert providers.verified_query_context(context) is None
+
+
+def test_verified_condition_view_round_trips_boolean_tree_and_literals() -> None:
+    from app.planning import QueryRequest
+
+    plan = QueryPlan.model_validate(
+        {
+            "task": "SQL",
+            "table_id": "d",
+            "source_revision_id": "r",
+            "raw_user_spans": ["previous"],
+            "coverage": ["previous"],
+            "aggregations": [{"operator": "SUM", "column_id": "mass", "output_id": "total"}],
+            "filters": {
+                "operator": "AND",
+                "children": [
+                    {
+                        "operator": "EQ",
+                        "column_id": "enabled",
+                        "literal": {"raw_phrase": "false", "value_type": "boolean"},
+                    },
+                    {
+                        "operator": "OR",
+                        "children": [
+                            {
+                                "operator": "IN",
+                                "column_id": "tag",
+                                "values": [
+                                    {"raw_phrase": "0007", "value_type": "text"},
+                                    {"raw_phrase": "17", "value_type": "text"},
+                                ],
+                            },
+                            {"operator": "IS_NULL", "column_id": "tag"},
+                        ],
+                    },
+                ],
+            },
+        }
+    )
+    context = {"question": "previous", "plan": plan.model_dump(mode="json")}
+    snapshot = json.dumps(context, sort_keys=True)
+    hint = providers.verified_query_context(context)
+    assert hint is not None and hint["plan"]["result_shape"] == "scalar"
+    request = QueryRequest.model_validate(
+        request_payload(
+            "SQL",
+            aggregations=[a.model_dump() for a in plan.aggregations],
+            conditions=hint["plan"]["conditions"],
+        )
+    )
+    assert request.to_plan().filters == plan.filters
+    assert json.dumps(context, sort_keys=True) == snapshot

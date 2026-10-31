@@ -1,5 +1,11 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+## 01/11/2026 — Ngữ cảnh cùng hợp đồng và phạm vi câu tiếp
+
+Quyết định nội bộ: serialize read-only verified QueryPlan thành hình thức conditions hậu thứ tự của QueryRequest, giữ nguyên cột/operator/raw literals/cấu trúc Boolean, không tạo planner mới hoặc sửa kế hoạch model sau lỗi. context_scope phân biệt câu độc lập, refine, reset; guard refine chỉ kiểm có context cùng source và không mất cột lọc cũ. Giá trị mới trên cùng cột vẫn được phép thay cũ; hệ thống không tự thêm điều kiện. Kiểm round-trip AND/OR/IN/NULL/Boolean/TEXT zero đầu và context bất biến; canary một HTTP trên context SQL đã xác minh đạt. Cần đo rộng cùng source trước nghiệm thu.
+
+Đặt chỉ dẫn ở system_instruction theo [tài liệu Gemini chính thức](https://ai.google.dev/gemini-api/docs/text-generation#system-instructions-and-other-configurations), SDK pinned2.34 có tham số tương ứng; Knowledge dùng system role tương đương và không gọi thêm cloud để kiểm. Giới hạn prompt/dự phòng tính cả chỉ dẫn. Hiệu quả giữ ngữ cảnh là giả thuyết kiểm bằng canary/bộ rộng, không suy từ tài liệu API.
+
 ## Review429 giữ dự phòng —31/10/2026
 
 Sau direct HTTP429 thiếuusage, owner cho phép audit đúng lượt8e3bf1d7-dcf8-47de-9710-716907b2c309. Mở cơ chế audit hiện hữu cho429/PROVIDER_RATE_LIMIT, vẫn fullsnapshot/responsehook/UNKNOWN/NOT_VERIFIED/admin và tối đa3review429/503tổng/grant. Giữ count/fullreserve, không tự retry/duyệt lỗi kếtiếp. Không lấy500/10 làm quyền nângquotaGoogle. Probe200sauaudit chứng minh hồi phục mẫu này; nguyên nhânRPM/TPM/RPD chưa đủevidence. Harness giãn15s và chỉ gắnusage khi có đúng1row mới; nếu0row hoặc concurrentnewrows dừng/unscored thay gắn rowcuối tùytiện. NguồnGoogle chính thức: https://ai.google.dev/gemini-api/docs/rate-limits , https://ai.google.dev/gemini-api/docs/troubleshooting .

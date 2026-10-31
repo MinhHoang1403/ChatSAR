@@ -39,6 +39,28 @@ class GeneralizationTests(unittest.TestCase):
         self.assertEqual(set(unseen["sources"]), {"observatory", "recycling"})
         for name, digest in json.loads((EVALUATIONS / "unseen_checksums.json").read_text()).items():
             self.assertEqual(hashlib.sha256((EVALUATIONS / name).read_bytes()).hexdigest(), digest)
+        clarified = json.loads((EVALUATIONS / "clarified.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(clarified["cases"]), 2)
+        self.assertEqual(clarified["original_manifest_sha256"], hashlib.sha256((EVALUATIONS / "unseen.json").read_bytes()).hexdigest())
+        originals = {c["case_id"]: c for c in unseen["cases"]}
+        for case in clarified["cases"]:
+            original = originals[case["replaces"]]
+            for field in ("expected_status", "expected_semantics", "expected_rows", "oracle_sql", "column_types"):
+                self.assertEqual(case[field], original[field])
+            self.assertNotEqual(case["question"], original["question"])
+        for name, digest in json.loads((EVALUATIONS / "clarified_checksums.json").read_text()).items():
+            self.assertEqual(hashlib.sha256((EVALUATIONS / name).read_bytes()).hexdigest(), digest)
+        fresh = json.loads((EVALUATIONS / "fresh_schemas.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(fresh["cases"]), 8)
+        self.assertEqual(set(fresh["sources"]), {"ceramics", "marine"})
+        self.assertTrue(set(fresh["sources"]).isdisjoint(unseen["sources"]))
+        for case in fresh["cases"]:
+            self.assertLessEqual(
+                set(case["expected_semantics"]),
+                {"metrics", "selection", "filters", "group_by", "order", "limit", "execution_allowed"},
+            )
+        for name, digest in json.loads((EVALUATIONS / "fresh_schemas_checksums.json").read_text()).items():
+            self.assertEqual(hashlib.sha256((EVALUATIONS / name).read_bytes()).hexdigest(), digest)
 
     @unittest.skipUnless(
         os.getenv("CHATSAR_POSTGRES_TESTS") == "1", "Cần PostgreSQL thật"
@@ -51,7 +73,9 @@ class GeneralizationTests(unittest.TestCase):
             (EVALUATIONS / "annotation_review.json").read_text(encoding="utf-8")
         )
         unseen = json.loads((EVALUATIONS / "unseen.json").read_text(encoding="utf-8"))
-        cases = [c for c in manifest["cases"] + unseen["cases"] if c["oracle_sql"]] + list(
+        clarified = json.loads((EVALUATIONS / "clarified.json").read_text(encoding="utf-8"))
+        fresh = json.loads((EVALUATIONS / "fresh_schemas.json").read_text(encoding="utf-8"))
+        cases = [c for c in manifest["cases"] + unseen["cases"] + clarified["cases"] + fresh["cases"] if c["oracle_sql"]] + list(
             audit["overrides"].values()
         )
         sql = [
@@ -59,6 +83,7 @@ class GeneralizationTests(unittest.TestCase):
             (EVALUATIONS / "datasets/fixtures.sql").read_text(encoding="utf-8"),
             (EVALUATIONS / "datasets/generalization.sql").read_text(encoding="utf-8"),
             (EVALUATIONS / "datasets/unseen.sql").read_text(encoding="utf-8"),
+            (EVALUATIONS / "datasets/fresh_schemas.sql").read_text(encoding="utf-8"),
         ]
         sql += [
             "SELECT coalesce(jsonb_agg(t),'[]'::jsonb) FROM ("

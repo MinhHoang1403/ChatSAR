@@ -1739,9 +1739,11 @@ class DatasetIntegration(unittest.TestCase):
         )
 
     def test_row_reordering_and_irrelevant_records_preserve_filtered_sum(self) -> None:
-        for content in [
-            b"code,amount\n0007,0.10\n0012,0.20\n",
-            b"code,amount\n0999,999.99\n0012,0.20\n0007,0.10\n",
+        for content, total in [
+            (b"code,amount\n0007,0.10\n0012,0.20\n", "0.30"),
+            (b"code,amount\n0012,0.20\n0007,0.10\n", "0.30"),
+            (b"code,amount\n0007,0.10\n0012,0.20\n0999,999.99\n", "1000.29"),
+            (b"code,amount\n0999,999.99\n0012,0.20\n0007,0.10\n", "1000.29"),
         ]:
             revision = self.published(content)
             code, amount = [c["id"] for c in revision["columns"]]
@@ -1760,6 +1762,14 @@ class DatasetIntegration(unittest.TestCase):
                 },
             )
             self.assertEqual(execute_query(compile_query(plan, revision, "0007"))[0], [["0.10"]])
+            unfiltered = self.plan(
+                revision,
+                "Tổng",
+                aggregations=[{"operator": "SUM", "column_id": amount, "output_id": "total"}],
+            )
+            self.assertEqual(
+                execute_query(compile_query(unfiltered, revision, "Tổng"))[0], [[total]]
+            )
 
 
 if __name__ == "__main__":

@@ -42,8 +42,12 @@ và value_type đúng kiểu cột. Không sinh candidate/canonical value. Serve
 nguyên văn, format hoặc mapping owner đã xác nhận. Giữ zero đầu/dấu, không fuzzy,
 không tự đổi giá trị/đơn vị/năm. Cụm chỉ có chữ số trên cột TEXT vẫn là TEXT nguyên văn.
 Trong câu hỏi tiếp, điều kiện mới trên cùng cột thay điều kiện cũ, không AND với cũ.
+Điều kiện mới trên cột khác được thêm vào bằng AND, giữ các điều kiện cũ ở cột khác,
+kể cả câu tiếp nói 'chỉ'; chỉ bỏ điều kiện khi người dùng yêu cầu bỏ hoặc đổi phạm vi.
 Literal hiện tại giữ đúng nguyên văn và kiểu kể cả chuỗi chỉ có chữ số; không lấy
-giá trị dài hơn từ context để thay nó. Chỉ kế thừa metric/điều kiện không bị thay đổi.
+giá trị dài hơn từ context để thay nó. Kế thừa metric/điều kiện và dạng đầu ra không
+bị thay đổi. Nếu câu tiếp chỉ thêm/thay điều kiện lọc, giữ verified_context.plan.result_shape;
+không tự chia nhóm theo cột vừa lọc. Chỉ đổi dạng khi người dùng yêu cầu đầu ra mới.
 current_value_mentions là các giá trị nguồn khớp ranh giới từ trong câu hiện tại,
 được tách khỏi toàn bộ vocabulary và context. Khi chọn literal mới, đối chiếu danh
 sách này với raw_phrase hiện tại; một giá trị chỉ có trong context không thay được nó.
@@ -83,6 +87,16 @@ class Condition(Contract):
 
 class QueryRequest(Contract):
     task: Literal["SQL", "CLARIFY", "UNSUPPORTED"]
+    context_scope: Literal["independent", "refine", "reset"] = Field(
+        default="independent",
+        description=(
+            "independent: a self-contained new question. refine: the question restricts or "
+            "changes the previous result, inheriting its measures and unchanged conditions. "
+            "Short follow-ups such as 'what if only the blue ones?' refine the previous "
+            "population; include all unchanged filters. reset: the user explicitly asks to "
+            "remove previous restrictions or return to the whole table."
+        ),
+    )
     table_id: str
     source_revision_id: str
     result_shape: Literal["record", "list", "list_all", "scalar", "group", "ranking"] = Field(
@@ -108,13 +122,31 @@ class QueryRequest(Contract):
         ),
     )
     aggregations: list[Aggregate] = Field(max_length=20)
-    conditions: list[Condition] = Field(max_length=100)
-    group_by: list[str] = Field(max_length=10)
+    conditions: list[Condition] = Field(
+        max_length=100,
+        description=(
+            "Complete effective WHERE tree, not only the latest changes. In a follow-up, "
+            "copy unchanged conditions from verified_context.plan.conditions and AND new filters "
+            "on other columns. A new condition on the same column replaces the old condition. "
+            "Remove an inherited filter only when the user requests its removal or a scope reset."
+        ),
+    )
+    group_by: list[str] = Field(
+        max_length=10,
+        description=(
+            "Dimensions explicitly requested for a per-group breakdown. A column used only "
+            "to restrict rows or identify the time period does not request grouping. "
+            "A filter-only follow-up preserves the verified answer shape. "
+            "For an overall count/total use scalar and group_by=[]."
+        ),
+    )
     order_by: list[Ordering] = Field(max_length=10)
     limit: int = Field(ge=1, le=500)
     unresolved: list[str] = Field(max_length=30)
 
-    def to_plan(self, *, identifier_columns: set[str] | None = None) -> QueryPlan:
+    def to_plan(
+        self, *, identifier_columns: set[str] | None = None, verified_plan: QueryPlan | None = None
+    ) -> QueryPlan:
         nodes: list[Predicate] = []
         depths: list[int] = []
         references: list[int] = [0] * len(self.conditions)
@@ -170,6 +202,28 @@ class QueryRequest(Contract):
         if references and references != [1] * (len(references) - 1) + [0]:
             raise ValueError("Conditions must form one tree without unused or shared nodes")
         if self.task == "SQL":
+            if self.context_scope == "refine":
+                if (
+                    verified_plan is None
+                    or verified_plan.task != "SQL"
+                    or verified_plan.table_id != self.table_id
+                    or verified_plan.source_revision_id != self.source_revision_id
+                ):
+                    raise ValueError("Refinement requires verified context on the same source")
+
+                def filter_columns(node: Predicate | None) -> set[str]:
+                    if node is None:
+                        return set()
+                    return ({node.column_id} if node.column_id else set()).union(
+                        *(filter_columns(child) for child in node.children)
+                    )
+
+                # Không tự thêm điều kiện bị bỏ: chặn trước SQL để tránh mở rộng
+                # quần thể ngầm trong câu tiếp mà model đã xác nhận là refine.
+                if not filter_columns(verified_plan.filters) <= filter_columns(
+                    nodes[-1] if nodes else None
+                ):
+                    raise ValueError("Refinement omitted a previously filtered column")
             selected = set(self.select_columns)
             if not set(self.required_columns) <= selected:
                 raise ValueError("Requested output columns are missing")
