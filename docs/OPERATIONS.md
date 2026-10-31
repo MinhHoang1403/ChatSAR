@@ -1,5 +1,13 @@
 # Vận hành ChatSAR
 
+## Bàn giao vận hành 01/11/2026 — ngừng gọi model, còn36manual
+
+Nguồn ứng dụng19module fb50d49 không thay; web/api/db healthy sau fullrestart. Ledger568(Gemini563/Knowledge5), grant464used, reserve6.8002886USD, knownestimate0.7158162USD. Sáu unknowncost vẫnNULL/fullreserve, đềuđãreview fullsnapshot; khôngunreviewedunknown/duplicate dispatch. Cùnggrant max495→500 chỉ sau toàn bộCodexcalls dừng; budget10/baseline/ledger/envkeysflags giữ, before/afterhashkhớp. Còn36lượt dànhowner, không tựgọi thêm để hoàn tất mẫu số benchmark đã giảm.
+
+UIGoogle sau reload đọc lại COUNT4/SQL; các source0.35/0.40/context0.47→0.43→0.26 exactsnapshotgiữ. Original199/full127ledgerrows/2Google/privateB/history0.30/11goldplansnguyênvẹn. Cleanup chỉ UUIDtestworkspace52messages đãsnapshot và khôngpending; không nguồnGoogle/ledger. NTPstripchart hiệnlệch~0.33s, TimeService vẫnunsync vàresyncOSAccessDeniedlàlịchsử; không đổiGoogleverification.
+
+Trạngthái/điểm/phạmvi chưađo xemđầuPREFLIGHT; không dùng các checkpoint BLOCKED phía dưới làm current. Từ nay kiểm thêm chỉ khi cóthayđổithật/lỗimới hoặcowner yêu cầu; ưu tiên câu tựnhiên theo ý định, không yêu cầu người dùng đọc tênfield. PR1vẫnDraft, chưamerge/Phase2.
+
 ## Quyền hiện hành: tối đa 8 review, giữ nguyên 500/10 — 01/11/2026
 
 Owner đã duyệt bổ sung3 review (tổng8): đúng b66d8f40-6557-4570-9d87-22de67f5fd21 và tối đa2 phản hồi429/503 đã xác minh khác. CLI `--review-limit 8` là lựa chọn có chủ đích ngoài API, default3 và chỉ cho grant >400 requests; trần request500, Codex495 và budget10USD không đổi. Review thứ6 đã apply, fullrow/UNKNOWN/fullreserve/count giữ nguyên, 2 review còn lại chưa dùng. Mỗi lỗi mới vẫn dừng nhóm kiểm thử để đối chiếu bằng chứng và cooldown; không auto-review/auto-retry, không chấp nhận transport/timeout/HTTPkhác chỉ vì còn quyền review. Không vượt8 hoặc giảm reserve/cost bằng suy đoán.

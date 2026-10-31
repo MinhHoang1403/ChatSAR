@@ -1,5 +1,11 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## Chốt phạm vi kiểm rút gọn 01/11/2026
+
+Theo chỉ đạo trực tiếp mới nhất, ưu tiên luồng người dùng và6câu tự nhiên, không lặp lại toàn bộ model benchmark. Production contract/prompt19module vẫn fb50d49; một QueryRequest→QueryPlan→binder/compiler/PGreadonly→facts→naturalanswer. Nguồn, gold gốc, kiểu/literal/owner/CSRF/quota không đổi. 52bộgốc +8heldout +6natural có báo raw/adjudicated/provider riêng trong PREFLIGHT;26NLgốc và12reg bổ sung chưa chạy không được báoPASS. Top2 tự nhiên khớp SQL/rows đã khóa; rawFAIL do expectedorder thiếu tie-breaker giữ cùng audit. READY_FOR_USER_ACCEPTANCE cho phạm vi mới, ownerchưaACCEPTED, chưa JOIN/Phase2.
+
+Grant cùngID đãhandoff max500 sauCodexdừng464, budget10USD vàledger/keys/flags/baselinekhôngđổi; còn36manual. Sáu review giữUNKNOWN/fullreserve/count, khôngunreviewedunknown; còn2reviewtheoquyềnmax8. Mọi đoạn ghi blocked503/max5 bên dưới là checkpoint lịch sử.
+
 ## Quyền đối soát bổ sung 01/11/2026
 
 Owner duyệt tổng8 review sau lần chặn thứ6. Default3, mức8 chỉ cho grant lớn, app không được INSERT reviews. UNKNOWN và full snapshot/reserve/count vẫn là điều kiện bắt buộc, request500/10USD và5manual không đổi. Quyền mới thay trần5 trong các checkpoint lịch sử bên dưới; không sửa lại original usage hoặc coi phản hồi lỗi là miễn phí.

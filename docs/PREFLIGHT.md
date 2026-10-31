@@ -1,5 +1,52 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Chốt kỹ thuật theo phạm vi kiểm thử rút gọn của chủ dự án — 01/11/2026
+
+**READY_FOR_USER_ACCEPTANCE cho luồng Giai đoạn 1 đã kiểm bên dưới; chưa tự ghi ACCEPTED, chưa merge PR #1 hoặc triển khai Giai đoạn 2.** Chủ dự án vừa yêu cầu giảm kiểm thử lặp, ưu tiên câu hỏi người dùng thường hỏi và hoàn thành nhanh. Vì vậy dừng bộ gốc sau 52 câu, không chạy tiếp chỉ để đủ mẫu số cũ; bổ sung đúng 6 câu tự nhiên và 1 lượt browser rồi dừng Gemini. Đây là kết luận cho phạm vi rút gọn mới, không phải chứng nhận đã đo đủ 90 scenario hay mọi câu hỏi có thể có.
+
+### Kết quả trên cùng nguồn ứng dụng
+
+19 module ứng dụng giữ đúng bytes của fb50d496a900a4b6e253252fdf5ff65f96a7a145; các commit tiếp theo chỉ thay CLI/test/tài liệu. Metadata, checksum và kiểu dữ liệu của các source logic giống nhau giữa các phiên UUID kiểm thử. Không cộng điểm checkpoint source cũ.
+
+| Nhóm | Kết quả thực tế | Giới hạn |
+|---|---|---|
+| Bộ gốc | 52/52 theo phân xử đã khóa; 51/52 gold gốc | 26/78 câu NL còn lại NOT_RUN theo yêu cầu giảm test; 12 system guard báo riêng |
+| Museum/waterworks mới | 8/8 sau phục hồi thủ công; lần đầu 7/8 do 1 HTTP503 | Held-out nội bộ, người viết biết nhãn; không external blind |
+| 6 câu tự nhiên | 5/6 chấm tự động; ca top2 còn lại đúng SQL chuẩn/typed rows, xem đối chiếu bên dưới | Không sửa gold sau model, không gọi lại câu xếp hạng |
+| Giao diện Google đã đăng nhập | “Dữ liệu này có bao nhiêu bản ghi?” → 4, SQL COUNT thực thi thành công | Báo riêng, không cộng vào accuracy NL |
+| 12 regression observatory/recycling bổ sung | NOT_RUN trên source cuối theo phạm vi giảm test | Không dùng 11/12 của source cũ làm điểm source cuối |
+
+66 caseIDs duy nhất, 67 HTTP attempts trong các report cùng nguồn (1 phục hồi 503), không cộng canary, GUI hoặc seed thành accuracy. Sau phục hồi: chấm tự động 65/66; in-scope 62/63 = **98,4127%**, theo gold gốc 61/63 = **96,8254%**. Lần thử đầu giữ lỗi dịch vụ: 64/66; in-scope 61/63 = 96,8254%, strict gốc 60/63 = 95,2381%. Trong các câu có provider hoạt động, kết quả có kiểu đúng 63/63 sau phục hồi; negative/clarify 3/3, false refusal 0/63. Không diễn giải tỷ lệ trên mẫu rút gọn thành accuracy của toàn bộ 90 scenario. Latency model sau phục hồi: median 2029,92ms, p95 nearest-rank 2674,85ms.
+
+Ca natural_ranking: câu “Cho tôi hai đặt phòng có tiền phòng cao nhất.” trả H02/200.10 rồi H01/100.05. Cột, lọc, hướng xếp hạng, LIMIT và typed rows đúng. Expected semantic order của test mới thiếu tie-breaker booking_ref ASC vốn đã có trong **SQL oracle viết tay trước model** và là hành vi ổn định của ứng dụng. Giữ raw FAIL và hash report, không sửa manifest/checksum/đầu ra, không sửa prompt hoặc gọi lại để lấy PASS. Cờ silent-wrong thô của bộ chấm là 1; sau đối chiếu exact SQL/plan/rows, **lỗi ứng dụng silent-critical chưa tranh chấp = 0** trong mẫu đã đo. Đây là sai khác mô tả của bộ chấm, không loại các lỗi lọc/giá trị khác để nâng điểm.
+
+Gold tháng basic_logistics_month_boundary vẫn giữ: câu chỉ hỏi SUM nhưng gold gốc đòi COUNT+SUM. Runtime trả SUM đúng 10.10, không thêm COUNT; báo điểm gốc và phân xử đã khóa riêng. Hai ca mơ hồ empty-sum/observatory_month chưa đo trên source cuối, không gọi PASS hoặc lấy câu thay thế làm điểm gốc. 52 kết quả trước khi tiến trình kiểm bị ngắt được khôi phục từ **durable messages + query_plan + revision + ledger**, ghép 1:1 theo thời gian/latency/tokens; snapshot nguyên trạng giữ riêng, không replay model/SQL. Fixture đúng owner test đã dọn bằng cleanup hiện hữu sau khi lưu bằng chứng; không chạm nguồn Google.
+
+6 câu tự nhiên khóa trước model trong evaluations/natural_usage.json: tổng tiền phòng 300.15; câu tiếp chỉ phòng tiêu chuẩn 100.05; tổng tháng9/2026 300.15; hai đặt phòng cao nhất H02/H01; thiếu năm → CLARIFY; “Xóa hết các đặt phòng này giúp tôi” → UNSUPPORTED, không SQL. Bốn SQL oracle độc lập đã đối chiếu kiểu Decimal/TEXT; có một assertion chuỗi numeric ở script kiểm ban đầu không nhận 200.1 = 200.10, đã đối chiếu lại bằng typed Decimal trước khi gọi ca xếp hạng, không đổi expected hoặc runtime.
+
+### Các gate và bằng chứng chức năng
+
+- **A — Provider/accounting PASS trong giới hạn đã cấp:** direct503 được lưu/provider_unavailable, full snapshot + UNKNOWN/full reserve/count giữ; review admin thứ6 theo quyền max8 và cooldown300s, lần phục hồi200. Không suy nguyên nhân hạ tầng phía Google hoặc hóa đơn thực; HTTP503 chứng minh lỗi phản hồi nhà cung cấp, không chứng minh timeout/SQL bug. SDK/API không retry tự động, duplicate_dispatch0. Hai review còn lại chỉ dùng cho verified429/503 theo quyền, không tự nâng trần.
+- **B — SQL PASS trên phạm vi rút gọn đã đo:** lookup/COUNT/Decimal/NULL/SUM/AVG/MIN/GROUP/top/Boolean/TEXT/month/multi-metric và follow-up đã có bằng chứng cùng bytes. Các critical cũ về literal, scalar MIN và context có ca tương ứng; waterworks falseCOUNT+SUM→thêm khu vực giữ đúng filter/shape, cùng pipeline. Canary task boundary cuối3/3 gồm DDL/unapproved relation từ chối và quotedSQL TEXT được bind như dữ liệu. Phần chưa chạy ở bảng trên vẫn NOT_RUN.
+- **C — Benchmark integrity PASS:** 11 file gold/plan gốc bất biến; strict/adjudicated/provider/manual review tách riêng, không ghi đè FAIL hoặc trộn source. Bằng chứng local: artifacts/release-metrics.json, release-core-durable-snapshot.json, release-core-recovered.json, release-holdout*.json, release-natural*.json, natural-ranking-review.json. Không đưa raw artifacts/tài khoản local lên repo public.
+- **D — Application PASS cho các luồng đã nghiệm thu:** upload CSV tựAI→gốc/sau→Save; XLSX chỉ chọn sheet khi cần; cache không gọi AI lại; không checkbox consent từng model; đổi source tự chat mới. Browser CSV0.35/XLSX0.40 và context0.47→0.43→0.26 trước đây, cùng normalization/setup/frontend bytes hiện hành. Truy vấn mới COUNT4 trên source cuối qua browser Google, source/message/SQL giữ exact qua full stack restart và reload. Phần query functional6 ở checkpoint trước (500-row cap/partial/metamorphic) là bằng chứng component cũ có phạm vi rõ, không cộng thành model score source cuối; các guard tương ứng trong integration nguồn hiện tại PASS. Login hai Google đã do owner tự thao tác trước đây, auth/session code không đổi; tài khoản B private và lịch sử0.30 giữ. Guest reload mất phiên, login không nhập guest; UI/checkpoint cũ không được gọi là fresh Google lần này.
+- **E — Infrastructure PASS:** web/api/db healthy sau restart, migration/persistence đúng; 199 ledger đầu + full127 rows và dữ liệu/lịch sử hai tài khoản nguyên vẹn; secret scan và exact final commit CI kiểm trước bàn giao. Không tạo môi trường thứ hai, không dọn volumes hoặc tác động ShopQuery/Langfuse.
+- **F — Owner acceptance PENDING:** chủ dự án xem giao diện/kết quả và quyết định merge/chuyển mốc. Không dùng READY thay ACCEPTED.
+
+Kiểm thử đầy đủ ở CI a90e0ac: **211 unit, 49 integration (8auth+35dataset+6guest), 47 evaluationPG, 18 frontend**, types/build/ruff/mypy19 đều PASS. 25 SQL oracle và 75 gold +5 replacement PASS, là các nhóm khác nhau, không cộng thành 90 NL. CI push41238318550/PR41238322610 SUCCESS. Commit bàn giao chỉ thêm manifest tự nhiên/tài liệu, CI exact commit mới kiểm lại riêng. 12 guard hệ thống gốc có mapping vào tests hiện hành: catalog expression boundaries; owner isolation; stale revision/context; provider disabled/failed-answer context; đảo dòng/thêm dòng ngoài lọc; thêmNULL/non-nullCOUNT; COUNTrows khácCOUNTdistinct. Các guard không được giả là 12 lượt Gemini.
+
+Windows Time service vẫn báo chưa đồng bộ; phép đọc NTP time.windows.com 3 mẫu mới lệch -0.333 đến -0.335s, không còn mức ~11s của lỗi clock_early lịch sử. Resync trước đó bị OSAccessDenied; không nới token verifier. HTTP Date có cache không được dùng để kết luận lệch giờ.
+
+### Usage và bàn giao
+
+Ledger cuối **568 = Gemini563 / Knowledge5**; grant hiện hữu69d37b9b-fd6d-4296-9189-9fb5303b46a1 dùng **464/500**, giữ **36 lượt manual**. Request thành công458, lỗi HTTP6, sáu cost/tokensUNKNOWN vẫn giữ toàn reserve và đã review fullsnapshot; effective unreviewedunknown0. Tổng reserve **6.8002886USD**, known token estimate **0.7158162USD**, input929154/output174828; đây không phải hóa đơn và không coi503 miễn phí. So checkpoint đầuturn: +65HTTP (64benchmark/status +1browser), không mớiKnowledge/LlamaParse/BGE, không duplicate dispatch.
+
+Sau khi dừng toàn bộ Codex generation, đã bàn giao **cùng grant495→500**, budget10USD/baseline/ledger/keys/flags giữ nguyên, hash toàn ledger trước/sau bằng nhau. Không modelcall sau bàn giao. Không tiêu thêm36 lượt để lấp mẫu số chưa chạy.
+
+Checklist owner ngắn: mở trang chủ khách; upload một CSV/XLSX và xem gốc/sau trước Save; hỏi tổng/theo nhóm/theo tháng bằng lời thông thường và hỏi tiếp; xem SQL/nguồn; đăng nhập rồi reload mở chat cũ. Kết hợp nhiều dataset thuộc **R1 Approved JOINs** của Giai đoạn2, cần xác nhận PK/FK/grain/cardinality và chống nhân bản số liệu; không chỉ đổi bộ chọn dữ liệu thành đa chọn. R2 là ingestion tài liệu/embedding theo kế hoạch hiện hữu. Không sửa hai plan gốc hoặc âm thầm mở phạm vi này trong Giai đoạn1.
+
+Các mục dưới là lịch sử từng checkpoint; không dùng BLOCKED/usage/score cũ thay trạng thái đầu trang.
+
 ## Chủ dự án duyệt thêm review, tiếp tục kiểm có giới hạn — 01/11/2026
 
 Owner đã duyệt tổng tối đa 8 review, gồm lượt b66d8f40-6557-4570-9d87-22de67f5fd21 và tối đa 2 phản hồi 429/503 được xác minh khác. CLI vẫn mặc định3; mức8 chỉ dành cho grant lớn >400, không tăng request cap hoặc ngân sách. Test PostgreSQL mới kiểm đủ8 review, lượt thứ9 vẫn UNKNOWN, cả9 rows giữ costNULL và reserve0.09; grant nhỏ và review_limit9 bị từ chối. Review thứ6 đã được preview/apply đúng full snapshot, original usage row không đổi, đủ300s cooldown trước khi kiểm tiếp. Không tự retry trong SDK/API.

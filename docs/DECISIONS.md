@@ -1,5 +1,11 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+## 01/11/2026 — Rút gọn kiểm thử theo yêu cầu trực tiếp, không lặp model
+
+Owner yêu cầu giảm số lượt test, hỏi như người dùng thực tế và sớm chốt Giai đoạn1. Dừng bộ gốc ở52/78NL, giữ26NOT_RUN; không chạy12reg bổ sung chỉ để đủ số. Khóa6câu tự nhiên trên catalog hotel đã review, SQL/typed rows độc lập, không dùng tên cột kỹ thuật trong câu hỏi. 52kết quả bị gián đoạn harness được đọc lại từ messages/plan/revision/ledger, không replay; usage vẫn đủcount. Source19module fb50d49 giữ nguyên. Kết luận READY_FOR_USER_ACCEPTANCE chỉ cho phạm vi rút gọn đã đo, không tuyên bố đủ90 hoặc ACCEPTED thay owner. Xem đầuPREFLIGHT về điểm gốc/phân xử/503/NOT_RUN.
+
+Ca ranking trong test mới có semantic expectation thiếu tie-breaker đã tồn tại trong SQL oracle khóa trước model. Giữ rawFAIL/manifest/checksum và audit exactplan/typedrows thay sửa ứng dụng hoặc gọi lại để tăng điểm. Không tạo quy tắc chấm lỏng cho order/filter khác. Budget dừng464; bàn giao cùnggrant max500/10USD, còn36manual, giữUNKNOWN/fullreserve/count của6review lỗi và2review đượcduyệt chưa dùng. Không modelcall sauhandoff, chưa merge/Phase2.
+
 ## 01/11/2026 — COUNT tương đương chỉ với PK đơn đã cưỡng chế
 
 Bộ chấm một bảng chấp nhận COUNT(DISTINCT pk)/COUNT(pk) tương đương COUNT(*) khi catalog đã publish xác nhận đúng một PRIMARY KEY và NOTNULL. Đây là suy luận đại số từ ràng buộc [PostgreSQL17](https://www.postgresql.org/docs/17/ddl-constraints.html#DDL-CONSTRAINTS-PRIMARY-KEYS), có PG oracle độc lập và API publish kiểm physical constraint, duplicate/NULL bị từ chối. Không dùng observed uniqueness, roleidentifier, nullableUNIQUE hoặc một cột trong compositePK; không đổi các filter, projection, grouping hay số metrics khác. Gold và modeloutput giữ nguyên; rawFAIL của evaluator cũ lưu cùng audit đối chiếu. Không thay runtime, prompt hay SQLcompiler.
