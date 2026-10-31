@@ -1,5 +1,11 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+## Upload tự động, before/after và quyền kiểm thử500 — 31/10/2026
+
+Chỉ đạo UI mới thay opt-in từng bước: upload là thao tác dùngAI cho dataset. Client setup luôn use_ai/consent_metadata/consent_values=true, Gemini mặc định; profile giới hạn20values/120chars/cột giữ nguyên. Không xóa guard backend hoặc chuyểnprivate→synthetic. Nguồn mới lưu sharingGemini/Knowledge; nguồn cũ chỉ owner gửi câu hỏi mới sẽ cấp bằng endpoint audited hiện có, không sửa mọi source chỉ vì đọc history. Không thêm thư viện/framework/model/worker. API normalization-preview chỉ tái dùng phép kiểm publish và không ghi dữ liệu. Pending model vẫn không replay và không cho lưu từ trang khác; lỗiAI vẫn dùng local nhưng ghi rõ nguồn gợi ý, không giảAI thành công.
+
+Owner tăng trần tổng500Gemini/10USD sau khi đã95used; quyền này thay cap100/1.50 trong phần thực hiện tiếp, không reset/cộng thêm500, không tạo grant song song. Chừa5manual, Codex dừng ở tổng495 hoặc budget thấp hơn. Cần migration mở giới hạn bảng grant và cập nhật đúng currentgrant/cap local; không đổi keys/Knowledge5/LlamaParse/BGE0. Những checkpoint bên dưới giữ lịch sử quyền cũ.
+
 Bổ sung root cause critical31/10: guard trước chỉ tìm giá trị có trongDB nên model có thể bỏ so sánh với giá trị chưa tồn tại. validate_structure và helper explicit_text_mentions dùng tên/alias cột + cú pháp EQ tường minh (có quote hoặc ranh giới câu); không sinh/vá filter. Cùng helper nối vào payload, unitđa-schema/API-PG beforeexecute và modelretestNULL. Đây là grammar giới hạn, không semantic oracle. Historicalcritical response giữ nguyên; nguồn cuối6/7FAILfollowup, không đạt acceptance.
 
 ## Root-cause repair — 31/10/2026

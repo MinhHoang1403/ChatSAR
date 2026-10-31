@@ -42,6 +42,7 @@ from app.schema import dataset_sharing_events, datasets, jobs, messages, revisio
 from app.tabular import (
     MAX_BYTES,
     ColumnReview,
+    ParsedTable,
     invalid,
     profile,
     read_table,
@@ -208,6 +209,7 @@ def list_datasets(workspace_id: UUID, principal: PrincipalDependency) -> list[di
                     revisions.c.id.label("revision_id"),
                     revisions.c.status,
                     revisions.c.row_count,
+                    revisions.c.sharing_providers,
                 )
                 .select_from(datasets.join(revisions, datasets.c.id == revisions.c.dataset_id))
                 .where(datasets.c.workspace_id == workspace_id)
@@ -357,6 +359,8 @@ def preview_dataset(
         "sheet_name": parsed.sheet_name,
         "columns": columns,
         "rows": [[wire(v) for v in row] for row in preview_rows],
+        "original_rows": [[wire(v) for v in row] for row in parsed.rows[offset : offset + limit]],
+        "original_headers": parsed.headers,
         "row_count": len(parsed.rows),
         "checksum": revision["checksum"],
         "data_classification": revision["data_classification"],
@@ -367,6 +371,49 @@ def preview_dataset(
         "sharing_providers": revision["sharing_providers"],
         "setup_proposal": revision["setup_proposal"],
         "relationship_status": "not_configured_single_table",
+    }
+
+
+def reviewed_rows(
+    parsed: ParsedTable, revision_id: UUID, body: PublishInput
+) -> list[dict[str, Any]]:
+    """Một phép kiểm toàn bảng dùng chung cho xem trước và công bố."""
+    expected = profile(parsed, revision_id) if parsed.headers else []
+    if (
+        any(not c.name.strip() for c in body.columns)
+        or [c.id for c in body.columns] != [c["id"] for c in expected]
+        or len({c.name.strip().casefold() for c in body.columns}) != len(body.columns)
+    ):
+        raise invalid("Danh sách cột hoặc tên cột không khớp; cần kiểm tra lại preview.")
+    return validate_rows(parsed, body.columns, body.timezone)
+
+
+@router.post("/datasets/{dataset_id}/normalization-preview")
+def normalization_preview(
+    dataset_id: UUID, body: PublishInput, principal: MutationDependency
+) -> dict[str, Any]:
+    try:
+        revision_id = UUID(body.revision_id)
+        ZoneInfo(body.timezone)
+    except (ValueError, ZoneInfoNotFoundError):
+        raise invalid("Revision hoặc múi giờ không hợp lệ.") from None
+    with db.get_engine().connect() as connection:
+        revision = owned_revision(connection, dataset_id, principal, revision_id)
+    if revision["status"] != "needs_review":
+        raise AppError(409, "REVISION_STATE", "Dữ liệu đã lưu hoặc chưa sẵn sàng để xem trước.")
+    parsed = read_table(
+        source_bytes(revision), revision["suffix"], body.sheet_name or revision["sheet_name"]
+    )
+    rows = reviewed_rows(parsed, revision_id, body)
+    return {
+        "revision_id": revision_id,
+        "checksum": revision["checksum"],
+        "sheet_name": parsed.sheet_name,
+        "row_count": len(rows),
+        "preview_limit": 20,
+        "original_headers": parsed.headers,
+        "original_rows": [[wire(v) for v in row] for row in parsed.rows[:20]],
+        "rows": [[wire(row[c.id]) for c in body.columns] for row in rows[:20]],
     }
 
 
@@ -385,17 +432,12 @@ def publish_dataset(
             raise AppError(
                 409, "REVISION_STATE", "Revision đã công bố hoặc chưa sẵn sàng để xác nhận."
             )
+        if (revision["setup_proposal"] or {}).get("status") == "pending":
+            raise AppError(409, "REQUEST_PENDING", "Đợi AI phân tích xong trước khi lưu dữ liệu.")
         parsed = read_table(
             source_bytes(revision), revision["suffix"], body.sheet_name or revision["sheet_name"]
         )
-        expected = profile(parsed, revision_id) if parsed.headers else []
-        if (
-            any(not c.name.strip() for c in body.columns)
-            or [c.id for c in body.columns] != [c["id"] for c in expected]
-            or len({c.name.strip().casefold() for c in body.columns}) != len(body.columns)
-        ):
-            raise invalid("Danh sách cột hoặc tên cột không khớp; cần kiểm tra lại preview.")
-        rows = validate_rows(parsed, body.columns, body.timezone)
+        rows = reviewed_rows(parsed, revision_id, body)
         physical_name = "r_" + revision_id.hex
         types: dict[str, TypeEngine[Any]] = {
             "text": Text(),

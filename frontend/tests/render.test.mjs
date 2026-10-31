@@ -100,18 +100,16 @@ test('SQL formatting changes only whitespace and preserves quoted identifiers an
   assert.equal(formatted.replace(/\s+/g,' '),sql.replace(/\s+/g,' '));
   assert.equal((formatted.match(/%\(/g) ?? []).length,4);
 });
-test('private AI setup starts with explicit consent and disabled cloud action', async () => {
-  const html = await render('AIReview', { preview, csrf: 'never-render-token', onBusy: noop, onProposal: noop });
-  assert.match(html, /Cho phép gửi tên cột và thống kê/);
-  assert.match(html, /Cho phép thêm tối đa 20 giá trị phân biệt/);
-  assert.match(html, /<input type="checkbox" disabled=""/);
-  assert.match(html, /<button disabled="">Nhận đề xuất AI/);
-  assert.match(html, /Phân tích local/); assert.doesNotMatch(html, /never-render-token/);
+test('AI review explains the result without extra consent or analysis controls', async () => {
+  const html = await render('AIReview', { busy: false, notice: 'AI đã gợi ý chuẩn hoá.', notes: [] });
+  assert.match(html, /AI đã gợi ý chuẩn hoá/);
+  assert.doesNotMatch(html, /checkbox|Nhận đề xuất AI|Phân tích local|Chọn mô hình/);
 });
 test('data manager offers only working CSV/XLSX input', async () => {
   const html = await render('Datasets', { workspaceId: 'w', csrf: 'csrf', onReady: noop });
-  assert.match(html, /accept="\.csv,\.xlsx"/); assert.match(html, /Tải lên và xem trước/);
-  assert.doesNotMatch(html, /RAG|HYBRID|PDF/);
+  assert.match(html, /accept="\.csv,\.xlsx"/); assert.match(html, /AI tự phân tích/);
+  assert.match(html, /Xem trước và sau/);
+  assert.doesNotMatch(html, /Tải lên và xem trước|Quyền hỏi đáp|RAG|HYBRID|PDF/);
 });
 test('API DTO rejects unknown data shape and preserves catalog metadata', async () => {
   const { datasetList, parsePreview } = await vite.ssrLoadModule('/src/data.ts');
@@ -134,9 +132,67 @@ test('applying local or AI metadata preserves immutable empty/null/duplicate sta
   assert.equal(merged.description, 'Metadata mới');
   assert.throws(() => mergeProposalColumn(source, { ...proposal, id: 'other' }));
 });
-test('saved setup is offered without another cloud call only for matching checksum and sheet', async () => {
+test('saved setup is reused automatically only for matching checksum and sheet', async () => {
+  const { savedSetupResponse } = await vite.ssrLoadModule('/src/AIReview.tsx');
   const p = { ...preview, checksum: 'file-hash', setup_proposal: { status: 'complete', response: { checksum: 'file-hash', sheet_name: '' } } };
-  const props = { preview: p, csrf: 'csrf', onBusy: noop, onProposal: noop };
-  assert.match(await render('AIReview', props), /Mở đề xuất đã lưu/);
-  assert.doesNotMatch(await render('AIReview', { ...props, preview: { ...p, checksum: 'different-hash' } }), /Mở đề xuất đã lưu/);
+  assert.ok(savedSetupResponse(p));
+  assert.equal(savedSetupResponse({ ...p, checksum: 'different-hash' }), null);
+  assert.equal(savedSetupResponse({ ...p, sheet_name: 'Other' }), null);
+});
+
+test('automatic AI preparation sends one bounded request and reuses the saved response', async () => {
+  const { analyzeDataset } = await vite.ssrLoadModule('/src/AIReview.tsx');
+  const { parseColumn } = await vite.ssrLoadModule('/src/data.ts');
+  const column = parseColumn({ id: 'code', name: 'code', data_type: 'text', nullable: false, empty_count: 2 });
+  const source = { ...preview, checksum: 'hash', columns: [column], rows: [['0007']] };
+  const response = { checksum: 'hash', sheet_name: '', mode: 'ai_proposal',
+    proposal: { columns: [{ ...column, description: 'Mã', empty_count: undefined }], description: 'Dataset', grain: 'Một dòng', notes: [] } };
+  const oldFetch = globalThis.fetch, oldWindow = globalThis.window;
+  const calls = [];
+  globalThis.window = { setTimeout, clearTimeout };
+  globalThis.fetch = async (path, options) => { calls.push({ path, options }); return { ok: true, status: 200, json: async () => response }; };
+  try {
+    const prepared = await analyzeDataset(source, 'csrf', 'stable-key');
+    assert.equal(calls.length, 1); assert.equal(calls[0].path, '/api/datasets/source/setup');
+    const body = JSON.parse(calls[0].options.body);
+    assert.equal(body.use_ai, true); assert.equal(body.consent_metadata, true); assert.equal(body.consent_values, true);
+    assert.equal(body.provider, 'gemini'); assert.equal(calls[0].options.headers.get('Idempotency-Key'), 'stable-key');
+    assert.equal(prepared.columns[0].empty_count, 2);
+    const cached = await analyzeDataset({ ...source, setup_proposal: { status: 'complete', response } }, 'csrf', 'other-key');
+    assert.equal(calls.length, 1); assert.equal(cached.columns[0].description, 'Mã');
+    await assert.rejects(() => analyzeDataset({ ...source, checksum: 'wrong' }, 'csrf', 'new-key'));
+    assert.equal(calls.length, 2); // Loại phản hồi sai nguồn, không confirm hoặc tự thử lại.
+  } finally { globalThis.fetch = oldFetch; if (oldWindow === undefined) delete globalThis.window; else globalThis.window = oldWindow; }
+});
+
+test('before-after preview preserves identifiers, exact decimals, empty and NULL', async () => {
+  const { DataComparison } = await vite.ssrLoadModule('/src/Datasets.tsx');
+  const { parseColumn, parseNormalization } = await vite.ssrLoadModule('/src/data.ts');
+  const columns = [parseColumn({ id: 'code', name: 'code', data_type: 'text', nullable: false }),
+    parseColumn({ id: 'amount', name: 'amount', data_type: 'numeric', nullable: true })];
+  const source = { ...preview, checksum: 'hash', row_count: 2, columns, rows: [['0007', '0,10'], ['0012', '']] };
+  const result = { revision_id: 'revision', checksum: 'hash', sheet_name: '', row_count: 2,
+    original_headers: ['code', 'amount'], original_rows: source.rows, rows: [['0007', '0.10'], ['0012', null]] };
+  const normalized = parseNormalization(result, source);
+  const html = renderToStaticMarkup(createElement(DataComparison, { preview: source, normalized }));
+  assert.match(html, /Dữ liệu gốc/); assert.match(html, /Sau chuẩn hoá/);
+  assert.match(html, /0007/); assert.match(html, /0,10/); assert.match(html, /0.10/);
+  assert.match(html, /NULL/); assert.match(html, /“”/); assert.match(html, /normalized-cell/);
+  assert.throws(() => parseNormalization({ ...result, revision_id: 'other' }, source));
+  assert.throws(() => parseNormalization({ ...result, rows: [['0007']] }, source));
+});
+
+test('using a selected legacy dataset grants models with owner CSRF without another user step', async () => {
+  const { prepareDatasetForQuery } = await vite.ssrLoadModule('/src/data.ts');
+  const oldFetch = globalThis.fetch, oldWindow = globalThis.window;
+  const calls = []; globalThis.window = { setTimeout, clearTimeout };
+  globalThis.fetch = async (path, options) => { calls.push({ path, options }); return { ok: true, status: 200, json: async () => ({}) }; };
+  try {
+    await prepareDatasetForQuery({ id: 'source', revision_id: 'revision', sharing_providers: [] }, 'csrf');
+    assert.equal(calls.length, 1); assert.equal(calls[0].path, '/api/datasets/source/sharing');
+    assert.equal(calls[0].options.headers.get('X-CSRF-Token'), 'csrf');
+    assert.deepEqual(JSON.parse(calls[0].options.body).sharing_providers, ['gemini', 'knowledge']);
+    await prepareDatasetForQuery({ id: 'source', revision_id: 'revision', sharing_providers: ['gemini', 'knowledge'] }, 'csrf');
+    assert.equal(calls.length, 1);
+  } finally { globalThis.fetch = oldFetch; if (oldWindow === undefined) delete globalThis.window; else globalThis.window = oldWindow; }
 });

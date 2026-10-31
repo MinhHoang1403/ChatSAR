@@ -1,4 +1,4 @@
-import { record } from './api';
+import { api, record } from './api';
 
 export type Kind = 'text' | 'integer' | 'numeric' | 'boolean' | 'date' | 'timestamp';
 export type Column = {
@@ -8,11 +8,14 @@ export type Column = {
   description?: string; aliases?: string[]; role?: string;
   value_mappings?: { phrase: string; value: string }[]; aggregation_policy?: string;
 };
-export type Dataset = { id: string; name: string; revision_id: string; status: string };
+export type Dataset = { id: string; name: string; revision_id: string; status: string; sharing_providers?: string[] };
 export type Preview = { dataset_id: string; revision_id: string; status: string; name: string;
   sheets: string[]; sheet_name: string; columns: Column[]; rows: unknown[][]; row_count: number;
   description: string; grain: string; timezone: string; sharing_providers: string[]; data_classification: string;
-  checksum?: string; setup_proposal?: unknown };
+  checksum?: string; setup_proposal?: unknown; original_rows?: unknown[][]; original_headers?: string[] };
+export const datasetModels = ['gemini', 'knowledge'];
+export type Normalization = { revision_id: string; checksum: string; sheet_name: string; row_count: number;
+  original_headers: string[]; original_rows: unknown[][]; rows: unknown[][] };
 export const kinds: Kind[] = ['text', 'integer', 'numeric', 'boolean', 'date', 'timestamp'];
 export const kindNames: Record<Kind, string> = { text: 'Văn bản / mã', integer: 'Số nguyên', numeric: 'Số thập phân', boolean: 'Có / không', date: 'Ngày', timestamp: 'Ngày và giờ' };
 
@@ -21,7 +24,8 @@ export function datasetList(data: unknown): Dataset[] {
   return data.map((value: unknown) => {
     if (!record(value) || typeof value.id !== 'string' || typeof value.name !== 'string'
       || typeof value.revision_id !== 'string' || typeof value.status !== 'string') throw new Error('Thông tin dữ liệu chưa đúng định dạng.');
-    return { id: value.id, name: value.name, revision_id: value.revision_id, status: value.status };
+    return { id: value.id, name: value.name, revision_id: value.revision_id, status: value.status,
+      sharing_providers: Array.isArray(value.sharing_providers) ? value.sharing_providers.filter((p): p is string => typeof p === 'string') : [] };
   });
 }
 
@@ -40,7 +44,31 @@ export function parsePreview(data: unknown): Preview {
     timezone: typeof data.timezone === 'string' ? data.timezone : 'Asia/Ho_Chi_Minh',
     sharing_providers: Array.isArray(data.sharing_providers) ? data.sharing_providers.filter((v): v is string => typeof v === 'string') : [],
     data_classification: typeof data.data_classification === 'string' ? data.data_classification : 'private',
-    checksum: typeof data.checksum === 'string' ? data.checksum : '', setup_proposal: data.setup_proposal };
+    checksum: typeof data.checksum === 'string' ? data.checksum : '', setup_proposal: data.setup_proposal,
+    original_rows: Array.isArray(data.original_rows) && data.original_rows.every(Array.isArray) ? data.original_rows as unknown[][] : undefined,
+    original_headers: Array.isArray(data.original_headers) && data.original_headers.every((v) => typeof v === 'string') ? data.original_headers as string[] : undefined };
+}
+
+export function parseNormalization(data: unknown, preview: Preview): Normalization {
+  if (!record(data) || data.revision_id !== preview.revision_id || data.checksum !== preview.checksum
+    || data.sheet_name !== preview.sheet_name || data.row_count !== preview.row_count
+    || !Array.isArray(data.original_headers) || !data.original_headers.every((v) => typeof v === 'string')
+    || data.original_headers.length !== preview.columns.length
+    || !Array.isArray(data.original_rows) || !Array.isArray(data.rows)
+    || data.rows.length !== data.original_rows.length
+    || ![...data.rows, ...data.original_rows].every((row) => Array.isArray(row) && row.length === preview.columns.length)) {
+    throw new Error('Bản chuẩn hoá chưa khớp phiên bản nguồn. Vui lòng kiểm tra lại.');
+  }
+  return data as unknown as Normalization;
+}
+
+export async function prepareDatasetForQuery(source: Dataset, csrf: string): Promise<void> {
+  if (datasetModels.every((provider) => source.sharing_providers?.includes(provider))) return;
+  // Hỏi một nguồn đã chọn là thao tác sử dụng dataset với mô hình theo chính sách mới.
+  // Dùng API owner/CSRF/audit hiện có; không backfill hoặc chia sẻ các nguồn khác.
+  await api(`/datasets/${source.id}/sharing`, { method: 'PATCH', body: JSON.stringify({
+    revision_id: source.revision_id, sharing_providers: datasetModels,
+  }) }, csrf);
 }
 
 

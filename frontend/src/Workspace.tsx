@@ -147,7 +147,9 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
         : <div className="empty-chat"><h1>Bắt đầu với ChatSAR</h1><button onClick={() => setCreateOpen(true)}>Tạo không gian làm việc</button></div>}
     </main>
     <Modal open={dataOpen} title="Quản lý dữ liệu" onClose={closeData} closeDisabled={dataBusy} wide>
-      {selected && <Datasets workspaceId={selected.id} csrf={me.csrf_token} onBusy={setDataBusy} onReady={(dataset) => { setScope(dataset); void refreshDatasets().catch((e: unknown) => setLocalError(message(e))); }} />}
+      {selected && <Datasets workspaceId={selected.id} csrf={me.csrf_token} onBusy={setDataBusy}
+        onReady={(dataset) => { setScope(dataset); void refreshDatasets().catch((e: unknown) => setLocalError(message(e))); }}
+        onSaved={(dataset) => { setScope(dataset); setDataOpen(false); setDataBusy(false); setNotice('Đã lưu dataset vào không gian làm việc. Bạn có thể bắt đầu hỏi.'); }} />}
     </Modal>
     <Modal open={createOpen} title="Tạo không gian làm việc" error={localError || error} closeDisabled={mutating} onClose={() => { if (!mutating) setCreateOpen(false); }}>
       <form className="dialog-body" onSubmit={(e) => { e.preventDefault(); void mutate(async () => { await onCreate(name.trim()); setName(''); setCreateOpen(false); }); }}>

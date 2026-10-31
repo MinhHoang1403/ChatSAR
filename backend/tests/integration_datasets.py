@@ -35,6 +35,91 @@ from app.tabular import wire
 
 
 class DatasetIntegration(unittest.TestCase):
+    def test_normalization_preview_and_publish_use_same_lossless_rows(self) -> None:
+        uploaded = self.upload(
+            b'code,amount,day,flag\n0007,"0,10",31/12/2026,true\n'
+            b'0012,"0,20",01/01/2027,false\n0100,,02/01/2027,false\n'
+        )
+        original = self.preview(uploaded["dataset_id"])
+        body = self.publish_input(original)
+        for column, kind in zip(
+            body["columns"], ["text", "numeric", "date", "boolean"], strict=True
+        ):
+            column["data_type"] = kind
+        body["columns"][1].update(decimal_separator=",", nullable=True, null_values=[""])
+        body["columns"][2]["date_format"] = "%d/%m/%Y"
+        path = f"/api/datasets/{uploaded['dataset_id']}"
+        response = self.client.post(path + "/normalization-preview", json=body)
+        self.assertEqual(response.status_code, 200, response.text)
+        normalized = response.json()
+        expected = [
+            ["0007", "0.10", "2026-12-31", True],
+            ["0012", "0.20", "2027-01-01", False],
+            ["0100", None, "2027-01-02", False],
+        ]
+        self.assertEqual(normalized["rows"], expected)
+        self.assertEqual(normalized["original_rows"], original["rows"])
+        self.assertEqual(normalized["checksum"], original["checksum"])
+        self.assertEqual(self.preview(uploaded["dataset_id"])["status"], "needs_review")
+        with db.get_engine().connect() as connection:
+            physical = connection.execute(
+                select(revisions.c.physical_table).where(
+                    revisions.c.id == UUID(uploaded["revision_id"])
+                )
+            ).scalar_one()
+        self.assertIsNone(physical)
+        self.assertEqual(self.client.post(path + "/confirm", json=body).status_code, 200)
+        table = Table(
+            "r_" + UUID(uploaded["revision_id"]).hex,
+            MetaData(),
+            autoload_with=db.get_reader_engine(),
+            schema="data",
+        )
+        with db.get_reader_engine().connect() as connection:
+            stored = connection.execute(
+                select(*(table.c[c["id"]] for c in body["columns"])).order_by(table.c._source_row)
+            ).all()
+        self.assertEqual([[wire(value) for value in row] for row in stored], expected)
+        ready = self.preview(uploaded["dataset_id"])
+        self.assertEqual(ready["rows"], expected)
+        self.assertEqual(ready["original_rows"], original["rows"])
+        self.assertEqual(
+            self.client.post(path + "/normalization-preview", json=body).status_code, 409
+        )
+
+    def test_normalization_owner_csrf_and_invalid_row_after_preview_limit(self) -> None:
+        content = "code,amount\n" + "\n".join(f"X{i},0.10" for i in range(24)) + "\nlast,bad\n"
+        uploaded = self.upload(content.encode())
+        preview = self.preview(uploaded["dataset_id"])
+        body = self.publish_input(preview)
+        body["columns"][1].update(data_type="numeric", nullable=False)
+        path = f"/api/datasets/{uploaded['dataset_id']}/normalization-preview"
+        self.as_user(self.token_b)
+        self.assertEqual(self.client.post(path, json=body).status_code, 404)
+        self.as_user(self.token_a)
+        csrf = self.client.headers.pop("X-CSRF-Token")
+        self.assertEqual(self.client.post(path, json=body).status_code, 403)
+        self.client.headers["X-CSRF-Token"] = csrf
+        response = self.client.post(path, json=body)
+        self.assertEqual(response.status_code, 422)
+        self.assertIn("26", response.json()["error"]["message"])
+        self.assertEqual(self.preview(uploaded["dataset_id"])["checksum"], preview["checksum"])
+        self.assertEqual(self.preview(uploaded["dataset_id"])["status"], "needs_review")
+
+    def test_setup_pending_cannot_be_saved_from_another_page(self) -> None:
+        uploaded = self.upload(b"code,amount\n0007,0.10\n")
+        body = self.publish_input(self.preview(uploaded["dataset_id"]))
+        with db.get_engine().begin() as connection:
+            connection.execute(
+                update(revisions)
+                .where(revisions.c.id == UUID(uploaded["revision_id"]))
+                .values(setup_proposal={"status": "pending", "request_key": uuid4().hex})
+            )
+        response = self.client.post(f"/api/datasets/{uploaded['dataset_id']}/confirm", json=body)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()["error"]["code"], "REQUEST_PENDING")
+        self.assertEqual(self.preview(uploaded["dataset_id"])["status"], "needs_review")
+
     def test_missing_explicit_unknown_filter_stops_before_sql_and_empty_sum_remains_null(
         self,
     ) -> None:

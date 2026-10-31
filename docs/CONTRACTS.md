@@ -1,5 +1,11 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## Luồng dataset hiện hành — 31/10/2026
+
+ChọnCSV/XLSX tự upload→setupGemini, cùng requestidempotency/cachedresponse checksum+sheet. Không checkbox consent/querypermission trong UI; client tự gửi flags đúng chính sách upload-for-AI mới. Chỉ sheet selection khi workbook nhiều sheet; cachedproposal tự áp dụng; model unavailable có local fallback ghi rõ. Không tự publish. Xác nhận bằng Lưu vào không gian làm việc sau previewlossless, đóngdialog/chọnsource.
+
+POST `/api/datasets/{id}/normalization-preview`: PublishInput + owner/session/CSRF, statusneeds_review; full-table same validator as confirm, tối đa20preview rows raw/canonical +revision/checksum/sheet/count. Không DDL/mutation/generation. GETpreview thêm original_rows/original_headers; confirm chặn setup pending409. UI kiểm đúng draft trước Save. New publish dùng2sharingproviders; legacy owner explicitnewquestion cấu hình cùng auditedPATCH khi cần. Backendprivacy/provider/quota checks vẫn áp dụng; không backfill/đổi phânloại/sourcevalues. API directclients cũ vẫn dùng schema có consent/sharing, không coi UI mandatorypolicy là admin bypass.
+
 ## Bổ sung hiện hành: audit503 và bằng chứng giá trị hiện tại — 31/10/2026
 
 Giữ một pipeline QueryRequest→QueryPlan→binder/compiler→reader→facts. Query payload thêm current_value_mentions lấy bằng matcher hiện hữu từ bounded source vocabulary đã kiểm quyền; không phải filter được tự tạo. Context verified giữ nguyên, model vẫn phải đề xuất và binder kiểm raw/candidate/mapping. UI/API shape không đổi.

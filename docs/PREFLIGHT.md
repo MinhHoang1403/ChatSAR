@@ -1,5 +1,21 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Đơn giản hoá upload và chuẩn hoá dữ liệu — checkpoint31/10/2026
+
+Theo chỉ đạo mới: **chọn file → tự chuẩn bị bằngAI → xem gốc/sau chuẩn hoá → lưu vào không gian**. Bỏ nút upload sau chọn file, phân tích local/AI riêng, checkbox metadata/vocabulary/query sharing, chọn model setup và mở proposal lưu bằng tay; không còn synthetic checkbox trong luồng người dùng. Gemini setup mặc định, cached proposal khớp checksum/sheet tự áp dụng. XLSX nhiều sheet mới yêu cầu chọn sheet; đang pending chỉ đọc trạng thái, không phát sinh model lặp. Chỉnh sửa kỹ thuật thu gọn. Lưu thành công tự đóng modal/chọn source. File gốc bất biến, không tự điền/xóa/fuzzy-sửa giá trị.
+
+Chính sách người dùng mới bắt buộc sử dụng mô hình được biểu diễn bằng flags setup tự cấu hình và sharing2provider khi lưu. Nguồn cũ chỉ được cấp qua API owner/CSRF/audit hiện hữu khi owner gửi câu hỏi trên đúng nguồn đã chọn; không backfill hoặc gửi dữ liệu các nguồn/tài khoản khác. Adapter guard/ownership/provider enable/quota vẫn giữ, classification private không đổi; Knowledge không tự được dispatch.
+
+POSTnormalization-preview nhận cùng PublishInput, kiểm owner/CSRF/revision/timezone và dùng **reviewed_rows/validate_rows chung với publish**, toàn bảng trước khi trả20dòngraw/typed. Không tạo table/ghi revision/callmodel. GETpreview thêm original_rows/headers cho dữ liệu đã lưu. DTO đối chiếu checksum/revision/sheet/count; Save chỉ mở khi đúng draft được validate, có chặn double click. PendingAI không thể bị publish bởi trang khác. Preview NULL/empty/Decimal/date/Boolean/leadingzero giữ đúng và ô đổi kiểu/định dạng được đánh dấu.
+
+183unit/46integration(8auth+32dataset+6guest)/37evaluationPG/17frontend/types/build/ruff/mypy đạt. API test đối chiếu trực tiếp rows trong PostgreSQL physical table với expected viết tay; preview/publish bằng nhau, rawsource/checksum không đổi; sai ở row26 vẫn bị chặn dù chỉ xem20rows; ownerB/CSRF bị từ chối và pendingAI409. Frontend tests kiểm auto request1lần/cached0lần, bindingnguồn, dữ liệu nhạykiểu, sharingowner và không còn controls dư.
+
+BrowserCSV3rows/4cols: chọn file tự upload/setup, quota95 trả local rõ ràng, trước/sau có empty→NULL/Boolean/ID0007; thử integer làm mất zero đầu bị422 và Save disabled, khôi phụcTEXT/lưu1click đóngmodal/chọnsource. XLSXGuide/Data: chỉ chọn sheet khi cần, tự setup sau chọnData, xem3rows/3cols/lưu; reload còn nguồn/typed preview. Các source mới normalization-ui.csv và normalization-sheets.xlsx giữ trong không gian tổng hợp Kiểm thử nghiệm thu31-10, private/bothproviders theo chính sách mới; nguồn/chat cũ không đổi. DOM390/1280 không overflow, grid1/2columns, viewport đãreset; ảnh desktop IAB chỉ chụp phần view thực, không gọi ảnh crop đó là audit toàn desktop. Ảnhlocalnormalization-final-preview.png. Console chỉ còn GSI observation cũ14:22, không lỗiapp mới.
+
+**Không gọi thêm model trong checkpointUI:** ledger199/activegrant95used/reserve1.3337723USD vẫn nguyên; browser đã kiểm honest local fallback và cached reuse, chưa lấy đó làm positive auto-AI-live. Query core bằng byte955d9f3, không cộng score6/7cũ thành điểm của fullsource mới. Root checkpoint955d9f36954b094d79c8ab1ad45228452a4be509 đãpush vàCIpush+PRSUCCESS. Hai plan/gold không đổi, PR1Draft/chưa merge/Phase2, tổngPhase1NOT_ACCEPTED.
+
+**Quyền tiếp nối:** owner trả lời “cứ test thoải mái” cho phần5lượt và sau đó tăng **tổng500requests**, xác nhận **tối đa10USD dự phòng**. Giữ một grant/ledger/keys; sẽ mở rộng schema/cap có kiểm soát trước live, chừa5manual (Codex đến tổng495). Không coi đây là500lượt phải tiêu hết. Công việc còn lại là sửa literal wire/đo bộ rộng cùng source và nghiệm thu, không dừng vì checkpointUI đã xong.
+
 ## Final root-cause repair — checkpoint 31/10/2026
 
 ### A. Trạng thái

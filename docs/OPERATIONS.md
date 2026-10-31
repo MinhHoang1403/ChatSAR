@@ -1,5 +1,11 @@
 # Vận hành ChatSAR
 
+## Luồng dữ liệu mới và quyền500 — 31/10/2026
+
+Chọn file tự chuẩn bị, xem trước/sau rồiLưu; không còn bấm phân tích/cấp quyền riêng. Cachedsetup tự mở, XLSX nhiều sheet chọn đúng trang. API normalization-preview dùng cùng validator với publish/toàn bảng, không callmodel. LỗiAI sẽ nói rõ dùng nhận diện từ file; không tự retry để tiêu credits. Nguồn mới được cấu hình cho2model theo policy owner, actualdispatch vẫn chọn một model/guard/cap; privategiữnguyên.
+
+Owner vừa cấp trầntổng500requests/10USD dự phòng, giữ5manual. Một grant69d37b9b-fd6d-4296-9189-9fb5303b46a1 và ledger199/95used tại checkpointUI, không reset/newgrant/đổi keys. Chỉ tăngcap sau migration và audit snapshot đúng quyền mới; Knowledgecap5đãdùng5, Llama/BGEkhôngthêm. Các đoạn100/1.50 phía dưới là lịch sử, không phải ngân sách hiện hành sau áp dụng mở rộng.
+
 ## Vận hành audit503 — 31/10/2026
 
 Không sửa usage/cost thành0, không đổi grant/reset ledger. `python -m operations.usage_review --usage-id UUID --grant-id UUID --model gemini-3.5-flash-lite --reserve DECIMAL --authority "Quyền cụ thể của chủ dự án"` chỉ preview. Sau kiểm đúng evidence/quyền, thêm `--apply` để ghi audit bằng chatsar_admin qua Compose db. API không nhận mật khẩu admin, không tự chạy công cụ này. Công cụ chỉ nhận verified HTTP503/error/dispatch1/UNKNOWN/fullreserve và snapshot nguyên vẹn, giới hạn3review503/grant; không phải bypass chung. Review trùng/mismatch/hết budget phải điều tra, không sửa trực tiếp bảng để vượt.

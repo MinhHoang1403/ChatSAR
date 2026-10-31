@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { api, ApiError, record } from './api';
 import type { Dataset } from './Datasets';
+import { prepareDatasetForQuery } from './data';
 import Menu from './Menu';
 import Result from './Result';
 
@@ -90,6 +91,7 @@ export default function Chat({ workspaceId, csrf, scope, selected, onSelect, onR
     sending.current = true; setBusy(true); setError(''); setRequestFailure(null);
     let id = selected;
     try {
+      await prepareDatasetForQuery(scope, csrf);
       if (!id) {
         id = conversation(await api('/conversations', { method: 'POST', body: JSON.stringify({ workspace_id: workspaceId, title: question.trim().slice(0, 120) }) }, csrf)).id;
         onSelect(id);
