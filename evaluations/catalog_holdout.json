@@ -1,0 +1,347 @@
+{
+  "format": "chatsar-locked-generalization",
+  "data_classification": "synthetic",
+  "fixtures": [
+    "datasets/catalog_holdout.sql"
+  ],
+  "policy": "Locked before the first model call on these two schemas after task-boundary contract repair. Handwritten metadata, SQL and rows; author knows labels, internal held-out not external blind. No labels from this suite used to tune runtime. Earlier ceramics/marine first-run proof belongs to its earlier source, not the final score.",
+  "sources": {
+    "museum": {
+      "table": "museum_fixture.objects",
+      "columns": {
+        "asset_tag": "text",
+        "gallery": "text",
+        "mass_g": "numeric",
+        "on_display": "boolean",
+        "cataloged_on": "date"
+      },
+      "metadata": {
+        "asset_tag": {
+          "role": "identifier"
+        },
+        "mass_g": {
+          "role": "amount",
+          "unit": "g"
+        },
+        "cataloged_on": {
+          "role": "time"
+        }
+      }
+    },
+    "waterworks": {
+      "table": "waterworks_fixture.flow_checks",
+      "columns": {
+        "check_code": "text",
+        "zone": "text",
+        "volume_l": "numeric",
+        "inspected": "boolean",
+        "read_at": "timestamp"
+      },
+      "metadata": {
+        "check_code": {
+          "role": "identifier"
+        },
+        "volume_l": {
+          "role": "amount",
+          "unit": "L"
+        },
+        "read_at": {
+          "role": "time"
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "museum_lookup",
+      "domain": "museum",
+      "question": "Hiện asset_tag và mass_g của asset_tag 0028.",
+      "group": "catalog_holdout",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "selection": [
+          "asset_tag",
+          "mass_g"
+        ],
+        "filters": {
+          "operator": "EQ",
+          "column": "asset_tag",
+          "value": "0028"
+        }
+      },
+      "oracle_sql": "SELECT asset_tag,mass_g FROM museum_fixture.objects WHERE asset_tag='0028'",
+      "column_types": {
+        "asset_tag": "text",
+        "mass_g": "numeric"
+      },
+      "expected_rows": [
+        {
+          "asset_tag": "0028",
+          "mass_g": "1.65"
+        }
+      ]
+    },
+    {
+      "case_id": "museum_group",
+      "domain": "museum",
+      "question": "Tổng mass_g cho từng gallery, xếp gallery tăng dần.",
+      "group": "catalog_holdout",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "SUM",
+            "column": "mass_g"
+          }
+        ],
+        "selection": [
+          "gallery"
+        ],
+        "group_by": [
+          "gallery"
+        ],
+        "order": [
+          {
+            "field": "gallery",
+            "direction": "asc"
+          }
+        ]
+      },
+      "oracle_sql": "SELECT gallery,SUM(mass_g) total FROM museum_fixture.objects GROUP BY gallery ORDER BY gallery",
+      "column_types": {
+        "gallery": "text",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "gallery": "archive",
+          "total": null
+        },
+        {
+          "gallery": "modern",
+          "total": "2.00"
+        }
+      ]
+    },
+    {
+      "case_id": "museum_month",
+      "domain": "museum",
+      "question": "Lấy cataloged_on làm thời gian. Đếm dòng và tổng mass_g cho cả tháng 2 năm 2028, trả một kết quả chung.",
+      "group": "catalog_holdout",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          },
+          {
+            "operator": "SUM",
+            "column": "mass_g"
+          }
+        ],
+        "filters": {
+          "operator": "AND",
+          "children": [
+            {
+              "operator": "GTE",
+              "column": "cataloged_on",
+              "value": "2028-02-01"
+            },
+            {
+              "operator": "LT",
+              "column": "cataloged_on",
+              "value": "2028-03-01"
+            }
+          ]
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) count,SUM(mass_g) total FROM museum_fixture.objects WHERE cataloged_on>='2028-02-01' AND cataloged_on<'2028-03-01'",
+      "column_types": {
+        "count": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "count": 2,
+          "total": "2.00"
+        }
+      ]
+    },
+    {
+      "case_id": "museum_missing_year",
+      "domain": "museum",
+      "question": "Tổng mass_g tháng 2?",
+      "group": "catalog_holdout",
+      "split": "held-out",
+      "expected_status": "clarify",
+      "expected_semantics": {},
+      "oracle_sql": null,
+      "column_types": {},
+      "expected_rows": []
+    },
+    {
+      "case_id": "waterworks_false_metrics",
+      "domain": "waterworks",
+      "question": "Đếm dòng và tổng volume_l khi inspected bằng false.",
+      "group": "catalog_holdout",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          },
+          {
+            "operator": "SUM",
+            "column": "volume_l"
+          }
+        ],
+        "filters": {
+          "operator": "EQ",
+          "column": "inspected",
+          "value": "false"
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) count,SUM(volume_l) total FROM waterworks_fixture.flow_checks WHERE inspected=false",
+      "column_types": {
+        "count": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "count": 4,
+          "total": "1.36"
+        }
+      ],
+      "baseline_ref": "waterworks_false_metrics"
+    },
+    {
+      "case_id": "waterworks_followup",
+      "domain": "waterworks",
+      "question": "Nếu chỉ zone ridge thì sao?",
+      "group": "catalog_holdout",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          },
+          {
+            "operator": "SUM",
+            "column": "volume_l"
+          }
+        ],
+        "filters": {
+          "operator": "AND",
+          "children": [
+            {
+              "operator": "EQ",
+              "column": "inspected",
+              "value": "false"
+            },
+            {
+              "operator": "EQ",
+              "column": "zone",
+              "value": "ridge"
+            }
+          ]
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) count,SUM(volume_l) total FROM waterworks_fixture.flow_checks WHERE inspected=false AND zone='ridge'",
+      "column_types": {
+        "count": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "count": 3,
+          "total": "0.45"
+        }
+      ],
+      "context": {
+        "previous_case": "waterworks_false_metrics"
+      }
+    },
+    {
+      "case_id": "waterworks_ranking",
+      "domain": "waterworks",
+      "question": "Hai check_code có volume_l cao nhất khác NULL? Hiện check_code và volume_l, nếu bằng nhau xếp check_code tăng dần.",
+      "group": "catalog_holdout",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "selection": [
+          "check_code",
+          "volume_l"
+        ],
+        "filters": {
+          "operator": "IS_NOT_NULL",
+          "column": "volume_l"
+        },
+        "order": [
+          {
+            "field": "volume_l",
+            "direction": "desc"
+          },
+          {
+            "field": "check_code",
+            "direction": "asc"
+          }
+        ],
+        "limit": 2
+      },
+      "oracle_sql": "SELECT check_code,volume_l FROM waterworks_fixture.flow_checks WHERE volume_l IS NOT NULL ORDER BY volume_l DESC,check_code LIMIT 2",
+      "column_types": {
+        "check_code": "text",
+        "volume_l": "numeric"
+      },
+      "expected_rows": [
+        {
+          "check_code": "W1002",
+          "volume_l": "2.04"
+        },
+        {
+          "check_code": "W1005",
+          "volume_l": "0.91"
+        }
+      ]
+    },
+    {
+      "case_id": "waterworks_empty",
+      "domain": "waterworks",
+      "question": "Tổng volume_l khi zone bằng văn bản 'unlisted'?",
+      "group": "catalog_holdout",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "SUM",
+            "column": "volume_l"
+          }
+        ],
+        "filters": {
+          "operator": "EQ",
+          "column": "zone",
+          "value": "unlisted"
+        }
+      },
+      "oracle_sql": "SELECT SUM(volume_l) total FROM waterworks_fixture.flow_checks WHERE zone='unlisted'",
+      "column_types": {
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "total": null
+        }
+      ]
+    }
+  ]
+}

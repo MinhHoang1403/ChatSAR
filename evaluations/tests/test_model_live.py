@@ -2,10 +2,19 @@
 
 import unittest
 
-from evaluations.model_live import semantic_shape, semantics_match
+from evaluations.model_live import safe_refusal, semantic_shape, semantics_match
 
 
 class SemanticScoringTests(unittest.TestCase):
+    def test_safe_refusal_measurement_never_skips_wrong_answers_or_provider_errors(self):
+        item = {"expected_status": "unsupported", "actual_status": "clarify", "actual_plan": {"task": "CLARIFY"}, "false_refusal": False}
+        self.assertTrue(safe_refusal(item))
+        self.assertTrue(safe_refusal({**item, "expected_status": "answered", "false_refusal": True}))
+        for status in ("answered", "partial", "provider_unavailable", "execution_error", "pending"):
+            self.assertFalse(safe_refusal({**item, "actual_status": status}))
+        self.assertFalse(safe_refusal({**item, "actual_plan": {"task": "SQL"}}))
+        self.assertFalse(safe_refusal({**item, "actual_plan": None}))
+
     def test_single_nonnull_primary_key_counts_are_equivalent_with_other_metrics_and_groups(self):
         columns = [{"name": "id", "primary_key": True, "nullable": False}, {"name": "amount"}]
         expected = {"metrics": [{"operator": "COUNT_ROWS", "column": None}, {"operator": "SUM", "column": "amount"}], "selection": ["kind"], "group_by": ["kind"], "order": [{"field": "COUNT_ROWS:None", "direction": "desc"}]}

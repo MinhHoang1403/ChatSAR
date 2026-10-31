@@ -295,6 +295,16 @@ def semantics_match(actual: dict, expected: dict, catalog_columns: list[dict] | 
     )
 
 
+def safe_refusal(item: dict) -> bool:
+    if item["actual_status"] not in {"clarify", "unsupported", "insufficient"}:
+        return False
+    return item["false_refusal"] or (
+        item["expected_status"] in {"clarify", "unsupported"}
+        and item["actual_status"] in {"clarify", "unsupported"}
+        and (item.get("actual_plan") or {}).get("task") in {"CLARIFY", "UNSUPPORTED"}
+    )
+
+
 def run_semantic(args) -> None:
     if getattr(args, "prepare_only", False):
         raise RuntimeError("Semantic prepare-only chưa hỗ trợ; không được gọi model.")
@@ -623,7 +633,7 @@ get_engine().dispose()
                 flush=True,
             )
             continue_refusal = (
-                getattr(args, "continue_after_refusal", False) and item["false_refusal"]
+                getattr(args, "continue_after_refusal", False) and safe_refusal(item)
             )
             if (not passed and not continue_refusal) or usage["estimated_cost_usd"] is None:
                 report["stop_reason"] = "case_failed" if not passed else "usage_unknown"

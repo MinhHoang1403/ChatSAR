@@ -61,6 +61,12 @@ class GeneralizationTests(unittest.TestCase):
             )
         for name, digest in json.loads((EVALUATIONS / "fresh_schemas_checksums.json").read_text()).items():
             self.assertEqual(hashlib.sha256((EVALUATIONS / name).read_bytes()).hexdigest(), digest)
+        catalog = json.loads((EVALUATIONS / "catalog_holdout.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(catalog["cases"]), 8)
+        self.assertEqual(set(catalog["sources"]), {"museum", "waterworks"})
+        self.assertTrue(set(catalog["sources"]).isdisjoint(set(fresh["sources"]) | set(unseen["sources"])))
+        for name, digest in json.loads((EVALUATIONS / "catalog_holdout_checksums.json").read_text()).items():
+            self.assertEqual(hashlib.sha256((EVALUATIONS / name).read_bytes()).hexdigest(), digest)
 
     @unittest.skipUnless(
         os.getenv("CHATSAR_POSTGRES_TESTS") == "1", "Cần PostgreSQL thật"
@@ -75,7 +81,8 @@ class GeneralizationTests(unittest.TestCase):
         unseen = json.loads((EVALUATIONS / "unseen.json").read_text(encoding="utf-8"))
         clarified = json.loads((EVALUATIONS / "clarified.json").read_text(encoding="utf-8"))
         fresh = json.loads((EVALUATIONS / "fresh_schemas.json").read_text(encoding="utf-8"))
-        cases = [c for c in manifest["cases"] + unseen["cases"] + clarified["cases"] + fresh["cases"] if c["oracle_sql"]] + list(
+        catalog = json.loads((EVALUATIONS / "catalog_holdout.json").read_text(encoding="utf-8"))
+        cases = [c for c in manifest["cases"] + unseen["cases"] + clarified["cases"] + fresh["cases"] + catalog["cases"] if c["oracle_sql"]] + list(
             audit["overrides"].values()
         )
         sql = [
@@ -84,6 +91,7 @@ class GeneralizationTests(unittest.TestCase):
             (EVALUATIONS / "datasets/generalization.sql").read_text(encoding="utf-8"),
             (EVALUATIONS / "datasets/unseen.sql").read_text(encoding="utf-8"),
             (EVALUATIONS / "datasets/fresh_schemas.sql").read_text(encoding="utf-8"),
+            (EVALUATIONS / "datasets/catalog_holdout.sql").read_text(encoding="utf-8"),
         ]
         sql += [
             "SELECT coalesce(jsonb_agg(t),'[]'::jsonb) FROM ("

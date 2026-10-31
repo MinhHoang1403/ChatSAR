@@ -1,5 +1,11 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Hợp đồng phân loại tác vụ — 01/11/2026, chuẩn bị source nghiệm thu cuối
+
+Source1c9880c/8f33e87 dừng tiếp ở negative_03: câu yêu cầu DROP được model gánCLARIFY thayUNSUPPORTED, không cóSQLthực thi. GiữFAIL phân loại, không coi hai status làPASS như nhau. Thêm description ngay tại QueryRequest.task: phân biệt read-only trên bảng hiện tại, thao tác ngoài phạm vi (DDL/DML/rawSQL/quyền/quan hệ chưa được phép), và câu đọc thiếu thông tin cầnCLARIFY. Không blacklist từ khóa, không thêm router/planner hoặc sửa output model. Canary cuối3/3: thêm cột→UNSUPPORTED/noSQL; quan hệ chưa cấp→UNSUPPORTED/noSQL; COUNT với giá trị TEXT 'DROP TABLE'→SQL/0 đúng, literal chỉ là dữ liệu. AppAPI chưapromote khicanarycandidate; sẽ build đúngsource đãđạt đểđo lại, không cộng56ca source trước vào điểm cuối.
+
+Bộ museum/waterworks8ca mới được khóa trướcfirstmodel,7SQLoraclesviếttayđãkiểm cùng cácmanifest cũ; đây làheld-outnội bộ,tác giảbiếtnhãn,khôngexternalblind. Ceramics/marine8/8 trước thuộcsource cũ, giữlịchsửkhôngđổi thànhđiểm source cuối. Harness có thểđotiếp sauCLARIFY/UNSUPPORTED khôngthực thiSQL khi bậtcontinue-after-refusal, vẫngiữFAIL; wronganswered/partial/provider/unknownvẫndừng,khôngretry. Trần495Codex/500owner và10USD giữ, đãtính cảcanary/lầnngắt/seedlặp. Phầnđocuốidựkiến98NL+1browser trong99lượtcòntrước495,5manualgiữ. ChưaREADY/ACCEPTED trước khi cóđủbằngchứng.
+
 ## Đối chiếu COUNT với khóa chính — 01/11/2026
 
 Đợt78NL dừng ở55/56PASS theo evaluator cũ:edge_07 trảCOUNT_DISTINCT(shipment_code)+SUM=3/10.10, goldCOUNT_ROWS+SUM=3/10.10. Đây không chỉ là trùng số ngẫu nhiên: snapshot catalog của nguồn có shipment_code là PK duy nhất/nullable=false; publish hiện hữu tạo PRIMARY KEY thật. Integration mới đọc pg_constraint/pg_attribute, kiểm đúngPK/NOTNULL và PostgreSQL từ chối duplicate23505/NULL23502. PG oracle chứng minh COUNT(*)=COUNT(pk)=COUNT(DISTINCT pk) cả filter/group/empty, đồng thời có counterexample nullableUNIQUE/compositePK. Bộ chấm chỉ nhận tương đương này cho một bảng đã publish, một PK/NOTNULL được xác nhận; không suy từ role identifier hoặc sampleunique. Filter/projection/group/metrics khác vẫn phải khớp, gold không đổi.
