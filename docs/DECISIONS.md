@@ -1,5 +1,9 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+## Review429 giữ dự phòng —31/10/2026
+
+Sau direct HTTP429 thiếuusage, owner cho phép audit đúng lượt8e3bf1d7-dcf8-47de-9710-716907b2c309. Mở cơ chế audit hiện hữu cho429/PROVIDER_RATE_LIMIT, vẫn fullsnapshot/responsehook/UNKNOWN/NOT_VERIFIED/admin và tối đa3review429/503tổng/grant. Giữ count/fullreserve, không tự retry/duyệt lỗi kếtiếp. Không lấy500/10 làm quyền nângquotaGoogle. Probe200sauaudit chứng minh hồi phục mẫu này; nguyên nhânRPM/TPM/RPD chưa đủevidence. Harness giãn15s và chỉ gắnusage khi có đúng1row mới; nếu0row hoặc concurrentnewrows dừng/unscored thay gắn rowcuối tùytiện. NguồnGoogle chính thức: https://ai.google.dev/gemini-api/docs/rate-limits , https://ai.google.dev/gemini-api/docs/troubleshooting .
+
 ## Khoảng tháng là một điều kiện — 31/10/2026
 
 Sau repro model tự sinh ngày không có trong câu, QueryRequest thêm leaf IN_MONTH với literal nguyên văn tháng/năm. Adapter chỉ hạ thành AND(GTE,LT) cùng raw span; binder/calendar_month hiện hữu kiểm năm/timezone và tính hai mốc. Không thêm parser/planner/compiler khác hoặc tự sửa filter sau model. Unit date/timestamp, leap/DST/rollover/missingyear, API/PG và canary timestamp thật1/1 trước promote đạt. Điểm source trước không gộp vào source mới. Câu basic_logistics_empty_sum có tranh chấp nghĩa “không có tên” (IS_NULL hay literal “không có”); giữ gold/FAIL riêng, sẽ đo tách ca này, không dùng kết quả NULL trùng để nâng semantic accuracy.

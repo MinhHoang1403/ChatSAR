@@ -8,7 +8,7 @@ import json
 import subprocess
 from datetime import datetime
 from decimal import Decimal
-from time import perf_counter
+from time import perf_counter, sleep
 from uuid import uuid4
 
 from evaluations.oracle import EVALUATIONS, ROOT, postgres, verify_checksums
@@ -270,6 +270,9 @@ def semantics_match(actual: dict, expected: dict) -> bool:
 def run_semantic(args) -> None:
     if getattr(args, "prepare_only", False):
         raise RuntimeError("Semantic prepare-only chưa hỗ trợ; không được gọi model.")
+    interval = getattr(args, "interval_seconds", 0)
+    if not 0 <= interval <= 60:
+        raise RuntimeError("Khoảng cách kiểm thử phải từ 0 đến 60 giây.")
     manifest = load_scenarios()
     if getattr(args, "generalization", False):
         suite_name = args.generalization if isinstance(args.generalization, str) else "generalization.json"
@@ -379,6 +382,7 @@ def run_semantic(args) -> None:
         "max_requests": args.max_requests,
         "catalog_review": args.catalog_review,
         "continue_after_refusal": getattr(args, "continue_after_refusal", False),
+        "interval_seconds": interval,
     }
     used = 0
     try:
@@ -435,6 +439,7 @@ get_engine().dispose()
 """)
         )
         report["baseline_usage_ids"] = baseline[:]
+        previous_dispatch = None
         for case in selected:
             if used >= args.max_requests:
                 report["stop_reason"] = "request_cap"
@@ -453,7 +458,9 @@ get_engine().dispose()
                     "/conversations",
                     {"workspace_id": workspace["id"], "title": case["case_id"]},
                 )["id"]
-            started = perf_counter()
+            if previous_dispatch is not None:
+                sleep(max(0, interval - (perf_counter() - previous_dispatch)))
+            started = previous_dispatch = perf_counter()
             envelope = session.request(
                 f"/conversations/{chat}/messages",
                 {
@@ -478,14 +485,24 @@ with get_engine().connect() as c:
                     + chat
                     + """')).order_by(messages.c.created_at.desc()).limit(1)).scalar_one()
  grant=UUID(get_settings().cloud_grant_id)
- usage=[dict(r) for r in c.execute(select(provider_usage).where(provider_usage.c.grant_id==grant).order_by(provider_usage.c.created_at.desc()).limit(1)).mappings()]
+ usage=[dict(r) for r in c.execute(select(provider_usage).where(provider_usage.c.grant_id==grant)).mappings()]
 print(json.dumps({'plan':plan,'usage':usage},default=str))
 get_engine().dispose()
 """
                 )
             )
-            usage = diagnostic["usage"][0]
-            used += int(usage["id"] not in baseline)
+            new_usage = [row for row in diagnostic["usage"] if row["id"] not in baseline]
+            if len(new_usage) != 1:
+                # Không gắn tùy tiện row mới nhất nếu có người khác đang gọi,
+                # hoặc API đã chặn trước dispatch. Không chấm model từ lượt đó.
+                report["stop_reason"] = "ambiguous_usage_association" if new_usage else "no_provider_dispatch"
+                report["unscored_attempt"] = {
+                    "case_id": case["case_id"], "status": envelope["status"],
+                    "error_code": envelope.get("error_code"), "new_usage_rows": len(new_usage),
+                }
+                break
+            usage = new_usage[0]
+            used += 1
             baseline.append(usage["id"])
             shape = (
                 semantic_shape(diagnostic["plan"], source["preview"]["columns"], envelope.get("facts", {}).get("filters", []))
@@ -626,6 +643,7 @@ def main() -> None:
     suite.add_argument("--generalization", nargs="?", const="generalization.json", default=False, help="Schema mới khóa độc lập; tùy chọn tên manifest")
     suite.add_argument("--adjudicated", action="store_true", help="Chấm riêng adjudication, giữ điểm gốc")
     parser.add_argument("--max-requests", type=int, default=0)
+    parser.add_argument("--interval-seconds", type=float, default=0, help="Giãn lượt kiểm thử (0–60s), không retry.")
     parser.add_argument("--output", default="artifacts/semantic-live.json")
     parser.add_argument("--catalog-review", help="Local source-checksummed metadata reviewed before evaluation")
     parser.add_argument("--continue-after-refusal", action="store_true", help="Giữ FAIL và đo tiếp ca độc lập sau false refusal; không retry hoặc bỏ qua đáp án sai.")

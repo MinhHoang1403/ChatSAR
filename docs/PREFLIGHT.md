@@ -1,5 +1,11 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## HTTP429 và kiểm tiếp có kiểm soát —31/10/2026
+
+Source d85ba75 đo28ca:27PASS/1provider429, không gọi lỗi429 là saiSQL. Còn49ca trong nhóm77 chưa chạy, ca empty-sum tranh chấp đo riêng,12systemguards riêng. Không gộp source trước. Ledger286=281Gemini/5Knowledge, grant182/reserve2.5870103/knownestimate0.2857203USD khi lỗi; id8e3bf1d7-dcf8-47de-9710-716907b2c309 dispatch1/http429/PROVIDER_RATE_LIMIT/tokens-costNULL/reserve0.0144997. Owner đã cấp quyền riêng đúnglượt; CLI preview/apply audit, toànrow bất biến. API review429 dùng cùng fullsnapshot/source hook/UNKNOWN/NOT_VERIFIED và cap3review429/503tổng; unknown khác vẫn chặn/cooldown, không automatic retry. Test13quotaPG gồm429chưa review, preview-only, wrong503authority, fullreserve/count, cooldown và unknown thứhai đạt;199unit/49provider subset/21answers subset/ruff/mypy đạt. Không cộng subset vào tổngunit. Một probeGemini thật thành công và2ca HTTP(MIN0.20/completedSUM1.30) đạt sauaudit; giãn lượt15s trước đợt rộng tiếp. Thông báo429 cho người dùng nêu giới hạndịchvụ, không gợi ý nhầm cấu hình.
+
+CSV0.35/XLSX0.40 giữ nguyên toàn revision/setup/plan/envelope/SQL qua Compose stackrestart; web/api/dbhealthy. Original199ledgerrows/full127rows,2Googleaccounts/privateB/history0.30 và11plan/gold gốc bất biến;19runtime modules khớp local,118trackedfiles+2servedassets secret0hits. Clock GoogleHEAD mới lệch-0.28s/RTT0.17s(AgeNULL), không tăngtokenclockskew; WindowsTimeservice hiệnstopped nên không coi đó là đã bậtNTP service. CI d85ba75push+PRSUCCESS, chưa merge/Phase2. Fullsourceguard mới cần đợt rộng; chưa READY_FOR_USER_ACCEPTANCE.
+
 ## Browser ingestion thật và đổi nguồn — 31/10/2026
 
 CSV acceptance-reviewed.csv4rows: AI tự chuẩn bị→gốc/sau→Save→Gemini trả0.35 không tự gánVND. XLSX acceptance-auto.xlsx(Hướng dẫn/Dữ liệu): chỉ chọnsheetDữ liệu→AIauto→preview3rows→Save→Gemini0.40; NULL/Boolean/ID0007giữ, private/bothproviders, setup complete/ai_proposal và SQLsucceeded. Đã snapshot revision/setup/plan/envelope/SQL để kiểm restart. File trùng checksum được mở source đã lưu/cached0call, không lấy đó làm AI-call mới. Các source/chat cũ giữ nguyên.

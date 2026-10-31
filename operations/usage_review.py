@@ -1,4 +1,4 @@
-"""Review bảo thủ một phản hồi 503 đã ghi nhận, bằng role admin ngoài API.
+"""Review bảo thủ phản hồi 429/503 đã ghi nhận, bằng role admin ngoài API.
 
 Mặc định chỉ preview. Không gọi provider, không sửa ledger/grant hoặc usage cũ.
 """
@@ -57,10 +57,14 @@ def review(
     authority: str,
     *,
     apply: bool = False,
+    http_status: int = 503,
 ) -> dict:
     usage_id, grant_id = str(UUID(usage_id)), str(UUID(grant_id))
     if not 10 <= len(authority) <= 1000 or not reserve.is_finite() or reserve <= 0:
         raise ValueError("Cần quyền cụ thể và reserve dương hữu hạn")
+    errors = {503: "PROVIDER_TEMPORARY", 429: "PROVIDER_RATE_LIMIT"}
+    if http_status not in errors:
+        raise ValueError("Chỉ nhận response trực tiếp 429/503 đã được cấp quyền đối soát")
     row = json.loads(
         postgres(
             "SELECT row_to_json(u) FROM app.provider_usage u WHERE id="
@@ -74,9 +78,9 @@ def review(
             row["model"] != model,
             row["provider"] != "gemini",
             row["status"] != "error",
-            row["error_code"] != "PROVIDER_TEMPORARY",
+            row["error_code"] != errors[http_status],
             row["dispatch_count"] != 1,
-            row["http_status"] != 503,
+            row["http_status"] != http_status,
             row["estimated_cost_usd"] is not None,
             any(
                 row[k] is not None
@@ -85,9 +89,9 @@ def review(
             Decimal(str(row["reserved_cost_usd"])) != reserve,
         )
     ):
-        raise ValueError("Snapshot/evidence không đủ điều kiện review 503")
+        raise ValueError("Snapshot/evidence không đủ điều kiện review 429/503")
     evidence = {
-        "http_status": 503,
+        "http_status": http_status,
         "source": "httpx_response_hook",
         "usage": "UNKNOWN",
         "billing": "NOT_VERIFIED",
@@ -122,12 +126,12 @@ def review(
             "AND (SELECT sum(reserved_cost_usd) FROM app.provider_usage "
             "WHERE grant_id=g.id)<=g.budget_usd "
             "AND (SELECT count(*) FROM app.provider_usage_reviews r JOIN app.provider_usage p "
-            "ON p.id=r.usage_id WHERE p.grant_id=g.id AND p.http_status=503)<3 "
+            "ON p.id=r.usage_id WHERE p.grant_id=g.id AND p.http_status IN (429,503))<3 "
             "RETURNING usage_id; COMMIT;"
         )
         if usage_id not in output.splitlines():
             raise ValueError(
-                "Snapshot đổi, hết hạn mức hoặc đã đạt giới hạn 3 review 503/grant"
+                "Snapshot đổi, hết hạn mức hoặc đã đạt giới hạn 3 review 429/503 mỗi grant"
             )
         payload["applied"] = True
     return payload
@@ -141,6 +145,7 @@ def main() -> None:
     parser.add_argument("--reserve", required=True, type=Decimal)
     parser.add_argument("--authority", required=True)
     parser.add_argument("--apply", action="store_true")
+    parser.add_argument("--http-status", type=int, choices=[429, 503], default=503)
     args = parser.parse_args()
     print(
         json.dumps(
@@ -151,6 +156,7 @@ def main() -> None:
                 args.reserve,
                 args.authority,
                 apply=args.apply,
+                http_status=args.http_status,
             ),
             ensure_ascii=False,
             indent=2,

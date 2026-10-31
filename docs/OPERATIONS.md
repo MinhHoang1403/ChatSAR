@@ -1,5 +1,9 @@
 # Vận hành ChatSAR
 
+## Đối soát429 có quyền riêng —31/10/2026
+
+Owner đã duyệt đúng HTTP429 8e3bf1d7-dcf8-47de-9710-716907b2c309. CLI usage_review nhận --http-status429 (mặc định503); so fullsnapshot/grant/model/status/dispatch1/HTTP direct/error tương ứng/all tokens-costNULL/reserve dương. Mặc định preview, --apply chỉ admin và cần quyền cụ thể từng request. Giữ cả count và fullreserve; không sửa ledger hoặc biến UNKNOWN thành0. Tối đa3review429/503 tổng mỗi grant. API chỉ SELECT audit hợp lệ, vẫn cooldown60s, unknown khác/mismatch vẫn chặn. Không tự approve hoặc retry. Một probe sau audit đã200, rồi2ca MIN/status qua HTTP đạt. Chưa biết429 vừa rồi làRPM/TPM/RPD; không suy từ recovery thànhquota vô hạn. Giãn các lượt harness15s, không gọi song song hoặc thử khiusage chưa rõ. Tài liệu: https://ai.google.dev/gemini-api/docs/rate-limits và https://ai.google.dev/gemini-api/docs/troubleshooting .
+
 ## Quota đã áp dụng và luồng kiểm tiếp — 31/10/2026
 
 Đã áp dụng grant_limits sau guest_sessions (10migrations). Chỉ thay hai CHECK của provider_grants, không sửa usage/baseline. Grant69d37b9b-fd6d-4296-9189-9fb5303b46a1 thực tế495requests/10USD, giữ5manual trong tổng500; .env global604/Gemini599/Knowledge5, flags/keys/globalbudget20khôngđổi. Không chạy authorize tạo grant khác hoặc reset ledger. Migration chạy lặp an toàn và không tự tăng quota; app vẫn chỉ SELECT grant/review. Evidence mở quota giữ snapshot199rows.

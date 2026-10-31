@@ -109,6 +109,11 @@ def failure_text(status: str, code: str | None = None, safe_message: str = "") -
             "Nhà cung cấp mô hình đang tạm thời không sẵn sàng. "
             "Lượt hỏi chưa có kết quả; hệ thống không tự gửi lại."
         )
+    if code == "PROVIDER_RATE_LIMIT":
+        return (
+            "Nhà cung cấp mô hình đang giới hạn lượt truy cập. "
+            "Hãy kiểm tra hạn mức dịch vụ trước khi thử lại; hệ thống không tự gửi lại."
+        )
     if status == "clarify":
         return safe_message or "Cần làm rõ cột, điều kiện hoặc đơn vị trước khi lấy kết quả."
     if status == "unsupported":

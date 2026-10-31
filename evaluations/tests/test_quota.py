@@ -178,6 +178,26 @@ assert reserve()=='USAGE_UNKNOWN'""")
         self.approve(identifier)
         self.run_quota("assert reserve('0.025')=='GRANT_BUDGET_REACHED'\nassert reserve() not in ('USAGE_UNKNOWN','PROVIDER_COOLDOWN')\nassert reserve()=='GRANT_LIMIT_REACHED'")
 
+    def test_verified_429_requires_separate_review_preserves_reserve_and_still_cools_down(self):
+        identifier = self.seed_503(http_status=429, error="PROVIDER_RATE_LIMIT", age=65)
+        before = postgres(f"SELECT to_jsonb(u) FROM app.provider_usage u WHERE id='{identifier}';")
+        self.run_quota("assert reserve()=='USAGE_UNKNOWN'")
+        with self.assertRaises(ValueError):
+            self.approve(identifier)  # Quyền/evidence 503 không tự bao phủ 429.
+        preview = self.approve(identifier, http_status=429, apply=False)
+        self.assertFalse(preview['applied'])
+        self.run_quota("assert reserve()=='USAGE_UNKNOWN'")
+        self.approve(identifier, http_status=429)
+        self.assertEqual(before, postgres(f"SELECT to_jsonb(u) FROM app.provider_usage u WHERE id='{identifier}';"))
+        self.run_quota("assert reserve('0.025')=='GRANT_BUDGET_REACHED'\nassert reserve() not in ('USAGE_UNKNOWN','PROVIDER_COOLDOWN')\nassert reserve()=='GRANT_LIMIT_REACHED'")
+
+    def test_fresh_429_review_does_not_skip_cooldown_or_cover_another_unknown(self):
+        postgres(f"UPDATE app.provider_grants SET max_requests=4 WHERE id='{self.grant}';")
+        self.approve(self.seed_503(http_status=429,error='PROVIDER_RATE_LIMIT'),http_status=429)
+        self.run_quota("assert reserve()=='PROVIDER_COOLDOWN'")
+        self.seed_503(http_status=429,error='PROVIDER_RATE_LIMIT',age=65)
+        self.run_quota("assert reserve()=='USAGE_UNKNOWN'")
+
     def test_review_rejects_wrong_grant_model_reserve_provider_or_untrusted_response(self):
         from decimal import Decimal
 

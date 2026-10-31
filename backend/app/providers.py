@@ -200,10 +200,20 @@ def reserve_call(provider: Provider, model: str, reserve: Decimal) -> Any:
                             provider_usage.c.error_code == "PROVIDER_SCHEMA",
                         ),
                         and_(
-                            review.evidence["http_status"].as_integer() == 503,
-                            provider_usage.c.http_status == 503,
-                            review.usage_snapshot["http_status"].as_integer() == 503,
-                            provider_usage.c.error_code == "PROVIDER_TEMPORARY",
+                            review.evidence["http_status"].as_integer()
+                            == provider_usage.c.http_status,
+                            review.usage_snapshot["http_status"].as_integer()
+                            == provider_usage.c.http_status,
+                            or_(
+                                and_(
+                                    provider_usage.c.http_status == 503,
+                                    provider_usage.c.error_code == "PROVIDER_TEMPORARY",
+                                ),
+                                and_(
+                                    provider_usage.c.http_status == 429,
+                                    provider_usage.c.error_code == "PROVIDER_RATE_LIMIT",
+                                ),
+                            ),
                             review.evidence["source"].as_string() == "httpx_response_hook",
                             review.evidence["usage"].as_string() == "UNKNOWN",
                             review.evidence["billing"].as_string() == "NOT_VERIFIED",
