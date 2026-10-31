@@ -1,0 +1,69 @@
+export type RecordValue = Record<string, unknown>;
+export type Identity = { id: string; display_name: string; csrf_token: string; is_guest?: boolean };
+export type Workspace = { id: string; name: string };
+
+// Chỉ sống trong bộ nhớ trang; không cookie/localStorage để khôi phục khách.
+let guestSession: { token: string; csrf: string } | null = null;
+export function activateGuestSession(value: unknown): Identity {
+  if (!record(value) || typeof value.guest_token !== 'string' || !value.guest_token
+    || value.is_guest !== true) throw new Error('Chưa tạo được phiên khách.');
+  const me = identity(value);
+  guestSession = { token: value.guest_token, csrf: me.csrf_token };
+  return me;
+}
+export async function endGuestSession(): Promise<void> {
+  const current = guestSession; guestSession = null;
+  if (!current) return;
+  try {
+    await fetch('/api/auth/guest', { method: 'DELETE', credentials: 'same-origin', keepalive: true,
+      headers: { 'X-Guest-Session': current.token, 'X-CSRF-Token': current.csrf } });
+  } catch { /* Server dọn phiên hết hạn nếu pagehide không gửi được cleanup. */ }
+}
+
+export class ApiError extends Error {
+  constructor(message: string, public diagnostics: RecordValue | null) { super(message); }
+}
+
+export function record(value: unknown): value is RecordValue {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export async function api(path: string, options: RequestInit = {}, csrf?: string): Promise<unknown> {
+  const headers = new Headers(options.headers);
+  if (guestSession) headers.set('X-Guest-Session', guestSession.token);
+  if (csrf) headers.set('X-CSRF-Token', csrf);
+  if (typeof options.body === 'string') headers.set('Content-Type', 'application/json');
+  const controller = new AbortController();
+  const deadline = window.setTimeout(() => controller.abort(), 90000);
+  let response: Response;
+  try {
+    response = await fetch(`/api${path}`, { ...options, headers, credentials: 'same-origin', signal: controller.signal });
+  } catch {
+    throw new Error('Chưa nhận được phản hồi. Lịch sử sẽ được đọc lại; yêu cầu có thể vẫn đang xử lý.');
+  } finally { window.clearTimeout(deadline); }
+  if (response.status === 204) return null;
+  const data: unknown = await response.json();
+  if (!response.ok) {
+    const message = record(data) && record(data.error) && typeof data.error.message === 'string'
+      ? data.error.message : 'Chưa thể xử lý yêu cầu. Vui lòng thử lại.';
+    throw new ApiError(message, record(data) && record(data.diagnostics) ? data.diagnostics : null);
+  }
+  return data;
+}
+
+export function identity(value: unknown): Identity {
+  if (!record(value) || typeof value.id !== 'string' || typeof value.display_name !== 'string'
+    || typeof value.csrf_token !== 'string') throw new Error('Thông tin phiên không hợp lệ.');
+  return { id: value.id, display_name: value.display_name, csrf_token: value.csrf_token,
+    is_guest: value.is_guest === true };
+}
+
+export function workspaceList(value: unknown): Workspace[] {
+  if (!Array.isArray(value)) throw new Error('Danh sách không gian làm việc không hợp lệ.');
+  return value.map((item: unknown) => {
+    if (!record(item) || typeof item.id !== 'string' || typeof item.name !== 'string') {
+      throw new Error('Thông tin không gian làm việc không hợp lệ.');
+    }
+    return { id: item.id, name: item.name };
+  });
+}

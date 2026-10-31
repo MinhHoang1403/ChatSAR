@@ -1,18 +1,26 @@
 # ChatSAR
 
+**Tiếp tục khắc phục 30/10 — trạng thái mới nhất:** quyền mới thêm100Gemini/trần1.50USD, baseline104; grant riêng, Codex<=95. Đã dùng23HTTP(7setup+16query), reserve0.3117407USD, known estimate0.0364535USD; ledger127=122Gemini/5Knowledge. HTTP503 cuối a4755acf-0039-4928-890e-0f57b6b4322d thiếu usage, giữ reserve0.0141532USD và dừng generation/USAGE_UNKNOWN, không thêm review/đổi grant để vượt chặn.157unit/42integration/28evaluation/25oracle/75gold+5replacement/14frontend PASS; Google mới và chuyển hai tài khoản đã kiểm browser với user tự đăng nhập. Ranking/follow-up và mapping đã review có repro đúng;13ca NL khác nhau mới12PASS/1providerFAIL sau đối chiếu typed equivalence, không là nghiệm thu90ca. Tháng/năm tường minh đã sửa/offlinePG PASS, model retest bị503; gold tháng còn conflict SUM-only question nhưng yêu cầu COUNT+SUM, giữ nguyên gold. NOT_ACCEPTED, PR1Draft, chưa merge/Phase2. Báo cáo chi tiết đầu PREFLIGHT thay checkpoint khách/UI bên dưới.
+
+**Bổ sung hiện hành 30/10 — trang chủ khách và header:** lần đầu/đăng xuất mở trang chủ, nút Đăng nhập ở chân sidebar mở `/login`. Khách dùng CSV/XLSX/setup/chat/SQL cùng pipeline và guard; token chỉ trong bộ nhớ trang, reload mở guest mới. Login mở dữ liệu tài khoản, không nhập phiên khách. Chỉ hiện “Chế độ khách”; bộ chọn không gian không nền/viền, co theo chữ, cách title6px.148unit/40integration/14frontend PASS; mypy19modules/types/build đạt. Guest provider được mock khi kiểm tích hợp, không thêm HTTP model;9lượt đã bàn giao chủ dự án giữ nguyên. Chất lượng tổng thể vẫn NOT_ACCEPTED với4FAIL và57/90NOT_RUN; báo cáo Usage/SQL bên dưới là checkpoint trước bổ sung khách.
+
 ChatSAR là MVP demo hỏi đáp dữ liệu bằng tiếng Việt, hướng đến kết quả chính xác, có nguồn đối chiếu và dễ bảo trì:
 
 - **Text-to-SQL:** hỏi dữ liệu CSV/XLSX; backend kiểm tra kế hoạch truy vấn có kiểu và biên dịch truy vấn chỉ đọc bằng SQLAlchemy Core.
 - **RAG:** tìm nội dung trong PDF/DOCX/TXT/Markdown rồi trả lời kèm trích dẫn nguồn.
 - **Hybrid:** kết hợp số liệu SQL với tài liệu giải thích hoặc đánh giá quy tắc ngưỡng đơn giản.
 
-**Trạng thái:** Đang lập kế hoạch, chưa có mã nguồn ứng dụng hoặc hệ thống để chạy. Thiết lập repository không phải phê duyệt bắt đầu triển khai. Các thông số và ngưỡng trong kế hoạch là đề xuất, chưa phải kết quả kiểm thử.
+**Trạng thái: NOT_ACCEPTED — chưa qua Giai đoạn 2.** Giai đoạn 1 trên `feature/sql-foundation` có Google/workspaces, CSV/XLSX/Smart Setup, catalog, QueryRequest → QueryPlan/compiler SQLAlchemy Core, chat/history, câu trả lời tất định và SQL thật theo từng lượt. Nguồn private ready có cấp/thu hồi quyền riêng từng provider; usage review giữ dự phòng có audit, không sửa chi phí chưa biết. Giao diện sáng xanh dương, workspace context ở header, hai nút Nguồn & xử lý / Truy vấn SQL.
+
+Kiểm hiện hành:148unit/34integration/25oracle/75gold+5replacement/25evaluation/12frontend PASS; browser30checks PASS/2BLOCKED (Google mới/hai tài khoản). Cùng26ca model baseline cải thiện22→26PASS; tập mở rộng tổng39ca35PASS/4FAIL, in-scope27/31, còn57/90ca gốc chưa đo. SQL/provenance/restart đã kiểm qua browser/Gemini thật. Không coi tests offline là model accuracy hoặc tự nghiệm thu. Xem [bằng chứng, chi phí và lỗi còn lại](docs/PREFLIGHT.md). PR#1 còn Draft, chưa merge; RAG/Hybrid chưa triển khai.
 
 ## Thiết kế dự kiến
 
 Kiến trúc một ứng dụng chia module: React/TypeScript/Vite, FastAPI/Pydantic, PostgreSQL/pgvector, SQLAlchemy Core và Docker Compose. Kế hoạch có Google Login, Gemini/Knowledge, BGE reranker chạy local, LlamaParse có điều kiện và Langfuse project riêng. Tính tương thích và phiên bản phải được xác minh khi được giao triển khai.
 
-Ưu tiên giải pháp đơn giản nhất đáp ứng MVP; không tự mở rộng công nghệ. Cloud trả phí mặc định tắt, ngân sách bằng 0 đến khi được người dùng phê duyệt. ChatSAR độc lập với ShopQuery AI; không sửa source, dữ liệu hay dịch vụ của dự án khác.
+Ưu tiên giải pháp đơn giản nhất đáp ứng MVP; không tự mở rộng công nghệ. Cấu hình provider local được giữ nguyên; quyền gọi và hạn mức được kiểm tra riêng. Chủ dự án cho phép smoke tests Gemini/Knowledge có giới hạn, luôn áp dụng giới hạn cấu hình thấp hơn. ChatSAR độc lập với ShopQuery AI; không sửa source, dữ liệu hay dịch vụ của dự án khác.
+
+Web local: `http://localhost:18181`; hướng dẫn chạy và kiểm thử tại [OPERATIONS.md](docs/OPERATIONS.md). Chỉ có một Compose project `chatsar`, không cần bản sao source/test stack.
 
 ## Tài liệu và cách làm việc
 

@@ -1,8 +1,14 @@
 # ChatSAR — Quy tắc phát triển và quản lý repository
 
+**Quyền tự chủ 01/11/2026:** Chủ dự án yêu cầu các bước hợp lý, cần thiết thì tự làm, không hỏi lại. Áp dụng trong phạm vi Giai đoạn 1 và trần tổng 500 Gemini / 10 USD, giữ ít nhất 5 lượt manual, ledger/keys/dữ liệu/lịch sử và feature branch. Owner đã duyệt thêm tối đa 3 review verified429/503 (gồm 1a9b1aaf-f50f-499f-a2ff-7965339e9df5), tổng tối đa 5/grant; giữ UNKNOWN/fullreserve/count, operator CLI ngoài API, dừng khi lỗi liên tiếp. `--review-limit 5` chỉ cho grant >400 requests, default3; không auto retry/auto approve trong API.
+
+**Quyền owner mới nhất31/10/2026:** tổng500Gemini requests trong grant hiện hữu, tối đa10USD dự phòng; Codex đến495, giữ5manual. Được mở CHECK/migrate và chỉnh caps local có audit, giữ ledger/keys/flags/baseline, Knowledge/LlamaParse/BGE mới0. UI upload→AIauto→before/after→Save thay yêu cầu checkbox consent trước đây; guard owner/CSRF/quota/provider vẫn giữ. Các quyền100/1.50 bên dưới là lịch sử. Không merge/main hoặc Phase2.
+
+**Quyền tác vụ mới nhất (30/10/2026):** “PHASE 1 FINAL STABILIZATION & ACCEPTANCE” cấp thêm tối đa 100 HTTP Gemini, Codex tối đa 95 và ít nhất 5 dành kiểm thử thủ công, dự phòng bổ sung 1.50 USD. Cho phép điều chỉnh quota local có kiểm soát và per-provider cap; giữ PostgreSQL ledger/guard trước dispatch, không đổi keys/reset lịch sử. Knowledge/LlamaParse/BGE mới = 0. Các giới hạn 10/provider và không sửa .env phía dưới là lịch sử, được quyền mới thay thế trong đúng tác vụ này.
+
 Áp dụng cho toàn bộ dự án tại `C:\Work\ChatSAR`, trong mọi phiên Codex. Đây là nguồn quy tắc chính; `AGENTS.md` chỉ dẫn đến file này, không nhân bản toàn bộ nội dung.
 
-**Trạng thái hiện tại:** Chỉ được thiết lập quy tắc, tài liệu và Git/GitHub. Chưa được lập trình ứng dụng, tạo Docker container, triển khai hệ thống hoặc gọi API trả phí. Chỉ bắt đầu milestone tiếp theo khi người dùng giao rõ phạm vi và phê duyệt các điều kiện liên quan.
+**Trạng thái hiện tại:** Chủ dự án đã cho phép kiểm tra tiền triển khai và Giai đoạn 1 (F1 → F4) ngày 29/10/2026, theo kế hoạch và nghiệm thu từng mốc. Giữ Giai đoạn 1 trên feature branch đến khi được duyệt merge. Điều kiện bên ngoài thiếu phải ghi BLOCKED và chỉ tiếp tục phần độc lập an toàn; xem `docs/DECISIONS.md`, `docs/PREFLIGHT.md`. Được smoke test tối đa 10 calls Gemini và 10 Knowledge, hoặc hạn mức cấu hình thấp hơn; không sửa .env/flags enabled, không gọi LlamaParse trong Phase 1. Được tiếp tục F3/F4 qua test harness an toàn khi Google live BLOCKED; không tự sang Giai đoạn 2 hoặc tác động dự án khác.
 
 **Tài liệu thực tế trong repository:** [Implementation Plan](../docs/IMPLIMENT_PLAN.md) và [Master Plan](../docs/ChatSAR_MASTER_PLAN.md). Giữ nguyên tên file hiện có; các tên kế hoạch cũ được nhắc trong nội dung không phải yêu cầu tạo bản sao. Trước lần sửa mã nguồn đầu tiên, đọc toàn bộ Implementation Plan theo mục 0.1 của tài liệu; các nhiệm vụ sau đọc lại phần liên quan.
 
