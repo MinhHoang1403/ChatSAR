@@ -1,5 +1,11 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Browser ingestion thật và đổi nguồn — 31/10/2026
+
+CSV acceptance-reviewed.csv4rows: AI tự chuẩn bị→gốc/sau→Save→Gemini trả0.35 không tự gánVND. XLSX acceptance-auto.xlsx(Hướng dẫn/Dữ liệu): chỉ chọnsheetDữ liệu→AIauto→preview3rows→Save→Gemini0.40; NULL/Boolean/ID0007giữ, private/bothproviders, setup complete/ai_proposal và SQLsucceeded. Đã snapshot revision/setup/plan/envelope/SQL để kiểm restart. File trùng checksum được mở source đã lưu/cached0call, không lấy đó làm AI-call mới. Các source/chat cũ giữ nguyên.
+
+Đổi source trước đây giữchatcũ và yêu cầu bấm thêm Tạo đoạn chat mới (guard cũ vẫn chặn gửi sai nguồn). Nay handler chọn nguồn, mở preview nguồn khác hoặc Save dataset khác tự chuyển chat mới, không xóa chat cũ. Browser đã đọc lại0.35sau reload rồi đổi source thấyĐoạnchatmới, không còn bước phụ. 18frontend/types/build đạt, API19modules bytekhớp; backend199unit/48integration/39evaluationPG và CI0cad127push+PRPASS. Bộ nghiệm thu rộng cùng source cuối vẫn đang chạy; không cộng các checkpoint/source trước thành accuracy, không merge/Phase2.
+
 ## Phân biệt giá trị cực trị với bản ghi cực trị — 31/10/2026
 
 Đợt rộng trên source abb6a0e dừng tại 27/28PASS: basic_maintenance_minimum có giá trị đúng0.20 nhưng trả thêm mãW03/ranking thay scalarMIN. Không coi kết quả đóPASS. Field result_shape trước chỉ có enum không description; bổ sung mô tả ngay tại trường constrained JSON, phân biệt numeric value MIN/MAX với identity/top-record, ví dụ chung nhiệt độ/cảm biến, không tên schema/giá trị benchmark. Không thêm rule sửa output/compiler. Unit25 và canary adapter thật3/3(MIN/MAX/which-record) đạt trước promote. Sẽ đo lại cùng source sau thay đổi; không cộng điểm cũ. Bộ 12ca observatory/recycling đã khóa và SQL oracle kiểm trước mọi model execution, không dùng nó tuning runtime.

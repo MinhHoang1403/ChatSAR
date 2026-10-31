@@ -97,6 +97,11 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
     const source = datasets.find((d) => d.revision_id === item.revision_id);
     if (source) setScope(source);
   }
+  function selectSource(source: Dataset | null) {
+    const currentChat = conversations.find((item) => item.id === conversationId);
+    if (conversationId && currentChat?.revision_id !== source?.revision_id) setConversationId('');
+    setScope(source);
+  }
   function manage(upload = false) { setUploadFocus(upload); setDataOpen(true); setMobileOpen(false); }
   function closeData() { if (!dataBusy) { setDataOpen(false); void refreshDatasets().catch((e: unknown) => setLocalError(message(e))); } }
   const groups = historyGroups(conversations.filter((item) => item.title.toLocaleLowerCase('vi').includes(search.toLocaleLowerCase('vi'))));
@@ -136,7 +141,7 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
             const item = workspaces.find((w) => w.id === e.target.value); if (item) onSelect(item);
           }}>{!selected && <option value="">Chưa có không gian</option>}{workspaces.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}</select></label>
         </div>
-        <label className="source-select"><span className="sr-only">Nguồn dữ liệu</span><select aria-label="Nguồn dữ liệu" value={scope?.revision_id ?? ''} disabled={unavailable} onChange={(e) => setScope(datasets.find((d) => d.revision_id === e.target.value) ?? null)}>
+        <label className="source-select"><span className="sr-only">Nguồn dữ liệu</span><select aria-label="Nguồn dữ liệu" value={scope?.revision_id ?? ''} disabled={unavailable} onChange={(e) => selectSource(datasets.find((d) => d.revision_id === e.target.value) ?? null)}>
           <option value="">Chọn dữ liệu</option>{datasets.filter((d) => d.status === 'ready').map((d) => <option key={d.revision_id} value={d.revision_id}>{d.name}</option>)}</select></label>
         <span className="health" role="status">{health}</span></header>
       {(error || localError) && <p className="error" role="alert">{error || localError}</p>}
@@ -148,8 +153,8 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
     </main>
     <Modal open={dataOpen} title="Quản lý dữ liệu" onClose={closeData} closeDisabled={dataBusy} wide>
       {selected && <Datasets workspaceId={selected.id} csrf={me.csrf_token} onBusy={setDataBusy}
-        onReady={(dataset) => { setScope(dataset); void refreshDatasets().catch((e: unknown) => setLocalError(message(e))); }}
-        onSaved={(dataset) => { setScope(dataset); setDataOpen(false); setDataBusy(false); setNotice('Đã lưu dataset vào không gian làm việc. Bạn có thể bắt đầu hỏi.'); }} />}
+        onReady={(dataset) => { selectSource(dataset); void refreshDatasets().catch((e: unknown) => setLocalError(message(e))); }}
+        onSaved={(dataset) => { selectSource(dataset); setDataOpen(false); setDataBusy(false); setNotice('Đã lưu dataset vào không gian làm việc. Bạn có thể bắt đầu hỏi.'); }} />}
     </Modal>
     <Modal open={createOpen} title="Tạo không gian làm việc" error={localError || error} closeDisabled={mutating} onClose={() => { if (!mutating) setCreateOpen(false); }}>
       <form className="dialog-body" onSubmit={(e) => { e.preventDefault(); void mutate(async () => { await onCreate(name.trim()); setName(''); setCreateOpen(false); }); }}>
