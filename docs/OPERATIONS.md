@@ -1,5 +1,15 @@
 # Vận hành ChatSAR
 
+## Quyền hiện hành: tối đa 8 review, giữ nguyên 500/10 — 01/11/2026
+
+Owner đã duyệt bổ sung3 review (tổng8): đúng b66d8f40-6557-4570-9d87-22de67f5fd21 và tối đa2 phản hồi429/503 đã xác minh khác. CLI `--review-limit 8` là lựa chọn có chủ đích ngoài API, default3 và chỉ cho grant >400 requests; trần request500, Codex495 và budget10USD không đổi. Review thứ6 đã apply, fullrow/UNKNOWN/fullreserve/count giữ nguyên, 2 review còn lại chưa dùng. Mỗi lỗi mới vẫn dừng nhóm kiểm thử để đối chiếu bằng chứng và cooldown; không auto-review/auto-retry, không chấp nhận transport/timeout/HTTPkhác chỉ vì còn quyền review. Không vượt8 hoặc giảm reserve/cost bằng suy đoán.
+
+## 01/11/2026 — Pending503, không tự vượt5review
+
+Currentgrant69d37b9b-fd6d-4296-9189-9fb5303b46a1,max495Codex/budget10USD (ownertổng500,giữ5manual). Ledger503,grant399/reserve5.8080951USD,UNKNOWN6/reviewed5. b66d8f40-6557-4570-9d87-22de67f5fd21 làdirect503/dispatch1/PROVIDER_TEMPORARY/reserve0.0152458,usagecostNULL;CLIpreviewđãsẵn,applychưađượcduyệtvìtrần5đãdùnghết. Khôngđổicost0,xóalượt,resetledger/grant/keys,bậtSDKretryhoặcgọigenerationkhácđểnéguard. RestartgiữUNKNOWN/fullsnapshot/reservevàchặnvẫnhiệulực.
+
+ChỉkhiownerduyệtbổsungcụthểmớiđượcmởCLIreviewlimit/applytrongđúngscope. Giữfullsnapshot/numericreserve/NULLcost/count,cooldown60/300s,operatorCLIngoàiAPI,APPchỉSELECTreviews. Khigenerationcóthểtiếptục,ưu tiên78NLgốc+12systemguardvàbộheldout2schema;budgettínhcảretry/seed/HTTPerrors,chừa5manual. Khôngtựhạtiêuchíhaygộpsourcecũ. Thực tếstatusxemPREFLIGHTđầu,tránhdùngcheckpointlịchsửlàđiểmcuối.
+
 ## Đối soát429 có quyền riêng —31/10/2026
 
 Owner đã duyệt đúng HTTP429 8e3bf1d7-dcf8-47de-9710-716907b2c309. CLI usage_review nhận --http-status429 (mặc định503); so fullsnapshot/grant/model/status/dispatch1/HTTP direct/error tương ứng/all tokens-costNULL/reserve dương. Mặc định preview, --apply chỉ admin và cần quyền cụ thể từng request. Giữ cả count và fullreserve; không sửa ledger hoặc biến UNKNOWN thành0. Tối đa3review429/503 tổng mỗi grant. API chỉ SELECT audit hợp lệ, vẫn cooldown60s, unknown khác/mismatch vẫn chặn. Không tự approve hoặc retry. Một probe sau audit đã200, rồi2ca MIN/status qua HTTP đạt. Chưa biết429 vừa rồi làRPM/TPM/RPD; không suy từ recovery thànhquota vô hạn. Giãn các lượt harness15s, không gọi song song hoặc thử khiusage chưa rõ. Tài liệu: https://ai.google.dev/gemini-api/docs/rate-limits và https://ai.google.dev/gemini-api/docs/troubleshooting .

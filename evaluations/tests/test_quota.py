@@ -249,3 +249,19 @@ assert reserve()=='USAGE_UNKNOWN'""")
         with self.assertRaises(ValueError):
             self.approve(identifier,review_limit=5)
         self.run_quota("assert reserve()=='USAGE_UNKNOWN'")
+
+    def test_owner_eighth_review_limit_keeps_ninth_unknown_and_full_reserve(self):
+        identifier=self.seed_503(age=360)
+        with self.assertRaises(ValueError):
+            self.approve(identifier,review_limit=8)
+        postgres(f"UPDATE app.provider_grants SET max_requests=495,budget_usd=10 WHERE id='{self.grant}';")
+        self.approve(identifier,review_limit=8)
+        for _ in range(7):
+            self.approve(self.seed_503(age=360),review_limit=8)
+        identifier=self.seed_503(age=360)
+        with self.assertRaises(ValueError):
+            self.approve(identifier,review_limit=8)
+        with self.assertRaises(ValueError):
+            self.approve(identifier,review_limit=9)
+        self.assertEqual(postgres(f"SELECT count(*),count(estimated_cost_usd),sum(reserved_cost_usd) FROM app.provider_usage WHERE grant_id='{self.grant}'").strip(),"9|0|0.09")
+        self.run_quota("assert reserve()=='USAGE_UNKNOWN'")

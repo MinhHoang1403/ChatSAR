@@ -1,5 +1,15 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## Quyền đối soát bổ sung 01/11/2026
+
+Owner duyệt tổng8 review sau lần chặn thứ6. Default3, mức8 chỉ cho grant lớn, app không được INSERT reviews. UNKNOWN và full snapshot/reserve/count vẫn là điều kiện bắt buộc, request500/10USD và5manual không đổi. Quyền mới thay trần5 trong các checkpoint lịch sử bên dưới; không sửa lại original usage hoặc coi phản hồi lỗi là miễn phí.
+
+## 01/11/2026 — Hợp đồng ngữ cảnh và ranh giới tác vụ hiện hành
+
+QueryRequest vẫn một adapter→typedQueryPlan→binder/compiler/reader hiện hữu. Contextanswered cùngrevision được trìnhbày read-only theo conditionshậu thứtự của wirecontract,khôngmutateplan cũ; context_scope independent/refine/reset. Refine thiếucontextcùngsource hoặc mấtcộtlọccũbịchặntrướcSQL,khôngtựđiềnfilter. Taskdescriptionphânbiệt read-only,thôngtin cầnCLARIFY,vàthao tácUNSUPPORTED(DDL/DML/rawSQL/quan hệchưaphêduyệt/quyềnhệthống); phânloạithao tácyêucầu,khôngblacklist từkhoátronggiátrịTEXT. Chỉdẫntáchsystem_instruction/systemrole; dựphòngtínhcảinstructions. Canarycuối3/3,benchmarkcùngsourceđangBLOCKEDprovider503theoPREFLIGHT,khôngcoicanarylà95%toànhệthống.
+
+BộchấmmộtbảngcónormalizeCOUNT(pk)/COUNT(DISTINCTpk)↔COUNT_ROWSchỉPKđơncatalogđãpublish+NOTNULL;PGcưỡngchếunique/nonnullvàcounterexamplecomposite/nullableđãkiểm. Gold/source/rows/filter/grouping/projectionkhôngđổi. Chỉđotiếpsauuncertainnonexecutingrefusalnếuharnessđượcbậtflag,vẫngiữFAIL;unknownusage/wronganswered/providerlỗivẫndừng. Quyềnđốisoát5đãhết,khôngtựreview503thứ6dùtrần500/10cònlượt.
+
 ## Khoảng tháng là một điều kiện — 31/10/2026
 
 Sau repro model tự sinh ngày không có trong câu, QueryRequest thêm leaf IN_MONTH với literal nguyên văn tháng/năm. Adapter chỉ hạ thành AND(GTE,LT) cùng raw span; binder/calendar_month hiện hữu kiểm năm/timezone và tính hai mốc. Không thêm parser/planner/compiler khác hoặc tự sửa filter sau model. Unit date/timestamp, leap/DST/rollover/missingyear, API/PG và canary timestamp thật1/1 trước promote đạt. Điểm source trước không gộp vào source mới. Câu basic_logistics_empty_sum có tranh chấp nghĩa “không có tên” (IS_NULL hay literal “không có”); giữ gold/FAIL riêng, sẽ đo tách ca này, không dùng kết quả NULL trùng để nâng semantic accuracy.

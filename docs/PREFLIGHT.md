@@ -1,5 +1,21 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Chủ dự án duyệt thêm review, tiếp tục kiểm có giới hạn — 01/11/2026
+
+Owner đã duyệt tổng tối đa 8 review, gồm lượt b66d8f40-6557-4570-9d87-22de67f5fd21 và tối đa 2 phản hồi 429/503 được xác minh khác. CLI vẫn mặc định3; mức8 chỉ dành cho grant lớn >400, không tăng request cap hoặc ngân sách. Test PostgreSQL mới kiểm đủ8 review, lượt thứ9 vẫn UNKNOWN, cả9 rows giữ costNULL và reserve0.09; grant nhỏ và review_limit9 bị từ chối. Review thứ6 đã được preview/apply đúng full snapshot, original usage row không đổi, đủ300s cooldown trước khi kiểm tiếp. Không tự retry trong SDK/API.
+
+App19modules vẫn đúng source fb50d49, không sửa model/prompt/SQL để thử lại lỗi dịch vụ. Các thay đổi mới chỉ là CLI quản trị, kiểm thử và ghi quyền đã được owner cấp. Ledger vẫn503/grant399/reserve5.8080951USD; không reset hoặc coi lỗi503 miễn phí. Trạng thái hiện tại là đang hoàn tất nghiệm thu, chưa READY/ACCEPTED. Ưu tiên 78NL gốc +12systemguards, 8case/2schema mới và các regression cần thiết trong trần495 Codex/500tổng/10USD; giữ5manual, tính cả lỗi/retry/seed. Các checkpoint bên dưới là lịch sử tại thời điểm bị chặn.
+
+## 503 thứ sáu vượt trần đối soát hiện hành — 01/11/2026
+
+**BLOCKED về kiểm Gemini; chưa READY_FOR_USER_ACCEPTANCE.** Appsource cuối fb50d496a900a4b6e253252fdf5ff65f96a7a145 đãpush, CIpush41236027435/PR41236120027SUCCESS;211unit/49integration/46evaluationPG/18frontend+types/build đạt. Canary hợp đồng cuối3/3. Bộ8museum/waterworks mới đo2PASS/1providerFAIL/5NOT_RUN, dừng đúngHTTP503 ởmuseum_month;78NLgốc và12regression chưađo trên source cuối. Không lấyđiểm source trước để tuyên bố95% trên source này.
+
+Lượt b66d8f40-6557-4570-9d87-22de67f5fd21: direct HTTP503/PROVIDER_TEMPORARY, dispatch1, latency31231.142267ms, tokens/costNULL, reserve0.0152458USD. Preview CLI đãđối chiếu toànrow/model/grant/hook; chưaapply. Đãdùng đủ5review429/503 đượcduyệt; CLI/currentAGENTS giới hạn5, không tự nângvì quyền tựchủ hoặc cònrequestbudget. Sau fullstackrestart row503/fullreserve/UNKNOWN cònnguyên vàchính rowchưa review này vẫnchặn generation. Không đổiHTTPstatus/tokens/cost/ledger hoặc retry tựđộng.
+
+Ledger503=498Gemini/5Knowledge; activegrant399/500tổng (Codexmax495), reserve5.8080951USD, knownestimate0.6167245USD,6lượtUNKNOWN/6HTTPerrors (5đãreview,1chờ),duplicate_dispatch0. Các con sốUSD là dựphòng/ước lượngtheotoken đãbiết, khônginvoicehoặc khẳngđịnh503miễnphí. Trần10USD vàít nhất5manualgiữ, grant495chưahandoff500,keys/flags/.env/104baselinekhôngđổi; Knowledge/LlamaParse/BGE mới0.
+
+CSV0.35/XLSX0.40 vàCSVcontext0.47→0.43→0.26 giữexactrevision/setup/plan/envelope/SQL/physicalrows qua restart; web/api/dbhealthy. Original199ledger/full127rows,2Googleaccounts/privateB/history0.30,11plan/goldgốc khôngđổi;19runtime modules khớplocal. Browsertoolđãbật lại vàđãkiểmCSVautoAI/before-after/Save/query thật trướcchặnvàcachefilecũ; trạngtháimới saurestart đangđọc lại lịch sử, không gọi model trongkhiUNKNOWNchưareview. Cácmodelreports cũ bên dưới làlịchsử,khônglàđiểm sourcecuối. PR1Draft,chưamerge/Phase2.
+
 ## Hợp đồng phân loại tác vụ — 01/11/2026, chuẩn bị source nghiệm thu cuối
 
 Source1c9880c/8f33e87 dừng tiếp ở negative_03: câu yêu cầu DROP được model gánCLARIFY thayUNSUPPORTED, không cóSQLthực thi. GiữFAIL phân loại, không coi hai status làPASS như nhau. Thêm description ngay tại QueryRequest.task: phân biệt read-only trên bảng hiện tại, thao tác ngoài phạm vi (DDL/DML/rawSQL/quyền/quan hệ chưa được phép), và câu đọc thiếu thông tin cầnCLARIFY. Không blacklist từ khóa, không thêm router/planner hoặc sửa output model. Canary cuối3/3: thêm cột→UNSUPPORTED/noSQL; quan hệ chưa cấp→UNSUPPORTED/noSQL; COUNT với giá trị TEXT 'DROP TABLE'→SQL/0 đúng, literal chỉ là dữ liệu. AppAPI chưapromote khicanarycandidate; sẽ build đúngsource đãđạt đểđo lại, không cộng56ca source trước vào điểm cuối.

@@ -65,18 +65,13 @@ def review(
         raise ValueError("Cần quyền cụ thể và reserve dương hữu hạn")
     errors = {503: "PROVIDER_TEMPORARY", 429: "PROVIDER_RATE_LIMIT"}
     if http_status not in errors:
+        raise ValueError("Chỉ nhận response trực tiếp 429/503 đã được cấp quyền đối soát")
+    if review_limit not in (3, 5, 8):
         raise ValueError(
-            "Chỉ nhận response trực tiếp 429/503 đã được cấp quyền đối soát"
-        )
-    if review_limit not in (3, 5):
-        raise ValueError(
-            "Trần review phải là 3 hoặc 5; mức 5 cần quyền riêng cho grant 500"
+            "Trần review phải là 3, 5 hoặc 8; mức trên 3 cần quyền riêng cho grant 500"
         )
     row = json.loads(
-        postgres(
-            "SELECT row_to_json(u) FROM app.provider_usage u WHERE id="
-            + quoted(usage_id)
-        )
+        postgres("SELECT row_to_json(u) FROM app.provider_usage u WHERE id=" + quoted(usage_id))
         or "null"
     )
     if not row or any(
@@ -89,10 +84,7 @@ def review(
             row["dispatch_count"] != 1,
             row["http_status"] != http_status,
             row["estimated_cost_usd"] is not None,
-            any(
-                row[k] is not None
-                for k in ("input_tokens", "output_tokens", "thought_tokens")
-            ),
+            any(row[k] is not None for k in ("input_tokens", "output_tokens", "thought_tokens")),
             Decimal(str(row["reserved_cost_usd"])) != reserve,
         )
     ):
@@ -129,7 +121,7 @@ def review(
             + " AND to_jsonb(u)="
             + snapshot
             + " AND g.provider='gemini' AND g.max_requests<=500 AND g.budget_usd<=10 "
-            + ("AND g.max_requests>400 " if review_limit == 5 else "")
+            + ("AND g.max_requests>400 " if review_limit > 3 else "")
             + "AND (SELECT count(*) FROM app.provider_usage WHERE grant_id=g.id)<=g.max_requests "
             "AND (SELECT sum(reserved_cost_usd) FROM app.provider_usage "
             "WHERE grant_id=g.id)<=g.budget_usd "
@@ -156,7 +148,7 @@ def main() -> None:
     parser.add_argument("--authority", required=True)
     parser.add_argument("--apply", action="store_true")
     parser.add_argument("--http-status", type=int, choices=[429, 503], default=503)
-    parser.add_argument("--review-limit", type=int, choices=[3, 5], default=3)
+    parser.add_argument("--review-limit", type=int, choices=[3, 5, 8], default=3)
     args = parser.parse_args()
     print(
         json.dumps(
