@@ -1,5 +1,9 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## CI false positive do UUID chứa chuỗi literal —31/10/2026
+
+4eb38a2 CIpushPASS nhưng CI PRFAIL tại privacy assertion: chuỗi0007 xuất hiện bên trong UUID cột, SQL vẫnWHERE c_id=%(bind)s::VARCHAR; không phải giá trị inline. Sửa test so literal cóquote, kiểm đúng0007 trong private bound parameters và evidence chỉ chứa tên tham số. Setup privacy test cũng so tokenJSON quote thay substringUUID và kiểm không cóobserved_values khi chưaconsent. Unit tái hiện dùng identifier có0007 và2API integration liên quan đạt;51queryunit/ruff đạt. Không đổi app/gold hoặc bỏ kiểm privacy. Đợt model đang chạy giữ nguyên19appmodule fingerprints, không cần gọi lại model vì sửa harness kiểm thử.
+
 ## HTTP429 và kiểm tiếp có kiểm soát —31/10/2026
 
 Source d85ba75 đo28ca:27PASS/1provider429, không gọi lỗi429 là saiSQL. Còn49ca trong nhóm77 chưa chạy, ca empty-sum tranh chấp đo riêng,12systemguards riêng. Không gộp source trước. Ledger286=281Gemini/5Knowledge, grant182/reserve2.5870103/knownestimate0.2857203USD khi lỗi; id8e3bf1d7-dcf8-47de-9710-716907b2c309 dispatch1/http429/PROVIDER_RATE_LIMIT/tokens-costNULL/reserve0.0144997. Owner đã cấp quyền riêng đúnglượt; CLI preview/apply audit, toànrow bất biến. API review429 dùng cùng fullsnapshot/source hook/UNKNOWN/NOT_VERIFIED và cap3review429/503tổng; unknown khác vẫn chặn/cooldown, không automatic retry. Test13quotaPG gồm429chưa review, preview-only, wrong503authority, fullreserve/count, cooldown và unknown thứhai đạt;199unit/49provider subset/21answers subset/ruff/mypy đạt. Không cộng subset vào tổngunit. Một probeGemini thật thành công và2ca HTTP(MIN0.20/completedSUM1.30) đạt sauaudit; giãn lượt15s trước đợt rộng tiếp. Thông báo429 cho người dùng nêu giới hạndịchvụ, không gợi ý nhầm cấu hình.

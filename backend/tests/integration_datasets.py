@@ -511,16 +511,15 @@ class DatasetIntegration(unittest.TestCase):
             },
         )
         captured = []
+        bound_parameters = []
 
         def execute(compiled, **kwargs):
-            captured.append(
-                str(
-                    compiled.statement.compile(
-                        dialect=db.get_reader_engine().dialect,
-                        compile_kwargs={"render_postcompile": True},
-                    )
-                )
+            rendered = compiled.statement.compile(
+                dialect=db.get_reader_engine().dialect,
+                compile_kwargs={"render_postcompile": True},
             )
+            captured.append(str(rendered))
+            bound_parameters.append(rendered.params)
             return execute_query(compiled, **kwargs)
 
         with (
@@ -537,7 +536,11 @@ class DatasetIntegration(unittest.TestCase):
             ).json()
             evidence = first["processing"]
             self.assertEqual(evidence["sql"]["statement"], captured[0])
-            self.assertNotIn("0007", evidence["sql"]["statement"])
+            # UUID tên bảng/cột có thể chứa 0007; chỉ literal mới là dữ liệu riêng.
+            self.assertNotIn("'0007'", evidence["sql"]["statement"])
+            self.assertIn("0007", bound_parameters[0].values())
+            self.assertEqual(evidence["sql"]["parameter_names"], sorted(bound_parameters[0]))
+            self.assertNotIn("params", evidence["sql"])
             self.assertIn("%(", evidence["sql"]["statement"])
             self.assertTrue(evidence["sql"]["compiled"])
             self.assertEqual(evidence["sql"]["execution_status"], "succeeded")
@@ -928,7 +931,8 @@ class DatasetIntegration(unittest.TestCase):
             payload = generate.call_args.args[0]
             import json
 
-            self.assertNotIn("0007", json.dumps(payload))
+            self.assertNotIn('"0007"', json.dumps(payload))
+            self.assertTrue(all("observed_values" not in c for c in payload["profile"]))
             self.assertNotIn("rows", payload)
             self.assertEqual(
                 self.client.post(

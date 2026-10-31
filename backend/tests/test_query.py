@@ -63,6 +63,27 @@ def test_untrusted_text_is_bound_parameter_and_provenance_kept(revision: dict) -
     assert query.columns[0]["type"] == "numeric"
 
 
+def test_sql_evidence_distinguishes_identifier_substrings_from_private_literals(
+    revision: dict,
+) -> None:
+    from app.evidence import Processing
+
+    identifier = "c_0007" + "a" * 28
+    revision["columns"][0]["id"] = identifier
+    compiled = compile_query(
+        proposal(revision, "0007", filters=leaf("0007", "0007", identifier)), revision, "0007"
+    )
+    evidence = Processing("gemini", {})
+    dialect = postgresql.dialect()
+    evidence.capture_sql(compiled, dialect)
+    assert "0007" in evidence.sql["statement"]  # Chỉ có trong catalog identifier.
+    assert "'0007'" not in evidence.sql["statement"]
+    rendered = compiled.statement.compile(dialect=dialect)
+    assert "0007" in rendered.params.values()
+    assert evidence.sql["parameter_names"] == sorted(rendered.params)
+    assert "params" not in evidence.sql
+
+
 @pytest.mark.parametrize("raw,candidate", [("0007", "7"), ("quận 3", "3")])
 def test_literal_cannot_be_silently_rewritten(revision: dict, raw: str, candidate: str) -> None:
     with pytest.raises(AppError) as error:
