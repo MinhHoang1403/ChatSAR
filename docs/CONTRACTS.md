@@ -1,5 +1,11 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## Trích giá trị và xác nhận metadata — 31/10/2026
+
+QueryRequest wire literal có raw_phrase/value_type, không candidate_value. QueryPlan nội bộ đọc legacy candidate và kiểm khớp nghiêm; span-only bind bằng logic typed/mapping/calendar hiện hữu, không fuzzy hoặc đoán năm. Evidence raw/canonical/span giữ đủ. Direct record/list/list_all chưa cóORDER dùng những identifier catalog có trong select_columns tăng dần; aggregate/ranking/thứ tự tường minh giữ nguyên. Đây là mặc định hiển thị khi LIMIT, không tự thêm cột/filter.
+
+Unit AI gợi ý chưa là metadata xác nhận: merge không áp dụng unit và trả UNIT_UNCONFIRMED/needs_review, các validator khác vẫn chạy. Cached AI proposal cũ có issue này không tự áp unit khi mở; owner có thể nhập trong chi tiết, unit thực tế hiện ngay trên header so sánh. Không sửa nguồn/audit/history đã lưu. Grant CHECK miền500/10 không là quyền dispatch; grant admin+ledger/caps/unknown guards vẫn quyết định.
+
 ## Luồng dataset hiện hành — 31/10/2026
 
 ChọnCSV/XLSX tự upload→setupGemini, cùng requestidempotency/cachedresponse checksum+sheet. Không checkbox consent/querypermission trong UI; client tự gửi flags đúng chính sách upload-for-AI mới. Chỉ sheet selection khi workbook nhiều sheet; cachedproposal tự áp dụng; model unavailable có local fallback ghi rõ. Không tự publish. Xác nhận bằng Lưu vào không gian làm việc sau previewlossless, đóngdialog/chọnsource.

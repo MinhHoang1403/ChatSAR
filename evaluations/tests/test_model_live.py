@@ -6,6 +6,20 @@ from evaluations.model_live import semantic_shape, semantics_match
 
 
 class SemanticScoringTests(unittest.TestCase):
+    def test_span_only_actual_requires_bound_evidence_and_keeps_text_and_period_bounds(self):
+        columns = [{"id":"c", "name":"region", "data_type":"text"}]
+        node = {"operator":"EQ", "column_id":"c", "literal":{"raw_phrase":"3", "value_type":"text"}}
+        actual = {"column_id":"c", "raw_phrase":"3", "canonical_value":"3", "operator":"EQ"}
+        expected = {"filters":{"operator":"EQ", "column":"region", "value":"3"}}
+        self.assertFalse(semantics_match(semantic_shape({"filters":node}, columns), expected))
+        self.assertTrue(semantics_match(semantic_shape({"filters":node}, columns, [actual]), expected))
+        changed = {**actual, "canonical_value":"quận 3"}
+        self.assertFalse(semantics_match(semantic_shape({"filters":node}, columns, [changed]), expected))
+        period = {"filters":{"operator":"AND", "children":[{**node,"operator":"GTE"},{**node,"operator":"LT"}]}}
+        bindings = [{**actual,"operator":"GTE","canonical_value":"2026-02-01"},{**actual,"operator":"LT","canonical_value":"2026-03-01"}]
+        result = semantic_shape(period, columns, bindings)
+        self.assertEqual([child['value'] for child in result['filters']['children']], ['2026-02-01','2026-03-01'])
+
     def test_semantic_prepare_only_cannot_dispatch(self):
         from types import SimpleNamespace
         from unittest.mock import patch

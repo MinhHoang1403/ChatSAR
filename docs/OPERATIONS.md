@@ -1,5 +1,11 @@
 # Vận hành ChatSAR
 
+## Quota đã áp dụng và luồng kiểm tiếp — 31/10/2026
+
+Đã áp dụng grant_limits sau guest_sessions (10migrations). Chỉ thay hai CHECK của provider_grants, không sửa usage/baseline. Grant69d37b9b-fd6d-4296-9189-9fb5303b46a1 thực tế495requests/10USD, giữ5manual trong tổng500; .env global604/Gemini599/Knowledge5, flags/keys/globalbudget20khôngđổi. Không chạy authorize tạo grant khác hoặc reset ledger. Migration chạy lặp an toàn và không tự tăng quota; app vẫn chỉ SELECT grant/review. Evidence mở quota giữ snapshot199rows.
+
+Đơn vị model gợi ý không tự áp dụng khi owner lưu before/after; owner nhập đúng unit ở chi tiết nếu cần. Xem header so sánh để kiểm units đã nhập. Cached proposal vẫn reuse0call, không dùng cache để vượt policy unit mới hoặc source binding. Kiểm live theo batch, giữFAIL/refusal và source fingerprint; không gộp source khác nhau thành accuracy. Không merge hoặc Phase2.
+
 ## Luồng dữ liệu mới và quyền500 — 31/10/2026
 
 Chọn file tự chuẩn bị, xem trước/sau rồiLưu; không còn bấm phân tích/cấp quyền riêng. Cachedsetup tự mở, XLSX nhiều sheet chọn đúng trang. API normalization-preview dùng cùng validator với publish/toàn bảng, không callmodel. LỗiAI sẽ nói rõ dùng nhận diện từ file; không tự retry để tiêu credits. Nguồn mới được cấu hình cho2model theo policy owner, actualdispatch vẫn chọn một model/guard/cap; privategiữnguyên.
@@ -71,7 +77,7 @@ npm.cmd ci --ignore-scripts --prefix frontend
 
 # Khởi động DB duy nhất và áp dụng migration.
 docker compose up -d --wait db
-foreach ($name in @('foundation','identity','datasets','conversation','catalog','provider_grants','chat_management','usage_review','guest_sessions')) {
+foreach ($name in @('foundation','identity','datasets','conversation','catalog','provider_grants','chat_management','usage_review','guest_sessions','grant_limits')) {
   Get-Content "backend/migrations/$name.sql" -Raw -Encoding UTF8 | docker compose exec -T db psql -X -q -U chatsar_admin -d chatsar -v ON_ERROR_STOP=1
   if ($LASTEXITCODE -ne 0) { throw "Migration thất bại: $name" }
 }

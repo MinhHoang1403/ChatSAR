@@ -65,6 +65,15 @@ try:
 except AppError as error:
     assert error.code=='CALL_LIMIT_REACHED'""")
 
+    def test_extended_grant_constraints_and_runtime_budget_are_independent(self):
+        postgres(f"UPDATE app.provider_grants SET max_requests=500,budget_usd=10 WHERE id='{self.grant}';")
+        for assignment in ("max_requests=501", "budget_usd=10.01", "max_requests=-1"):
+            with self.assertRaises(RuntimeError):
+                postgres(f"UPDATE app.provider_grants SET {assignment} WHERE id='{self.grant}';")
+        self.run_quota("""assert reserve('10.01')=='GRANT_BUDGET_REACHED'
+assert reserve('10') not in ('GRANT_LIMIT_REACHED','GRANT_BUDGET_REACHED')
+assert reserve()=='GRANT_BUDGET_REACHED'""")
+
     def test_reserve_budget_and_unknown_usage_stop_before_another_call(self):
         self.run_quota("""assert reserve('0.04')=='GRANT_BUDGET_REACHED'
 identifier=reserve()

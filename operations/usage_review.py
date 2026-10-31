@@ -117,7 +117,7 @@ def review(
             + quoted(usage_id)
             + " AND to_jsonb(u)="
             + snapshot
-            + " AND g.provider='gemini' AND g.max_requests<=100 AND g.budget_usd<=1.50 "
+            + " AND g.provider='gemini' AND g.max_requests<=500 AND g.budget_usd<=10 "
             "AND (SELECT count(*) FROM app.provider_usage WHERE grant_id=g.id)<=g.max_requests "
             "AND (SELECT sum(reserved_cost_usd) FROM app.provider_usage "
             "WHERE grant_id=g.id)<=g.budget_usd "

@@ -247,7 +247,7 @@ export function DataComparison({ preview, normalized }: { preview: Preview; norm
     </section>
     <section aria-label="Sau chuẩn hoá" className="comparison-pane normalized-pane">
       <div className="comparison-title"><h4>Sau chuẩn hoá</h4><span>{normalized ? preview.status === 'ready' ? 'Bản dữ liệu đã lưu' : 'Bản dữ liệu sẽ được lưu' : 'Đang kiểm tra đề xuất'}</span></div>
-      {normalized ? <div className="table-scroll"><table><thead><tr>{preview.columns.map((column) => <th key={column.id}>{column.name}<small>{kindNames[column.data_type]}</small></th>)}</tr></thead>
+      {normalized ? <div className="table-scroll"><table><thead><tr>{preview.columns.map((column) => <th key={column.id}>{column.name}<small>{kindNames[column.data_type]}{column.unit ? ` · ${column.unit}` : ''}</small></th>)}</tr></thead>
         <tbody>{normalized.rows.map((row, i) => <tr key={i}>{row.map((value, j) => <td key={j}
           className={JSON.stringify(value) !== JSON.stringify(original[i]?.[j]) ? 'normalized-cell' : undefined}>{display(value)}</td>)}</tr>)}</tbody></table></div>
         : <p className="comparison-empty">Bản chuẩn hoá sẽ hiện sau khi đề xuất được kiểm tra. Dữ liệu nguồn không thay đổi.</p>}

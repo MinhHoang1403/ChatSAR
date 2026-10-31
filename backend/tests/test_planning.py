@@ -138,6 +138,7 @@ def test_provider_schema_is_non_recursive_and_catalog_bound() -> None:
     assert "filters" not in schema["properties"] and "result_mode" not in schema["properties"]
     assert schema["properties"]["required_columns"]["items"]["enum"] == ["c"]
     assert schema["$defs"]["Condition"]["properties"]["children"]["items"]["type"] == "integer"
+    assert set(schema["$defs"]["QueryLiteral"]["properties"]) == {"raw_phrase", "value_type"}
 
 
 def test_missing_conversion_context_remains_clarify_not_fake_sql() -> None:
@@ -148,6 +149,23 @@ def test_missing_conversion_context_remains_clarify_not_fake_sql() -> None:
 def test_full_list_keeps_all_mode_for_existing_truncation_guard() -> None:
     plan = request(result_shape="list_all", select_columns=["code"], aggregations=[]).to_plan()
     assert plan.result_mode == "all"
+
+
+@pytest.mark.parametrize("identifier,value", [("serial", "cost"), ("accession", "days")])
+@pytest.mark.parametrize("shape", ["record", "list", "list_all"])
+def test_direct_output_has_catalog_identifier_order_only_when_order_is_absent(
+    identifier: str, value: str, shape: str
+) -> None:
+    data = dict(result_shape=shape, select_columns=[identifier, value], aggregations=[])
+    plan = request(**data).to_plan(identifier_columns={identifier})
+    assert [(o.field_id, o.direction) for o in plan.order_by] == [(identifier, "asc")]
+    explicit = request(**data, order_by=[{"field_id": value, "direction": "desc"}]).to_plan(
+        identifier_columns={identifier}
+    )
+    assert [(o.field_id, o.direction) for o in explicit.order_by] == [(value, "desc")]
+    assert not request(**data).to_plan(identifier_columns=set()).order_by
+    if shape != "record":
+        assert not request(**data).to_plan(identifier_columns={"unselected"}).order_by
 
 
 @pytest.mark.parametrize("identifier,value", [("serial", "cost"), ("reference", "weight")])

@@ -1,5 +1,15 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+## Trích span, mặc định thứ tự và đơn vị — 31/10/2026
+
+Quyết định nội bộ từ repro3→quận3: bỏ trường candidate model phải chép lại, giữ một QueryRequest→QueryPlan→binder/compiler. Giá trị typed do binder hiện hữu quyết định từ span/format/mapping owner hoặc cặp tháng/năm; stored candidate cũ vẫn phải khớp. Không thêm parser NL tổng quát/filter sau model. Canary cô lập4/4 và offline trước promote. Gemini structured output chỉ bảo đảm hình dạng JSON, không bảo đảm ngữ nghĩa: https://ai.google.dev/gemini-api/docs/structured-output .
+
+Direct output có catalog identifier đang hiển thị nhưng thiếuORDER dùng identifierASC làm mặc định sản phẩm, không thay thứ tự tường minh/ranking. Lý do: SQL LIMIT không cóORDER không bảo đảm thứ tự/subset; https://www.postgresql.org/docs/current/queries-limit.html . Test đa schema và canary1/1, không sửa gold. Evaluator dùng canonical binding evidence thực cho span-only, giữ gold/tháng adjudication riêng; false refusal có thể đo tiếp ca độc lập theo flag, giữFAIL, không retry hoặc bỏ qua đáp án sai/unknownusage.
+
+Auto-save review cần đơn giản nhưng không tự xác nhận đơn vị model đoán. Merge bỏ unit AI khỏi applied columns và báo rõ cần owner nhập nếu muốn; UI cũ cached cũng chặn unit chưa xác nhận, units owner hiện trên header before/after. Warning không được bỏ qua validate_rows toàn bảng. Đây là sửa từ browserCSV thật, không tuning benchmark.
+
+Owner xác nhận tổng500Gemini/10USD. Đã migrate CHECK, grant hiện hữu495/10 giữ5manual, global604/G599/K5; ledger199trước mở cap bất biến, không đổi keys/flags/reset/newgrant. Default app vẫn cloudOFF/cap0, schema mở rộng không tự cấp quyền.
+
 ## Upload tự động, before/after và quyền kiểm thử500 — 31/10/2026
 
 Chỉ đạo UI mới thay opt-in từng bước: upload là thao tác dùngAI cho dataset. Client setup luôn use_ai/consent_metadata/consent_values=true, Gemini mặc định; profile giới hạn20values/120chars/cột giữ nguyên. Không xóa guard backend hoặc chuyểnprivate→synthetic. Nguồn mới lưu sharingGemini/Knowledge; nguồn cũ chỉ owner gửi câu hỏi mới sẽ cấp bằng endpoint audited hiện có, không sửa mọi source chỉ vì đọc history. Không thêm thư viện/framework/model/worker. API normalization-preview chỉ tái dùng phép kiểm publish và không ghi dữ liệu. Pending model vẫn không replay và không cho lưu từ trang khác; lỗiAI vẫn dùng local nhưng ghi rõ nguồn gợi ý, không giảAI thành công.

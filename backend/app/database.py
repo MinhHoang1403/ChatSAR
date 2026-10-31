@@ -50,6 +50,7 @@ def database_ready() -> bool:
             "chat_management",
             "usage_review",
             "guest_sessions",
+            "grant_limits",
         } <= versions
     except SQLAlchemyError:
         # Không trả URL, credential hoặc thông báo DB ra endpoint công khai.

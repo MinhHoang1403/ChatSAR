@@ -143,13 +143,29 @@ def merge_suggestion(
     proposal.description = suggestion.description
     proposal.grain = suggestion.grain or proposal.grain
     proposal.notes = suggestion.notes
+    issues: list[SetupIssue] = []
     for index, column in enumerate(proposal.columns):
         patch = patches.get(column.id)
         if patch is None:
             continue
         changes = patch.model_dump(exclude={"id"}, exclude_none=True)
+        if changes.pop("unit", None) is not None:
+            # Đơn vị không thể kiểm chứng từ thống kê các ô. Không nâng một gợi ý
+            # của model thành metadata xác nhận chỉ vì owner lưu bảng trước/sau.
+            issues.append(
+                SetupIssue(
+                    code="UNIT_UNCONFIRMED",
+                    column_id=column.id,
+                    position=index + 1,
+                    rule="owner_confirmation",
+                    data_type=column.data_type,
+                    decision="needs_review",
+                    message=f"Chưa áp dụng đơn vị AI gợi ý cho cột {column.name}. "
+                    "Bạn có thể nhập đơn vị đúng trong Chỉnh sửa chi tiết.",
+                )
+            )
         proposal.columns[index] = ColumnReview.model_validate({**column.model_dump(), **changes})
-    return proposal, []
+    return proposal, issues
 
 
 def local_proposal(parsed: ParsedTable, revision_id: UUID) -> SetupProposal:
@@ -336,8 +352,7 @@ def propose_setup(
                 SetupSuggestion,
             )
             candidate, issues = merge_suggestion(reply.plan, parsed, revision_id)
-            if not issues:
-                issues = check_proposal(candidate, parsed, revision_id)
+            issues.extend(check_proposal(candidate, parsed, revision_id))
             if any(issue.decision == "rejected" for issue in issues):
                 proposal.notes = [issue.message for issue in issues]
                 error_code = "SETUP_PROPOSAL_REJECTED"

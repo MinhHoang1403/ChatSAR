@@ -35,6 +35,63 @@ from app.tabular import wire
 
 
 class DatasetIntegration(unittest.TestCase):
+    def test_disabled_provider_and_failed_answer_cannot_supply_followup_context(self) -> None:
+        revision = self.published(b"code,amount\n0007,0.10\n")
+        chat = self.client.post(
+            "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+        ).json()["id"]
+        path = f"/api/conversations/{chat}/messages"
+        body = {"question": "Tổng amount?", "dataset_revision_id": str(revision["id"])}
+        disabled = get_settings().model_copy(update={"gemini_enabled": False})
+        with (
+            patch("app.providers.get_settings", return_value=disabled),
+            patch("app.providers.reserve_call") as reserve,
+            patch("app.conversation.execute_query") as execute,
+        ):
+            answer = self.client.post(
+                path, json=body, headers={"Idempotency-Key": uuid4().hex}
+            ).json()
+            self.assertEqual(answer["status"], "provider_unavailable")
+            self.assertEqual(answer["error_code"], "PROVIDER_DISABLED")
+            reserve.assert_not_called()
+            execute.assert_not_called()
+
+        def followup(question, source, provider, context):
+            self.assertIsNone(context)
+            return Proposal(QueryPlan(task="CLARIFY"), "gemini", "offline", None, None, 0, None)
+
+        with (
+            patch("app.conversation.generate_proposal", side_effect=followup),
+            patch("app.conversation.execute_query") as execute,
+        ):
+            answer = self.client.post(
+                path,
+                json={**body, "question": "Vậy kết quả đó là bao nhiêu?"},
+                headers={"Idempotency-Key": uuid4().hex},
+            ).json()
+            self.assertEqual(answer["status"], "clarify")
+            execute.assert_not_called()
+
+    def test_adding_null_preserves_nonnull_count_and_duplicate_ids_separate_counts(self) -> None:
+        totals = []
+        for content in (
+            b"asset,amount\nA,0.10\nA,0.20\nB,\n",
+            b"asset,amount\nA,0.10\nA,0.20\nB,\nC,\n",
+        ):
+            revision = self.published(content)
+            asset, amount = [c["id"] for c in revision["columns"]]
+            plan = self.plan(
+                revision,
+                "Kiểm thử đếm",
+                aggregations=[
+                    {"operator": "COUNT_ROWS", "output_id": "rows"},
+                    {"operator": "COUNT_NON_NULL", "column_id": amount, "output_id": "nonnull"},
+                    {"operator": "COUNT_DISTINCT", "column_id": asset, "output_id": "distinct"},
+                ],
+            )
+            totals.append(execute_query(compile_query(plan, revision, "Kiểm thử đếm"))[0])
+        self.assertEqual(totals, [[[3, 2, 2]], [[4, 2, 3]]])
+
     def test_normalization_preview_and_publish_use_same_lossless_rows(self) -> None:
         uploaded = self.upload(
             b'code,amount,day,flag\n0007,"0,10",31/12/2026,true\n'
@@ -893,6 +950,7 @@ class DatasetIntegration(unittest.TestCase):
         local = local_proposal(read_table(content, ".csv"), UUID(uploaded["revision_id"]))
         proposal = SetupSuggestion(columns=[ColumnSuggestion(id=c.id) for c in local.columns])
         proposal.columns[0].primary_key = True
+        proposal.columns[1].unit = "VND"
         url = f"/api/datasets/{uploaded['dataset_id']}/setup"
         body = {"revision_id": uploaded["revision_id"], "use_ai": True, "consent_metadata": True}
         with patch(
@@ -915,6 +973,8 @@ class DatasetIntegration(unittest.TestCase):
             ).json()
         self.assertEqual(accepted["mode"], "ai_proposal")
         self.assertEqual(accepted["validation_errors"], [])
+        self.assertIsNone(accepted["proposal"]["columns"][1]["unit"])
+        self.assertTrue(any(i["code"] == "UNIT_UNCONFIRMED" for i in accepted["issues"]))
         self.assertEqual(self.preview(uploaded["dataset_id"])["status"], "needs_review")
         key = uuid4().hex
         with db.get_engine().begin() as connection:
@@ -1639,6 +1699,9 @@ class DatasetIntegration(unittest.TestCase):
                 ],
             },
         )
+        self.assertEqual(execute_query(compile_query(plan, revision, phrase))[0], [["0.30"]])
+        for condition in plan.filters.children:
+            condition.literal.candidate_value = None
         self.assertEqual(execute_query(compile_query(plan, revision, phrase))[0], [["0.30"]])
 
     def test_row_reordering_and_irrelevant_records_preserve_filtered_sum(self) -> None:

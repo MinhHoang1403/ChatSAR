@@ -45,7 +45,7 @@ class Contract(BaseModel):
 class QueryLiteral(Contract):
     raw_phrase: str = Field(min_length=1, max_length=500)
     value_type: Literal["text", "integer", "numeric", "boolean", "date", "timestamp"]
-    candidate_value: str = Field(max_length=500)
+    candidate_value: str | None = Field(default=None, max_length=500)
 
 
 class Predicate(Contract):
@@ -195,7 +195,6 @@ def compile_query(
                     "nullable": False,
                 }
             )
-            bound = typed_value(value.candidate_value, query_review, revision["timezone"])
             # Chỉ chấp nhận chuyển kiểu chính xác theo format đã duyệt hoặc ISO.
             # Tháng có đủ năm chỉ nhận cặp [đầu tháng, đầu tháng sau) đã đối chiếu.
             # Không lấy năm hiện tại, năm từ dữ liệu hoặc một mốc model tự chọn.
@@ -222,6 +221,14 @@ def compile_query(
                 if review.data_type != "date":
                     raise
                 original = typed_value(value.raw_phrase, query_review, revision["timezone"])
+            # Wire chỉ cần trích span. Giá trị có kiểu do binder suy ra từ span,
+            # format/mapping đã xác nhận hoặc cặp tháng lịch; không để model chép
+            # thêm một candidate dễ mâu thuẫn. Plan cũ có candidate vẫn so nghiêm.
+            bound = (
+                original
+                if value.candidate_value is None
+                else typed_value(value.candidate_value, query_review, revision["timezone"])
+            )
             if original != bound:
                 raise ValueError("Literal changed")
         except (ValueError, TypeError, ArithmeticError):

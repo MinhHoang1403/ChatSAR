@@ -17,6 +17,7 @@ list/list_all: chi tiết nhiều dòng/danh sách đầy đủ, direct projecti
 Danh sách mặc định chỉ hiện mã định danh và các cột người dùng yêu cầu hiển thị;
 cột chỉ dùng lọc không tự thành cột đầu ra. Đầy đủ dòng khác đầy đủ cột: chỉ lấy
 mọi cột khi người dùng yêu cầu toàn bộ cột/thông tin chi tiết đầy đủ.
+Danh sách/bản ghi chưa có thứ tự sẽ mặc định xếp tăng theo mã định danh được hiển thị.
 scalar: tổng/đếm/trung bình/MIN/MAX của tập đã lọc; không select/group/order.
 group: aggregate theo từng nhóm được hỏi; select_columns phải đúng group_by.
 ranking: các bản ghi/nhóm đứng đầu hoặc cuối; cần order_by và limit đúng yêu cầu.
@@ -33,10 +34,10 @@ children chứa chỉ số node con, mỗi node trừ root dùng đúng một l�
 AND/OR có ít nhất hai children, column_id/literal null và values rỗng.
 Leaf có column_id; EQ/NE/GT/GTE/LT/LTE có literal, không children/values.
 IN có values; IS_NULL/IS_NOT_NULL không literal/values. Không lọc dùng conditions=[].
-Literal raw_phrase có nguyên văn trong question hoặc verified_context.question.
-candidate_value có kiểu đúng cột: text giữ zero đầu/dấu; decimal dấu chấm;
-date ISO hoặc format đã xác nhận; timestamp ISO có timezone; boolean true/false.
-Không tự đổi giá trị/đơn vị/năm, không fuzzy. Dùng mapping owner xác nhận nếu có.
+Literal chỉ gồm raw_phrase nguyên văn trong question hoặc verified_context.question
+và value_type đúng kiểu cột. Không sinh candidate/canonical value. Server bind từ
+nguyên văn, format hoặc mapping owner đã xác nhận. Giữ zero đầu/dấu, không fuzzy,
+không tự đổi giá trị/đơn vị/năm. Cụm chỉ có chữ số trên cột TEXT vẫn là TEXT nguyên văn.
 Trong câu hỏi tiếp, điều kiện mới trên cùng cột thay điều kiện cũ, không AND với cũ.
 Literal hiện tại giữ đúng nguyên văn và kiểu kể cả chuỗi chỉ có chữ số; không lấy
 giá trị dài hơn từ context để thay nó. Chỉ kế thừa metric/điều kiện không bị thay đổi.
@@ -163,6 +164,16 @@ class QueryRequest(Contract):
                     raise ValueError("Grouped result requires its grouping columns")
             elif not self.order_by:
                 raise ValueError("Ranking requires ordering")
+        # LIMIT cần thứ tự ổn định khi đã có mã định danh trong projection.
+        # Đây là mặc định hiển thị theo catalog, không suy điều kiện từ câu hỏi
+        # và không thay thứ tự/ranking người dùng đã yêu cầu.
+        ordering = self.order_by
+        if not ordering and self.result_shape in {"record", "list", "list_all"}:
+            ordering = [
+                Ordering(field_id=column, direction="asc")
+                for column in self.select_columns
+                if column in (identifier_columns or set())
+            ]
         return QueryPlan(
             task=self.task,
             table_id=self.table_id,
@@ -173,7 +184,7 @@ class QueryRequest(Contract):
             aggregations=self.aggregations,
             filters=nodes[-1] if nodes else None,
             group_by=self.group_by,
-            order_by=self.order_by,
+            order_by=ordering,
             limit=self.limit,
             result_mode="top"
             if self.result_shape == "ranking"

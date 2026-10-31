@@ -81,7 +81,7 @@ SOURCES.update(
 )
 
 
-def semantic_shape(plan: dict, columns: list[dict]) -> dict:
+def semantic_shape(plan: dict, columns: list[dict], bindings: list[dict] | None = None) -> dict:
     """Đọc plan đã lưu, không import binder/compiler hoặc dùng chúng tạo expected."""
     names = {c["id"]: c["name"] for c in columns}
     types = {c["id"]: c.get("data_type") for c in columns}
@@ -91,7 +91,16 @@ def semantic_shape(plan: dict, columns: list[dict]) -> dict:
     }
 
     def literal_value(value, column_id):
-        candidate = value["candidate_value"]
+        candidate = value.get("candidate_value")
+        if candidate is None:
+            actual = {
+                str(item["canonical_value"])
+                for item in (bindings or [])
+                if item["column_id"] == column_id and item["raw_phrase"] == value["raw_phrase"]
+            }
+            # Không đoán actual từ gold hoặc chạy lại binder trong evaluator.
+            # Tháng dùng cùng span cho hai bound: chọn theo operator ở predicate.
+            candidate = next(iter(actual)) if len(actual) == 1 else None
         # Cột BOOLEAN được PostgreSQL bind theo kiểu; khác hoa/thường ở biểu diễn
         # không đổi nghĩa. TEXT luôn so nguyên văn, kể cả chữ True/False/0/1.
         if types.get(column_id) == "boolean" and value.get("value_type") == "boolean":
@@ -116,7 +125,16 @@ def semantic_shape(plan: dict, columns: list[dict]) -> dict:
                 node.get("column_id"), "UNBOUND:" + str(node.get("column_id"))
             )
             if node.get("literal"):
+                matches = [
+                    b for b in (bindings or [])
+                    if b["column_id"] == node.get("column_id")
+                    and b["raw_phrase"] == node["literal"].get("raw_phrase")
+                    and b["operator"] == node["operator"]
+                ]
                 result["value"] = literal_value(node["literal"], node.get("column_id"))
+                if node["literal"].get("candidate_value") is None and len(matches) == 1:
+                    value = matches[0]["canonical_value"]
+                    result["value"] = str(value).lower() if isinstance(value, bool) else str(value)
             if node.get("values"):
                 result["values"] = sorted(literal_value(v, node.get("column_id")) for v in node["values"])
         return result
@@ -302,8 +320,8 @@ def run_semantic(args) -> None:
         next(c for c in manifest["cases"] if c["case_id"] == name)
         for name in args.cases
     ]
-    if args.providers != ["gemini"] or not 1 <= args.max_requests <= 95:
-        raise RuntimeError("Semantic live chỉ Gemini và cap rõ ràng <=95.")
+    if args.providers != ["gemini"] or not 1 <= args.max_requests <= 495:
+        raise RuntimeError("Semantic live chỉ Gemini và cap rõ ràng <=495; grant thực tế vẫn quyết định.")
     if any(
         c["domain"] not in SOURCES
         or "metrics" not in c["expected_semantics"]
@@ -356,6 +374,7 @@ def run_semantic(args) -> None:
         "stop_reason": None,
         "max_requests": args.max_requests,
         "catalog_review": args.catalog_review,
+        "continue_after_refusal": getattr(args, "continue_after_refusal", False),
     }
     used = 0
     try:
@@ -465,7 +484,7 @@ get_engine().dispose()
             used += int(usage["id"] not in baseline)
             baseline.append(usage["id"])
             shape = (
-                semantic_shape(diagnostic["plan"], source["preview"]["columns"])
+                semantic_shape(diagnostic["plan"], source["preview"]["columns"], envelope.get("facts", {}).get("filters", []))
                 if diagnostic["plan"]
                 else None
             )
@@ -554,7 +573,10 @@ get_engine().dispose()
                 ),
                 flush=True,
             )
-            if not passed or usage["estimated_cost_usd"] is None:
+            continue_refusal = (
+                getattr(args, "continue_after_refusal", False) and item["false_refusal"]
+            )
+            if (not passed and not continue_refusal) or usage["estimated_cost_usd"] is None:
                 report["stop_reason"] = "case_failed" if not passed else "usage_unknown"
                 break
             if case.get("baseline_ref"):
@@ -602,6 +624,7 @@ def main() -> None:
     parser.add_argument("--max-requests", type=int, default=0)
     parser.add_argument("--output", default="artifacts/semantic-live.json")
     parser.add_argument("--catalog-review", help="Local source-checksummed metadata reviewed before evaluation")
+    parser.add_argument("--continue-after-refusal", action="store_true", help="Giữ FAIL và đo tiếp ca độc lập sau false refusal; không retry hoặc bỏ qua đáp án sai.")
     parser.add_argument("--restart", action="store_true")
     parser.add_argument(
         "--prepare-only",

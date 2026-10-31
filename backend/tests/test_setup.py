@@ -123,17 +123,16 @@ def test_unknown_units_need_owner_review_and_source_names_cannot_be_replaced() -
     parsed = read_table(b"code,value\n0007,1.10\n", ".csv")
     revision = uuid4()
     identifier = local_proposal(parsed, revision).columns[1].id
-    proposal, _ = merge_suggestion(
+    proposal, issues = merge_suggestion(
         SetupSuggestion.model_validate(
             {"columns": [{"id": identifier, "unit": "Đơn vị chưa được xác nhận"}]}
         ),
         parsed,
         revision,
     )
-    assert any(
-        i.code == "UNIT_UNCONFIRMED" and i.decision == "needs_review"
-        for i in check_proposal(proposal, parsed, revision)
-    )
+    assert any(i.code == "UNIT_UNCONFIRMED" and i.decision == "needs_review" for i in issues)
+    assert proposal.columns[1].unit is None
+    assert not check_proposal(proposal, parsed, revision)
     for forbidden in ({"name": "new"}, {"null_values": ["0"]}, {"rows": [[0]]}):
         with pytest.raises(ValidationError):
             SetupSuggestion.model_validate({"columns": [{"id": identifier, **forbidden}]})

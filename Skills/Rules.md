@@ -1,5 +1,7 @@
 # ChatSAR — Quy tắc phát triển và quản lý repository
 
+**Quyền owner mới nhất31/10/2026:** tổng500Gemini requests trong grant hiện hữu, tối đa10USD dự phòng; Codex đến495, giữ5manual. Được mở CHECK/migrate và chỉnh caps local có audit, giữ ledger/keys/flags/baseline, Knowledge/LlamaParse/BGE mới0. UI upload→AIauto→before/after→Save thay yêu cầu checkbox consent trước đây; guard owner/CSRF/quota/provider vẫn giữ. Các quyền100/1.50 bên dưới là lịch sử. Không merge/main hoặc Phase2.
+
 **Quyền tác vụ mới nhất (30/10/2026):** “PHASE 1 FINAL STABILIZATION & ACCEPTANCE” cấp thêm tối đa 100 HTTP Gemini, Codex tối đa 95 và ít nhất 5 dành kiểm thử thủ công, dự phòng bổ sung 1.50 USD. Cho phép điều chỉnh quota local có kiểm soát và per-provider cap; giữ PostgreSQL ledger/guard trước dispatch, không đổi keys/reset lịch sử. Knowledge/LlamaParse/BGE mới = 0. Các giới hạn 10/provider và không sửa .env phía dưới là lịch sử, được quyền mới thay thế trong đúng tác vụ này.
 
 Áp dụng cho toàn bộ dự án tại `C:\Work\ChatSAR`, trong mọi phiên Codex. Đây là nguồn quy tắc chính; `AGENTS.md` chỉ dẫn đến file này, không nhân bản toàn bộ nội dung.

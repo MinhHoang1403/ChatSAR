@@ -17,10 +17,15 @@ export function readPreparedDataset(data: unknown, preview: Preview): PreparedDa
     || typeof data.proposal.description !== 'string' || typeof data.proposal.grain !== 'string'
     || data.checksum !== preview.checksum || data.sheet_name !== preview.sheet_name
     || data.proposal.columns.length !== preview.columns.length) throw new Error('Đề xuất chưa khớp dữ liệu nguồn.');
+  const unconfirmedUnits = new Set(Array.isArray(data.issues) ? data.issues.filter(record)
+    .filter((issue) => issue.code === 'UNIT_UNCONFIRMED').map((issue) => issue.column_id) : []);
   const columns = data.proposal.columns.map((value: unknown, index: number): Column => {
     const column = parseColumn(value);
     if (column.id !== preview.columns[index].id) throw new Error('Thứ tự cột đề xuất chưa khớp file nguồn.');
-    return mergeProposalColumn(preview.columns[index], column);
+    // Cached proposal cũ vẫn giữ nguyên audit, nhưng đơn vị chưa xác nhận không
+    // tự thành metadata chỉ vì owner xác nhận bảng chuẩn hoá.
+    return mergeProposalColumn(preview.columns[index], unconfirmedUnits.has(column.id)
+      ? { ...column, unit: preview.columns[index].unit ?? null } : column);
   });
   return { columns, description: data.proposal.description, grain: data.proposal.grain,
     mode: typeof data.mode === 'string' ? data.mode : 'local',

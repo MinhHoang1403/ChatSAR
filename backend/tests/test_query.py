@@ -71,6 +71,49 @@ def test_literal_cannot_be_silently_rewritten(revision: dict, raw: str, candidat
 
 
 @pytest.mark.parametrize(
+    "kind,raw,options,expected",
+    [
+        ("text", "3", {}, "3"),
+        ("text", "0007", {}, "0007"),
+        ("text", "O'Reilly", {}, "O'Reilly"),
+        ("numeric", "0,10", {"decimal_separator": ","}, "0.10"),
+        ("boolean", "false", {}, False),
+        (
+            "boolean",
+            "chưa xong",
+            {"value_mappings": [{"phrase": "chưa xong", "value": "false"}]},
+            False,
+        ),
+        ("date", "01/02/2026", {"date_format": "%d/%m/%Y"}, "2026-02-01"),
+    ],
+)
+def test_span_only_literal_uses_existing_typed_binder(
+    revision: dict, kind: str, raw: str, options: dict, expected: object
+) -> None:
+    revision["columns"][0].update(data_type=kind, **options)
+    condition = leaf(raw, raw, CODE, kind)
+    del condition["literal"]["candidate_value"]
+    compiled = compile_query(proposal(revision, raw, filters=condition), revision, raw)
+    assert compiled.filters[0]["candidate_value"] is None
+    assert compiled.filters[0]["canonical_value"] == expected
+    if isinstance(expected, bool):
+        assert str(compiled.statement.whereclause).endswith(" = " + str(expected).lower())
+    else:
+        assert expected == wire(next(iter(compiled.statement.compile().params.values())))
+
+
+def test_span_only_does_not_accept_an_unconfirmed_mapping_or_non_question_span(
+    revision: dict,
+) -> None:
+    revision["columns"][0]["data_type"] = "boolean"
+    for raw in ("chưa xong", "true"):
+        condition = leaf(raw, raw, CODE, "boolean")
+        del condition["literal"]["candidate_value"]
+        with pytest.raises(AppError):
+            compile_query(proposal(revision, "chưa xong", filters=condition), revision, "chưa xong")
+
+
+@pytest.mark.parametrize(
     "fields",
     [
         {"table_id": str(uuid4())},
@@ -297,6 +340,13 @@ def test_explicit_calendar_month_requires_exact_half_open_pair(
     plan = proposal(revision, phrase, filters={"operator": "AND", "children": [first, last]})
     compiled = compile_query(plan, revision, phrase)
     assert all(item["mapping_source"] == "explicit_calendar_period" for item in compiled.filters)
+    for child in (first, last):
+        child["literal"].pop("candidate_value")
+    span_plan = proposal(revision, phrase, filters={"operator": "AND", "children": [first, last]})
+    span_compiled = compile_query(span_plan, revision, phrase)
+    assert [item["canonical_value"] for item in span_compiled.filters] == [start, end]
+    first["literal"]["candidate_value"] = start
+    last["literal"]["candidate_value"] = end
     for filters in (
         first,
         {"operator": "OR", "children": [first, last]},

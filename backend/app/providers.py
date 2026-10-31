@@ -330,6 +330,8 @@ def response_schema(
                 }
             schema["properties"]["table_id"]["enum"] = [str(revision["dataset_id"])]
             schema["properties"]["source_revision_id"]["enum"] = [str(revision["id"])]
+        if contract is QueryRequest:
+            schema["$defs"]["QueryLiteral"]["properties"].pop("candidate_value")
 
     def simplify(node: Any) -> None:
         if isinstance(node, dict):

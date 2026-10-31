@@ -182,6 +182,23 @@ test('before-after preview preserves identifiers, exact decimals, empty and NULL
   assert.throws(() => parseNormalization({ ...result, rows: [['0007']] }, source));
 });
 
+test('cached AI units require explicit editing and confirmed units remain visible in comparison', async () => {
+  const { readPreparedDataset } = await vite.ssrLoadModule('/src/AIReview.tsx');
+  const { DataComparison } = await vite.ssrLoadModule('/src/Datasets.tsx');
+  const { parseColumn } = await vite.ssrLoadModule('/src/data.ts');
+  const column = parseColumn({ id: 'amount', name: 'amount', data_type: 'numeric', nullable: false });
+  const source = { ...preview, checksum: 'hash', columns: [column], rows: [['0.10']] };
+  const response = { checksum: 'hash', sheet_name: '', mode: 'ai_proposal',
+    proposal: { columns: [{ ...column, unit: 'VND' }], description: '', grain: 'Một dòng' },
+    issues: [{ code: 'UNIT_UNCONFIRMED', column_id: 'amount', message: 'Chưa xác nhận đơn vị' }] };
+  assert.equal(readPreparedDataset(response, source).columns[0].unit, null);
+  const confirmed = { ...source, columns: [{ ...column, unit: 'kWh' }] };
+  assert.equal(readPreparedDataset(response, confirmed).columns[0].unit, 'kWh');
+  const html = renderToStaticMarkup(createElement(DataComparison, { preview: confirmed,
+    normalized: { original_rows: source.rows, rows: source.rows } }));
+  assert.match(html, /kWh/); assert.doesNotMatch(html, /VND/);
+});
+
 test('using a selected legacy dataset grants models with owner CSRF without another user step', async () => {
   const { prepareDatasetForQuery } = await vite.ssrLoadModule('/src/data.ts');
   const oldFetch = globalThis.fetch, oldWindow = globalThis.window;

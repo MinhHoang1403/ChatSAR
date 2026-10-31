@@ -1,5 +1,17 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Kiểm tra hợp đồng giá trị và quota mở rộng — 31/10/2026
+
+Đã áp dụng quyền owner **500 lượt Gemini tổng / 10 USD dự phòng**, giữ cùng grant69d37b9b-fd6d-4296-9189-9fb5303b46a1. Migration grant_limits chỉ mở CHECK tối đa500/10, readiness/CI/vận hành yêu cầu migration10. Grant thực tế495/10 để giữ5manual; globalcap604/Gemini599/Knowledge5, keys/flags/globalbudget20/baseline không đổi. Snapshot toàn199rows trước mở quota giữ nguyên. Admin review vẫn tối đa3 verified503/grant, không tự tạo audit hay sửa UNKNOWN.
+
+Wire QueryRequest bỏ candidate_value khỏi schema model: chỉ trích raw_phrase/value_type. QueryLiteral nội bộ giữ candidate cũ để đọc/kiểm nghiêm lịch sử; khi thiếu candidate, **binder hiện hữu** bind từ raw span/format/mapping đã xác nhận hoặc đúng cặp tháng lịch, không sửa filter hay tạo SQL khác. Có candidate thì vẫn so equality chính xác. Evidence giữ raw/candidateNULL/canonical/span; scorer đọc canonical từ evidence thực, không chạy binder hoặc suy actual từ gold. Offline đa kiểu/schema, legacy mismatch, unmapped và month half-open đạt; canary adapter thật trong process cô lập4/4 đạt trước promote, không sửa app đang phục vụ. Sau đó HTTP regression5ca4PASS/1FAIL chỉ thiếuORDER; followup3/quận3 và projectionAND/OR đã đạt trong mẫu nhỏ, chưa là điểm release.
+
+Thứ tự mặc định cho direct record/list có identifier được chọn: nếu model không chỉ địnhORDER, chuyển đổi hợp đồng thêm identifierASC theo catalog. Không thay order/ranking/aggregate hoặc thêm cột/filter; không nhận diện tên benchmark. Căn cứ PostgreSQL LIMIT không cóORDER trả subset/thứ tự không xác định; đây là quyết định sản phẩm nội bộ. Unit6biến thể/2schema và live canary1/1 xác minh trước promote. Chưa gộp score của source trước/sau thay đổi.
+
+BrowserCSV auto-AI thật trả0.30 nhưng lộ lỗi đơn vị: model gợi ýVND không có trong file, UI cũ thu gọn không đủ để xác nhận. Đã sửa merge bỏ đơn vị AI khỏi metadata áp dụng, ghi needs_review rõ; cached proposal cũ cũng bỏ đơn vị chưa xác nhận khi đọc, không sửa audit. Đơn vị do owner nhập vẫn được giữ và hiện ngay ở header so sánh. Merge có warning vẫn phải chạy validator toàn bảng; regression đồng thời unit warning+duplicatekey bị từ chối. Nguồn/chat synthetic trước sửa giữ lịch sử; không gọi kết quả có VND đó là nghiệm thu metadata đúng.
+
+197unit/48integration(8auth+34dataset+6guest)/39evaluationPG/18frontend/types/build/ruff/mypy đạt. Hệ thống bổ sung test provider tắt không reserve/SQL, failed context không được kế thừa, thêmNULL giữCOUNT non-null và duplicate phân biệtCOUNT rows/distinct. UI milestone b7d0025 đãpush, exactCIpush+PRSUCCESS. Hai plan/gold gốc giữ nguyên. **Đang kiểm tiếp bộ rộng cùng source và browser sau sửa unit; chưa READY_FOR_USER_ACCEPTANCE, không merge/Phase2.**
+
 ## Đơn giản hoá upload và chuẩn hoá dữ liệu — checkpoint31/10/2026
 
 Theo chỉ đạo mới: **chọn file → tự chuẩn bị bằngAI → xem gốc/sau chuẩn hoá → lưu vào không gian**. Bỏ nút upload sau chọn file, phân tích local/AI riêng, checkbox metadata/vocabulary/query sharing, chọn model setup và mở proposal lưu bằng tay; không còn synthetic checkbox trong luồng người dùng. Gemini setup mặc định, cached proposal khớp checksum/sheet tự áp dụng. XLSX nhiều sheet mới yêu cầu chọn sheet; đang pending chỉ đọc trạng thái, không phát sinh model lặp. Chỉnh sửa kỹ thuật thu gọn. Lưu thành công tự đóng modal/chọn source. File gốc bất biến, không tự điền/xóa/fuzzy-sửa giá trị.
