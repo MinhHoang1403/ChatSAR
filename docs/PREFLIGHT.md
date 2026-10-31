@@ -1,5 +1,9 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Phân biệt giá trị cực trị với bản ghi cực trị — 31/10/2026
+
+Đợt rộng trên source abb6a0e dừng tại 27/28PASS: basic_maintenance_minimum có giá trị đúng0.20 nhưng trả thêm mãW03/ranking thay scalarMIN. Không coi kết quả đóPASS. Field result_shape trước chỉ có enum không description; bổ sung mô tả ngay tại trường constrained JSON, phân biệt numeric value MIN/MAX với identity/top-record, ví dụ chung nhiệt độ/cảm biến, không tên schema/giá trị benchmark. Không thêm rule sửa output/compiler. Unit25 và canary adapter thật3/3(MIN/MAX/which-record) đạt trước promote. Sẽ đo lại cùng source sau thay đổi; không cộng điểm cũ. Bộ 12ca observatory/recycling đã khóa và SQL oracle kiểm trước mọi model execution, không dùng nó tuning runtime.
+
 ## Khoảng tháng là một điều kiện — 31/10/2026
 
 Sau repro model tự sinh ngày không có trong câu, QueryRequest thêm leaf IN_MONTH với literal nguyên văn tháng/năm. Adapter chỉ hạ thành AND(GTE,LT) cùng raw span; binder/calendar_month hiện hữu kiểm năm/timezone và tính hai mốc. Không thêm parser/planner/compiler khác hoặc tự sửa filter sau model. Unit date/timestamp, leap/DST/rollover/missingyear, API/PG và canary timestamp thật1/1 trước promote đạt. Điểm source trước không gộp vào source mới. Câu basic_logistics_empty_sum có tranh chấp nghĩa “không có tên” (IS_NULL hay literal “không có”); giữ gold/FAIL riêng, sẽ đo tách ca này, không dùng kết quả NULL trùng để nâng semantic accuracy.

@@ -85,7 +85,16 @@ class QueryRequest(Contract):
     task: Literal["SQL", "CLARIFY", "UNSUPPORTED"]
     table_id: str
     source_revision_id: str
-    result_shape: Literal["record", "list", "list_all", "scalar", "group", "ranking"]
+    result_shape: Literal["record", "list", "list_all", "scalar", "group", "ranking"] = Field(
+        description=(
+            "Shape of the requested answer, not a method to compute it. "
+            "scalar: a numeric value, including minimum/maximum value itself. "
+            "ranking: which records/entities have the highest/lowest value, or explicit top-N. "
+            "For lowest temperature use scalar MIN; for which sensor has the lowest "
+            "temperature use ranking. record: lookup fields for one identified entity. "
+            "list/list_all: requested record details. group: aggregates for each group."
+        )
+    )
     required_columns: list[str] = Field(
         max_length=30,
         description="Requested direct projection columns, excluding aggregate inputs.",
