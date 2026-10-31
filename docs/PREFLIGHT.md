@@ -1,5 +1,15 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Kiểm bản sửa 1c9880c qua HTTP và browser — 01/11/2026
+
+211unit/48integration(8auth+34dataset+6guest)/42evaluationPG và ruff/mypy19modules đạt. CI push41228742120 + PR41228747119 cùng SHA1c9880c7923aa012a78fdad688ac28d04b9fd495 SUCCESS. App19modules cùng bytes trong toàn bộ các phép đo dưới; chưa lấy77/77 của source cũ làm điểm source này.
+
+Recycling COUNT+SUMfalse→thêmglass đạt2/2 qua HTTP thực. Hoàn tất bộ12observatory/recycling trên cùng source:11PASS/1FAIL; observatory_month trả nhóm theo observed_on (Feb1:1/1.25,Feb29:1/0.75) thay scalar2/2.00. Filter tháng/bounds/Decimal đúng nhưng shape khác gold; câu “theo observed_on” có hai cách hiểu, giữ nguyên FAIL và gold, không gọi đóPASS. Câu clarified tường minh tổng cả tháng đạt2/2 (observatory2/2.00,recycling2/4.00), tách điểm khỏi câu gốc. Fresh ceramics/marine8/8 đạt lần đầu model, đã khóa/check SQL trước call; đây là held-out nội bộ tác giả biết nhãn, không external blind, chưa dùng nhãn sửa code.
+
+Browser đã bật lại: sau reload mở lại XLSX0.40/SQLsucceeded. CSVmớiacceptance-context.csv tựAI→trước/sau4rows/5cols→Save1clicktựđóng/chọnsource. Ba câu Gemini thật0.47→chỉalpha0.43→thêmfalse0.26đạt; SQL cuối cóAND hai điều kiện, parameterizedTEXT/Boolean typed. Snapshot đối chiếu physical rows viết tay giữ0009/0018/0027/0040,Decimal/NULL/date/Boolean,private/bothproviders,ai_proposalcomplete,không tựgánunit; sourcechecksumkhớpfilegốc. Source/chatkhác không xóa. UI bỏ thông báoSave đứng lại sau chuyển sangchat;18frontend/types/build đạt, không thay app19module.
+
+Functional pipeline6/6model-live đạt: filtered SUM0.30 giữ khi đảo dòng hoặc thêm dòng ngoài lọc,COUNT_NON_NULL3 giữ khi thêmNULL,501rows trả đúng500M0000..M0499/truncated/partial/reference_only/limitations. Không cộng các quan hệ này vàoNLaccuracy. Chuẩn bị đo78NLgốc/12systemguards riêng trên appsource này, chưa kết luậnREADY/ACCEPTED.
+
 ## Ngữ cảnh truy vấn và đối soát 01/11/2026 — đang kiểm bản sửa
 
 Bộ rộng trên app source 4eb38a2 (19 module vẫn cùng bytes tại 9a7413b) đạt 77/77 ca không tranh chấp. Ca empty-sum mơ hồ đo riêng vẫn FAIL về nghĩa dù cùng NULL; gold gốc giữ nguyên. Bộ observatory/recycling mới phát hiện scalar bị chia nhóm và một ca tháng chia theo ngày; không gộp điểm từ các phiên bản hoặc gọi các ca đã quan sát là held-out sau khi dùng sửa runtime.

@@ -154,7 +154,7 @@ export default function WorkspaceView({ me, workspaces, selected, onSelect, onCr
     <Modal open={dataOpen} title="Quản lý dữ liệu" onClose={closeData} closeDisabled={dataBusy} wide>
       {selected && <Datasets workspaceId={selected.id} csrf={me.csrf_token} onBusy={setDataBusy}
         onReady={(dataset) => { selectSource(dataset); void refreshDatasets().catch((e: unknown) => setLocalError(message(e))); }}
-        onSaved={(dataset) => { selectSource(dataset); setDataOpen(false); setDataBusy(false); setNotice('Đã lưu dataset vào không gian làm việc. Bạn có thể bắt đầu hỏi.'); }} />}
+        onSaved={(dataset) => { selectSource(dataset); setDataOpen(false); setDataBusy(false); setNotice(''); }} />}
     </Modal>
     <Modal open={createOpen} title="Tạo không gian làm việc" error={localError || error} closeDisabled={mutating} onClose={() => { if (!mutating) setCreateOpen(false); }}>
       <form className="dialog-body" onSubmit={(e) => { e.preventDefault(); void mutate(async () => { await onCreate(name.trim()); setName(''); setCreateOpen(false); }); }}>
