@@ -14,6 +14,9 @@ record: tra bản ghi cụ thể, giữ mã định danh và mọi cột đượ
 Trong record, select_columns/required_columns phải bao gồm cả cột EQ dùng nhận diện
 bản ghi (ngay cả khi role chưa xác nhận), rồi đến các cột giá trị cần tra.
 list/list_all: chi tiết nhiều dòng/danh sách đầy đủ, direct projection, không aggregate.
+Danh sách mặc định chỉ hiện mã định danh và các cột người dùng yêu cầu hiển thị;
+cột chỉ dùng lọc không tự thành cột đầu ra. Đầy đủ dòng khác đầy đủ cột: chỉ lấy
+mọi cột khi người dùng yêu cầu toàn bộ cột/thông tin chi tiết đầy đủ.
 scalar: tổng/đếm/trung bình/MIN/MAX của tập đã lọc; không select/group/order.
 group: aggregate theo từng nhóm được hỏi; select_columns phải đúng group_by.
 ranking: các bản ghi/nhóm đứng đầu hoặc cuối; cần order_by và limit đúng yêu cầu.
@@ -37,6 +40,12 @@ Không tự đổi giá trị/đơn vị/năm, không fuzzy. Dùng mapping owner
 Trong câu hỏi tiếp, điều kiện mới trên cùng cột thay điều kiện cũ, không AND với cũ.
 Literal hiện tại giữ đúng nguyên văn và kiểu kể cả chuỗi chỉ có chữ số; không lấy
 giá trị dài hơn từ context để thay nó. Chỉ kế thừa metric/điều kiện không bị thay đổi.
+current_value_mentions là các giá trị nguồn khớp ranh giới từ trong câu hiện tại,
+được tách khỏi toàn bộ vocabulary và context. Khi chọn literal mới, đối chiếu danh
+sách này với raw_phrase hiện tại; một giá trị chỉ có trong context không thay được nó.
+explicit_text_mentions ghi so sánh TEXT tường minh theo cột, kể cả giá trị chưa có
+trong nguồn. Phải giữ điều kiện đó; không bỏ filter để tránh tập rỗng. Tập rỗng
+vẫn là SQL hợp lệ (SUM trả NULL); không được trả tổng toàn bảng thay thế.
 Thời gian chính xác dùng GTE start, LT end. Tháng có đủ năm là khoảng lịch tường minh:
 dùng cùng raw_phrase của tháng/năm cho GTE đầu tháng và LT đầu tháng kế tiếp theo timezone.
 Tháng thiếu năm cần CLARIFY; không lấy năm hiện tại hoặc suy từ dữ liệu.

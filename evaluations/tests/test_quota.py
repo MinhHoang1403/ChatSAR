@@ -89,14 +89,13 @@ assert reserve()=='USAGE_UNKNOWN'""")
 
         identifier = str(uuid4())
         model = "gemini-3.5-flash-lite"
-        snapshot = json.dumps({"status": status, "error_code": "PROVIDER_SCHEMA",
-                               "model": snapshot_model or model, "dispatch_count": 1})
+        change = json.dumps({"model": snapshot_model}) if snapshot_model else "{}"
         evidence = json.dumps({"http_status": evidence_status, "reference": "offline_test"})
         postgres(
             f"INSERT INTO app.provider_usage(id,provider,model,status,reserved_cost_usd,grant_id,dispatch_count,error_code) "
             f"VALUES ('{identifier}','gemini','{model}','{status}',0.01,'{self.grant}',1,'PROVIDER_SCHEMA');"
             f"INSERT INTO app.provider_usage_reviews(usage_id,policy,accounted_reserve_usd,usage_snapshot,evidence,authority) "
-            f"VALUES ('{identifier}','retain_full_reserve',0.01,'{snapshot}','{evidence}','Offline test authority');"
+            f"SELECT id,'retain_full_reserve',0.01,to_jsonb(u)||'{change}'::jsonb,'{evidence}','Offline test authority' FROM app.provider_usage u WHERE id='{identifier}';"
         )
         return identifier
 
@@ -136,3 +135,73 @@ from sqlalchemy import update
 with get_engine().begin() as c:
     c.execute(update(provider_usage).where(provider_usage.c.id==UUID(identifier)).values(dispatch_count=1,status='error',error_code='PROVIDER_SCHEMA'))
 assert reserve()=='USAGE_UNKNOWN'""")
+
+    def seed_503(self, *, http_status=503, error="PROVIDER_TEMPORARY", age=0):
+        identifier = str(uuid4())
+        postgres(
+            "INSERT INTO app.provider_usage(id,provider,model,status,reserved_cost_usd,"
+            "grant_id,dispatch_count,error_code,http_status,created_at) "
+            f"VALUES ('{identifier}','gemini','gemini-3.5-flash-lite','error',0.01,"
+            f"'{self.grant}',1,'{error}',{http_status},clock_timestamp()-interval '{age} seconds');"
+        )
+        return identifier
+
+    def approve(self, identifier, **changes):
+        from decimal import Decimal
+        from operations.usage_review import review
+
+        args = dict(usage_id=identifier, grant_id=self.grant, model="gemini-3.5-flash-lite",
+                    reserve=Decimal("0.01"), authority="Offline test owner authorization", apply=True)
+        args.update(changes)
+        return review(**args)
+
+    def test_verified_503_review_cooldown_and_original_ledger_unchanged(self):
+        identifier = self.seed_503()
+        before = postgres(f"SELECT to_jsonb(u) FROM app.provider_usage u WHERE id='{identifier}';")
+        self.approve(identifier)
+        self.run_quota("assert reserve()=='PROVIDER_COOLDOWN'")
+        self.assertEqual(before, postgres(f"SELECT to_jsonb(u) FROM app.provider_usage u WHERE id='{identifier}';"))
+        with self.assertRaises(RuntimeError):
+            self.approve(identifier)
+        # Tua đồng hồ fixture trước audit mới, không thay row/audit đã duyệt.
+        postgres(f"DELETE FROM app.provider_usage_reviews WHERE usage_id='{identifier}'; DELETE FROM app.provider_usage WHERE id='{identifier}';")
+        identifier = self.seed_503(age=65)
+        self.approve(identifier)
+        self.run_quota("assert reserve('0.025')=='GRANT_BUDGET_REACHED'\nassert reserve() not in ('USAGE_UNKNOWN','PROVIDER_COOLDOWN')\nassert reserve()=='GRANT_LIMIT_REACHED'")
+
+    def test_review_rejects_wrong_grant_model_reserve_provider_or_untrusted_response(self):
+        from decimal import Decimal
+
+        identifier = self.seed_503(age=65)
+        for changes in ({"grant_id": str(uuid4())}, {"model": "different"},
+                        {"reserve": Decimal("0.02")}, {"authority": "no"}):
+            with self.assertRaises(ValueError):
+                self.approve(identifier, **changes)
+        for assignment in ("provider='knowledge'", "http_status=NULL", "dispatch_count=0",
+                           "status='reserved'", "error_code='PROVIDER_TIMEOUT'"):
+            postgres(f"BEGIN; UPDATE app.provider_usage SET {assignment} WHERE id='{identifier}'; COMMIT;")
+            with self.assertRaises(ValueError):
+                self.approve(identifier)
+            postgres(f"UPDATE app.provider_usage SET provider='gemini',http_status=503,dispatch_count=1,status='error',error_code='PROVIDER_TEMPORARY' WHERE id='{identifier}';")
+        self.run_quota("assert reserve()=='USAGE_UNKNOWN'")
+
+    def test_repeated_503_has_longer_cooldown_and_does_not_allow_new_unknown(self):
+        for _ in range(2):
+            self.approve(self.seed_503(age=65))
+        # Hai lỗi đều tính request; nâng riêng cap fixture để kiểm cooldown.
+        postgres(f"UPDATE app.provider_grants SET max_requests=4,budget_usd=0.1 WHERE id='{self.grant}';")
+        self.run_quota("assert reserve()=='PROVIDER_COOLDOWN'")
+        self.seed_503(age=65)
+        self.run_quota("assert reserve()=='USAGE_UNKNOWN'")
+
+    def test_generic_admin_review_is_bounded_and_snapshot_changes_block(self):
+        postgres(f"UPDATE app.provider_grants SET max_requests=6,budget_usd=0.1 WHERE id='{self.grant}';")
+        for _ in range(3):
+            self.approve(self.seed_503(age=360))
+        identifier = self.seed_503(age=360)
+        with self.assertRaises(ValueError):
+            self.approve(identifier)
+        self.run_quota("assert reserve()=='USAGE_UNKNOWN'")
+        # Toàn snapshot phải khớp, cả grant/provider/reserve và NULL usage.
+        postgres(f"DELETE FROM app.provider_usage WHERE id='{identifier}'; UPDATE app.provider_usage SET reserved_cost_usd=0.02 WHERE grant_id='{self.grant}';")
+        self.run_quota("assert reserve()=='USAGE_UNKNOWN'")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import timedelta
 from decimal import Decimal
 from time import perf_counter
 from typing import Any, Generic, Literal, TypeVar
@@ -14,7 +15,7 @@ from fastapi import APIRouter
 from google import genai
 from google.genai import types
 from pydantic import BaseModel, ValidationError
-from sqlalchemy import func, insert, select, update
+from sqlalchemy import and_, func, insert, or_, select, update
 
 from app import database as db
 from app.auth import PrincipalDependency
@@ -22,7 +23,7 @@ from app.config import get_settings
 from app.errors import AppError
 from app.observability import annotate, observation
 from app.planning import REQUEST_INSTRUCTIONS, QueryRequest
-from app.query import QueryPlan
+from app.query import QueryPlan, explicit_text_mentions, mentioned_phrases
 from app.schema import provider_grants, provider_usage, provider_usage_reviews
 
 Provider = Literal["gemini", "knowledge"]
@@ -179,8 +180,8 @@ def reserve_call(provider: Provider, model: str, reserve: Decimal) -> Any:
                     func.coalesce(func.sum(provider_usage.c.reserved_cost_usd), 0),
                 ).where(provider_usage.c.grant_id == grant_id)
             ).one()
-            # Chỉ ngoại lệ đúng snapshot admin đã duyệt. Usage thật vẫn NULL,
-            # toàn bộ reserve vẫn tính vào cap; không tự duyệt HTTP400 mới.
+            # Audit admin phải khớp đúng lượt, grant và snapshot bất biến.
+            # Review chỉ hạch toán toàn reserve; không suy chi phí thật bằng 0.
             review = provider_usage_reviews.c
             reviewed = (
                 select(review.usage_id)
@@ -188,13 +189,27 @@ def reserve_call(provider: Provider, model: str, reserve: Decimal) -> Any:
                     review.usage_id == provider_usage.c.id,
                     review.policy == "retain_full_reserve",
                     review.accounted_reserve_usd == provider_usage.c.reserved_cost_usd,
+                    review.usage_snapshot == func.to_jsonb(provider_usage.table_valued()),
                     review.usage_snapshot["status"].as_string() == provider_usage.c.status,
                     review.usage_snapshot["error_code"].as_string() == provider_usage.c.error_code,
                     review.usage_snapshot["model"].as_string() == provider_usage.c.model,
                     review.usage_snapshot["dispatch_count"].as_integer() == 1,
-                    review.evidence["http_status"].as_integer() == 400,
+                    or_(
+                        and_(
+                            review.evidence["http_status"].as_integer() == 400,
+                            provider_usage.c.error_code == "PROVIDER_SCHEMA",
+                        ),
+                        and_(
+                            review.evidence["http_status"].as_integer() == 503,
+                            provider_usage.c.http_status == 503,
+                            review.usage_snapshot["http_status"].as_integer() == 503,
+                            provider_usage.c.error_code == "PROVIDER_TEMPORARY",
+                            review.evidence["source"].as_string() == "httpx_response_hook",
+                            review.evidence["usage"].as_string() == "UNKNOWN",
+                            review.evidence["billing"].as_string() == "NOT_VERIFIED",
+                        ),
+                    ),
                     provider_usage.c.provider == "gemini",
-                    provider_usage.c.error_code == "PROVIDER_SCHEMA",
                     provider_usage.c.status == "error",
                     provider_usage.c.reserved_cost_usd > 0,
                 )
@@ -218,6 +233,30 @@ def reserve_call(provider: Provider, model: str, reserve: Decimal) -> Any:
                 raise provider_error(
                     "GRANT_BUDGET_REACHED", "Đã đạt ngân sách dự phòng của tác vụ."
                 )
+            recent = connection.execute(
+                select(
+                    provider_usage.c.http_status,
+                    provider_usage.c.created_at,
+                    provider_usage.c.latency_ms,
+                )
+                .where(provider_usage.c.grant_id == grant_id, provider_usage.c.dispatch_count == 1)
+                .order_by(provider_usage.c.created_at.desc(), provider_usage.c.id.desc())
+                .limit(2)
+            ).all()
+            if recent and recent[0].http_status in (429, 500, 503):
+                # Không tự retry: lần gửi có chủ đích tiếp theo vẫn phải đợi.
+                seconds = (
+                    300 if len(recent) == 2 and all(r.http_status == 503 for r in recent) else 60
+                )
+                now = connection.execute(select(func.clock_timestamp())).scalar_one()
+                completed_at = recent[0].created_at + timedelta(
+                    milliseconds=recent[0].latency_ms or 0
+                )
+                if (now - completed_at).total_seconds() < seconds:
+                    raise provider_error(
+                        "PROVIDER_COOLDOWN",
+                        "Mô hình đang quá tải. Vui lòng đợi rồi gửi yêu cầu mới.",
+                    )
         request_id = uuid4()
         connection.execute(
             insert(provider_usage).values(
@@ -348,6 +387,12 @@ def query_payload(
         "instructions": INSTRUCTIONS,
         "catalog": catalog,
         "question": question,
+        "explicit_text_mentions": explicit_text_mentions(question, revision["columns"]),
+        "current_value_mentions": {
+            column_id: sorted(mentioned_phrases(question, values))
+            for column_id, values in revision.get("grounding_values", {}).items()
+            if mentioned_phrases(question, values)
+        },
         "verified_context": context,
     }
 
@@ -558,8 +603,14 @@ def generate_structured(
                 or type(error).__name__ == "APITimeoutError"
                 else "PROVIDER_AUTH"
                 if status == 401
+                else "PROVIDER_INTERNAL"
+                if status == 500
+                else "PROVIDER_DEADLINE"
+                if status == 504
                 else "PROVIDER_RATE_LIMIT"
                 if status == 429
+                else "PROVIDER_NETWORK"
+                if isinstance(error, httpx.TransportError)
                 else "PROVIDER_SCHEMA"
                 if isinstance(error, (ValidationError, ValueError, KeyError, TypeError))
                 or status == 400
@@ -583,9 +634,9 @@ def generate_structured(
                 thought_tokens,
                 cost=cost,
                 error=code,
-                http_status=status
-                if isinstance(status, int) and 100 <= status <= 599
-                else response_status,
+                # Chỉ response hook/direct HTTP mới chứng minh đã nhận HTTP.
+                # Exception SDK có status nhưng không có response không đủ để review.
+                http_status=response_status,
             )
             annotate(
                 span,
@@ -641,8 +692,11 @@ def generate_structured(
             )
             raise ProviderError(
                 code,
-                "Mô hình chưa xử lý được yêu cầu. "
+                "Mô hình đang quá tải. Vui lòng đợi rồi gửi yêu cầu mới."
+                if code == "PROVIDER_TEMPORARY"
+                else "Mô hình chưa xử lý được yêu cầu. "
                 "Vui lòng kiểm tra trạng thái kết nối hoặc cấu hình.",
+                upstream_status=status if isinstance(status, int) else None,
                 stage=error_stage,
                 provider_name=provider,
                 model=model,

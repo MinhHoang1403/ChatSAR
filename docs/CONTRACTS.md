@@ -1,5 +1,11 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## Bổ sung hiện hành: audit503 và bằng chứng giá trị hiện tại — 31/10/2026
+
+Giữ một pipeline QueryRequest→QueryPlan→binder/compiler→reader→facts. Query payload thêm current_value_mentions lấy bằng matcher hiện hữu từ bounded source vocabulary đã kiểm quyền; không phải filter được tự tạo. Context verified giữ nguyên, model vẫn phải đề xuất và binder kiểm raw/candidate/mapping. UI/API shape không đổi.
+
+Usage review503: original error/dispatch1/http503/PROVIDER_TEMPORARY/NULLusage và toànreserve giữ nguyên. Chỉ audit admin retain_full_reserve có snapshot toàn row khớp và evidence source=httpx_response_hook/http503/usageUNKNOWN/billingNOT_VERIFIED mới mở unknown gate. Old400review giữ tương thích, pending/timeout/network/mismatch/provider/grant khác không qua. App chỉ SELECT, không quyền tự duyệt. Admin CLI ngoài container/API preview trước apply, advisory lock và giới hạn3review503/grant; không có endpoint admin hoặc grant mới. Sau lỗi transient60s cooldown, hai503liên tiếp300s; không automatic retry/replay. Cap/grant/full-reserve budget vẫn kiểm trước insert/network; mỗi HTTP tính một lượt kể cả lỗi. Xem DECISIONS/PREFLIGHT hiện hành, không dùng checkpoint cũ làm quyền mới.
+
 ## Bổ sung hiện hành: vocabulary opt-in và lịch tháng — 30/10/2026
 
 POSTsetup thêm consent_values:boolean=false; chỉ gửi observed_values khi use_ai+consent_metadata+consent_values. Vocabulary riêngTEXT/BOOLEAN tốiđa20giátrị/120kýtự; cột vượtgiớihạn bỏvocabulary hoàn toàn. Khôngrawrows, không coi mappingAI làapproved trướcconfirm, khôngtựcấp querypermission. CSVtrue/false candidateboolean,0/1giữinteger. Mappingphrasecasefold/duplicatecasefold đượckiểm, canonicalTEXTkhôngđổichữhoa/thường; cụm dài ởcùngvịtrí che cụm con nhưng khôngche lầnxuấthiện độc lập.

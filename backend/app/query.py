@@ -485,9 +485,45 @@ def mentioned_phrases(question: str, phrases: list[str]) -> set[str]:
     }
 
 
+def explicit_text_mentions(question: str, columns: list[dict[str, Any]]) -> dict[str, list[str]]:
+    """So sánh TEXT tường minh có tên/alias cột, kể cả giá trị không có trong DB.
+
+    Chỉ nhận cú pháp so sánh bằng có ranh giới rõ; không suy nghĩa/tạo filter.
+    Cụm có dấu câu bên trong cần quote. Các dạng NL khác vẫn qua guard hiện hữu.
+    """
+    found: dict[str, list[str]] = {}
+    for item in columns:
+        if item.get("data_type") != "text":
+            continue
+        labels = sorted({item["name"], *item.get("aliases", [])}, key=len, reverse=True)
+        label = r"(?<!\w)(?:" + "|".join(re.escape(s) for s in labels if s) + r")(?!\w)"
+        cue = r"\s*(?:ghi\s+(?:đúng|chính\s+xác)\s+là|bằng(?:\s+văn\s+bản)?|equals?|=)\s*"
+        value = r"""(?:"([^"\n]+)"|'([^'\n]+)'|“([^”\n]+)”|([^,;?!\n]+))"""
+        mentions = []
+        for match in re.finditer(label + cue + value, question, re.IGNORECASE):
+            quoted = next((v for v in match.groups()[:3] if v is not None), None)
+            raw = quoted if quoted is not None else match.group(4).strip().rstrip(".")
+            if raw:
+                mentions.append(raw)
+        if mentions:
+            found[item["id"]] = mentions
+    return found
+
+
 def validate_structure(
     plan: QueryPlan, revision: dict[str, Any], question: str, evidence: list[dict[str, Any]]
 ) -> None:
+    for column_id, values in explicit_text_mentions(question, revision["columns"]).items():
+        for value in values:
+            if not any(
+                e["column_id"] == column_id
+                and e["operator"] == "EQ"
+                and e["raw_phrase"].casefold() == value.casefold()
+                for e in evidence
+            ):
+                raise fail(
+                    "Một so sánh tường minh chưa có điều kiện lọc tương ứng.", "QUERY_CLARIFY"
+                )
     for item in revision["columns"]:
         review = ColumnReview.model_validate(item)
         for phrase in mentioned_phrases(question, [m.phrase for m in review.value_mappings]):

@@ -1,5 +1,11 @@
 # Vận hành ChatSAR
 
+## Vận hành audit503 — 31/10/2026
+
+Không sửa usage/cost thành0, không đổi grant/reset ledger. `python -m operations.usage_review --usage-id UUID --grant-id UUID --model gemini-3.5-flash-lite --reserve DECIMAL --authority "Quyền cụ thể của chủ dự án"` chỉ preview. Sau kiểm đúng evidence/quyền, thêm `--apply` để ghi audit bằng chatsar_admin qua Compose db. API không nhận mật khẩu admin, không tự chạy công cụ này. Công cụ chỉ nhận verified HTTP503/error/dispatch1/UNKNOWN/fullreserve và snapshot nguyên vẹn, giới hạn3review503/grant; không phải bypass chung. Review trùng/mismatch/hết budget phải điều tra, không sửa trực tiếp bảng để vượt.
+
+Lần gửi có chủ đích sau lỗi cần key mới, đợi cooldown60s (hai503liền300s). Không retry cùng key/pending; GET history trước khi quyết định gửi lại. Timeout/network/unknown thiếu response vẫn giữ gate. Không kết luận Google không thu phí; reserve tiếp tục tính đầy đủ. Lượt503lịch sử đã được chủ dự án cho phép audit, các phần dưới giữ lịch sử trước quyền31/10; xem đầuPREFLIGHT về số liệu hiện hành.
+
 ## Vận hành hiện hành sau đợt sửa — 30/10/2026
 
 Live đang dừngUSAGE_UNKNOWN doHTTP503 mới a4755acf-0039-4928-890e-0f57b6b4322d, khôngphảilỗiconfigsource. Khônggọihealthmodel/retry/chuyểngrant hoặc thêmreviewHTTP400cho503. Giữtokens/costNULLvàreserve0.0141532USD. Quyềnmới thêm100calls/1.50USD,grant riêng69d37b9b-fd6d-4296-9189-9fb5303b46a1,max95Codex;đãdùng23,reserve0.3117407USD. Ledger127=122/5. Còn77mới và9cũmanual nhưng usagegate vẫn dừng; .env chỉđổi total/provider cap vàactivegranttheoquyềnmới,keys/flags/budgetglobalgiữnguyên. Không dùngquota còn đểtựbỏchặn.

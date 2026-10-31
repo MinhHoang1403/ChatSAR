@@ -212,6 +212,13 @@ def semantics_match(actual: dict, expected: dict) -> bool:
     def canonical(value):
         if isinstance(value, dict):
             result = {k: canonical(v) for k, v in value.items()}
+            if result.get("operator") == "OR":
+                children = result["children"]
+                if (len(children) >= 2 and all(set(c) == {"operator", "column", "value"}
+                    and c["operator"] == "EQ" and c["value"] is not None for c in children)
+                    and len({c["column"] for c in children}) == 1):
+                    return {"operator": "IN", "column": children[0]["column"],
+                            "values": sorted({c["value"] for c in children})}
             if result.get("operator") in ("AND", "OR"):
                 result["children"] = sorted(
                     result["children"], key=lambda x: json.dumps(x, sort_keys=True)
@@ -243,7 +250,24 @@ def semantics_match(actual: dict, expected: dict) -> bool:
 
 
 def run_semantic(args) -> None:
+    if getattr(args, "prepare_only", False):
+        raise RuntimeError("Semantic prepare-only chưa hỗ trợ; không được gọi model.")
     manifest = load_scenarios()
+    if getattr(args, "generalization", False):
+        locked = json.loads((EVALUATIONS / "generalization_checksums.json").read_text(encoding="utf-8"))
+        for name, digest in locked.items():
+            assert hashlib.sha256((EVALUATIONS / name).read_bytes()).hexdigest() == digest, name
+        manifest = json.loads((EVALUATIONS / "generalization.json").read_text(encoding="utf-8"))
+        SOURCES.update({name: (source["table"], source["columns"])
+                        for name, source in manifest["sources"].items()})
+    original_cases = {c["case_id"]: c for c in manifest["cases"]}
+    if getattr(args, "adjudicated", False):
+        locked = json.loads((EVALUATIONS / "generalization_checksums.json").read_text(encoding="utf-8"))
+        assert hashlib.sha256((EVALUATIONS / "annotation_review.json").read_bytes()).hexdigest() == locked["annotation_review.json"]
+        audit = json.loads((EVALUATIONS / "annotation_review.json").read_text(encoding="utf-8"))
+        assert audit["semantic_sha256"] == hashlib.sha256((EVALUATIONS / "semantic.json").read_bytes()).hexdigest()
+        manifest = {**manifest, "cases": [{**c, **audit["overrides"].get(c["case_id"], {})}
+                                          for c in manifest["cases"]]}
     catalog_review = None
     if args.catalog_review:
         review_path = (ROOT / args.catalog_review).resolve()
@@ -297,7 +321,7 @@ def run_semantic(args) -> None:
         (EVALUATIONS / n).read_text(encoding="utf-8") for n in manifest["fixtures"]
     ]
     for domain in domains:
-        table_name = SOURCES[domain][0] if domain == "printing" else "oracle_fixture." + SOURCES[domain][0]
+        table_name = SOURCES[domain][0] if domain == "printing" or getattr(args, "generalization", False) else "oracle_fixture." + SOURCES[domain][0]
         statements.append(
             f"SELECT json_build_object('domain','{domain}','rows',json_agg(row_to_json(t))) FROM {table_name} t;"
         )
@@ -364,7 +388,7 @@ def run_semantic(args) -> None:
                     for name in kinds
                     if any(r[name] is None for r in fixtures[domain])
                 },
-                reviewed_metadata=reviewed["columns"] if reviewed else None,
+                reviewed_metadata=reviewed["columns"] if reviewed else manifest.get("sources", {}).get(domain, {}).get("metadata"),
             )
             source["preview"] = session.request(
                 f"/datasets/{source['dataset_id']}/preview"
@@ -503,6 +527,16 @@ get_engine().dispose()
                 "silent_wrong_answer": envelope["status"] == "answered"
                 and (result_ok is False or semantics_ok is False),
             }
+            if getattr(args, "adjudicated", False):
+                original = original_cases[case["case_id"]]
+                original_expected = [[r[k] for k in original.get("column_types", {})]
+                                     for r in original.get("expected_rows", [])]
+                item["original_reference_pass"] = bool(
+                    status_ok and shape and semantics_match(shape, original["expected_semantics"])
+                    and normalized(actual, list(original.get("column_types", {}).values()))
+                    == normalized(original_expected, list(original.get("column_types", {}).values()))
+                ) if original["expected_status"] == "answered" else passed
+                item["adjudicated"] = original != case
             report["cases"].append(item)
             print(
                 json.dumps(
@@ -561,7 +595,10 @@ def main() -> None:
     )
     parser.add_argument("--cases", nargs="+", required=True)
     parser.add_argument("--semantic", action="store_true")
-    parser.add_argument("--replacement", action="store_true", help="Bộ held-out thay thế đã khóa")
+    suite = parser.add_mutually_exclusive_group()
+    suite.add_argument("--replacement", action="store_true", help="Bộ held-out thay thế đã khóa")
+    suite.add_argument("--generalization", action="store_true", help="Schema mới khóa độc lập")
+    suite.add_argument("--adjudicated", action="store_true", help="Chấm riêng adjudication, giữ điểm gốc")
     parser.add_argument("--max-requests", type=int, default=0)
     parser.add_argument("--output", default="artifacts/semantic-live.json")
     parser.add_argument("--catalog-review", help="Local source-checksummed metadata reviewed before evaluation")
@@ -572,6 +609,8 @@ def main() -> None:
         help="Kiểm tra fidelity fixture qua ingestion, không gọi model",
     )
     args = parser.parse_args()
+    if (args.replacement or args.generalization or args.adjudicated) and not args.semantic:
+        parser.error("Bộ semantic cần --semantic; không gọi provider.")
     if args.semantic:
         run_semantic(args)
         return

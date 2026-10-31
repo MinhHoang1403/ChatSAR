@@ -106,6 +106,46 @@ def test_missing_known_qualifier_is_clarification(revision: dict) -> None:
         assert error.value.code == "QUERY_CLARIFY"
 
 
+@pytest.mark.parametrize(
+    "name,aliases,question,raw",
+    [
+        (
+            "zone_tag",
+            [],
+            "Tổng amount nơi zone_tag ghi đúng là không tồn tại, giữ NULL.",
+            "không tồn tại",
+        ),
+        ("brand", [], 'Tổng amount với brand = "ACME, Inc."?', "ACME, Inc."),
+        ("batch", ["mã lô"], "Tổng amount khi mã lô bằng văn bản 0047?", "0047"),
+        ("state", [], "Tổng amount khi state equals pending.", "pending"),
+        ("route", [], "Tổng amount khi route ghi chính xác là north west?", "north west"),
+        ("tag", [], 'Tổng amount khi tag bằng "a."?', "a."),
+    ],
+)
+def test_explicit_unknown_text_filter_cannot_disappear(
+    revision: dict, name: str, aliases: list[str], question: str, raw: str
+) -> None:
+    revision["columns"][0].update(name=name, aliases=aliases)
+    revision["grounding_values"] = {CODE: ["existing"]}
+    for filters in (None, leaf(raw, raw, AMOUNT, "numeric"), {**leaf(raw, raw), "operator": "NE"}):
+        with pytest.raises(AppError):
+            compile_query(proposal(revision, question, filters=filters), revision, question)
+    compiled = compile_query(
+        proposal(revision, question, filters=leaf(raw, raw)), revision, question
+    )
+    assert compiled.filters[0]["canonical_value"] == raw
+    assert raw in compiled.statement.compile(dialect=postgresql.dialect()).params.values()
+
+
+def test_explicit_text_guard_does_not_guess_implicit_or_negated_comparison(revision: dict) -> None:
+    from app.query import explicit_text_mentions
+
+    assert explicit_text_mentions("Tổng amount?", revision["columns"]) == {}
+    assert explicit_text_mentions("code không bằng missing", revision["columns"]) == {}
+    # Tên cột gần giống không được nhận; không áp regex theo tên schema/domain.
+    assert explicit_text_mentions("zipcode bằng missing", revision["columns"]) == {}
+
+
 @pytest.mark.parametrize("raw,candidate", [("tháng 9", "2026-09-01"), ("2026-09-01", "2026-09-02")])
 def test_dates_cannot_be_invented_or_shifted(revision: dict, raw: str, candidate: str) -> None:
     with pytest.raises(AppError) as error:

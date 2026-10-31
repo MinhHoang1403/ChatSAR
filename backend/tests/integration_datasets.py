@@ -35,6 +35,54 @@ from app.tabular import wire
 
 
 class DatasetIntegration(unittest.TestCase):
+    def test_missing_explicit_unknown_filter_stops_before_sql_and_empty_sum_remains_null(
+        self,
+    ) -> None:
+        revision = self.published(b"code,amount\n0007,0.10\n0012,0.20\n")
+        code, amount = [c["id"] for c in revision["columns"]]
+        question = "Tổng amount khi code ghi đúng là missing?"
+        aggregate = [{"operator": "SUM", "column_id": amount, "output_id": "total"}]
+        plan = self.plan(revision, question, aggregations=aggregate)
+        chat = self.client.post(
+            "/api/conversations", json={"workspace_id": str(self.workspace_id)}
+        ).json()["id"]
+        path = f"/api/conversations/{chat}/messages"
+        body = {"question": question, "dataset_revision_id": str(revision["id"])}
+        with (
+            patch(
+                "app.conversation.generate_proposal",
+                return_value=Proposal(plan, "gemini", "offline", None, None, 0, None),
+            ),
+            patch("app.conversation.execute_query") as execute,
+        ):
+            blocked = self.client.post(
+                path, json=body, headers={"Idempotency-Key": uuid4().hex}
+            ).json()
+            self.assertEqual(blocked["status"], "clarify")
+            self.assertFalse(blocked["processing"]["sql"]["compiled"])
+            execute.assert_not_called()
+        plan.filters = Predicate.model_validate(
+            {
+                "operator": "EQ",
+                "column_id": code,
+                "literal": {
+                    "raw_phrase": "missing",
+                    "candidate_value": "missing",
+                    "value_type": "text",
+                },
+            }
+        )
+        with patch(
+            "app.conversation.generate_proposal",
+            return_value=Proposal(plan, "gemini", "offline", None, None, 0, None),
+        ):
+            empty = self.client.post(
+                path, json=body, headers={"Idempotency-Key": uuid4().hex}
+            ).json()
+        self.assertEqual(empty["status"], "answered")
+        self.assertEqual(empty["display_rows"], [[None]])
+        self.assertEqual(empty["facts"]["filters"][0]["source_match"], "no_match")
+
     def test_ready_private_permission_can_be_granted_and_revoked_without_republish(self) -> None:
         revision = self.published(b"code,amount\n0007,0.10\n")
         with db.get_engine().begin() as connection:

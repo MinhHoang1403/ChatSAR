@@ -1,5 +1,21 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+Bổ sung root cause critical31/10: guard trước chỉ tìm giá trị có trongDB nên model có thể bỏ so sánh với giá trị chưa tồn tại. validate_structure và helper explicit_text_mentions dùng tên/alias cột + cú pháp EQ tường minh (có quote hoặc ranh giới câu); không sinh/vá filter. Cùng helper nối vào payload, unitđa-schema/API-PG beforeexecute và modelretestNULL. Đây là grammar giới hạn, không semantic oracle. Historicalcritical response giữ nguyên; nguồn cuối6/7FAILfollowup, không đạt acceptance.
+
+## Root-cause repair — 31/10/2026
+
+Chủ dự án cho phép review bảo thủ đúng HTTP503 a4755acf-0039-4928-890e-0f57b6b4322d trong grant69d37b9b-fd6d-4296-9189-9fb5303b46a1; không cấp grant/cap/budget mới. Toàn row gốc giữ nguyên, tokens/costNULL và reserve0.0141532USD; audit riêng qua role admin. Quyền tối đa95 Codex/100tổng, giữ5mới và9cũmanual. Baseline127rows đã khóa local trước live.
+
+Thiết kế tối thiểu: mở rộng provider_usage_reviews hiện hữu, kiểm toàn snapshot JSONB với row hiện tại (bao gồm ID/provider/grant/reserve/status/error/usage); HTTP503 còn cần direct response hook và PROVIDER_TEMPORARY. HTTP400 đã review vẫn tương thích. Exception SDK có status không được tự ghi thành bằng chứng HTTP; chỉ hook/direct response mới lưu http_status. Admin CLI `python -m operations.usage_review` mặc định preview, apply so lại snapshot trong advisory lock chung, UNIQUE chống trùng, tối đa3review503/grant, cap/budget giữ nguyên. API không có admin credentials/quyền ghi reviews. Công cụ quản trị thay SQL thủ công cho lỗi sau; vẫn cần quyền/evidence cụ thể, không tự duyệt mọi lỗi.
+
+Không thêm automatic retry: một reservation/một HTTP, chặn hidden SDK retry. Sau phản hồi429/500/503 có cooldown60s từ thời điểm hoàn tất; hai503liền nhau tăng300s. Cooldown lưu theo ledger nên qua restart, không cache/circuit framework mới. Yêu cầu mới sau cooldown là thao tác có chủ đích, không replay idempotency key cũ. Timeout/network/504/unknown chưa review vẫn dừng; 400/401/403 không retry. Google hướng dẫn backoff khi retry nhưng không chứng minh error miễn phí; retain_full_reserve là chính sách nội bộ của chủ dự án, không billing reconciliation.
+
+Follow-up có repro mới: model lấy literal cũ dài hơn, guard chặn. Payload thêm current_value_mentions bằng mentioned_phrases hiện có trên vocabulary bounded đã kiểm quyền: giúp phân biệt giá trị được nhắc hiện tại với vocabulary/context cũ. Không prune/sửa context, không thêm/vá filter hoặc candidate sau model, không engine thứ hai. Regression prefix/ID/nhiều vị trí và live trước-sau báo riêng.
+
+Audit90annotations khóa trong annotation_review.json, giữ nguyên semantic.json/gold/checksums. Một adjudication SUM-only của câu tháng9 báo cả original_reference_pass và adjudicated; SQL viết tay kiểm PG trước live. Hai schema mới museum/bakery gồm10cases khóa cùng SQL/metadata/expected bằng generalization_checksums trước chạy model; người viết biết labels, không gọi blind external. Không dùng expected trong payload, không tuning trên output held-out.
+
+Nguồn chính thức đã đọc trước sửa: [Gemini troubleshooting](https://ai.google.dev/gemini-api/docs/troubleshooting), [API errors](https://ai.google.dev/gemini-api/docs/api-errors), [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits), [structured output](https://ai.google.dev/gemini-api/docs/structured-output). 503 là dịch vụ quá tải; 429 có rate/quota; 504 deadline khác timeout không response. JSON Schema không chứng minh semantic correctness. Runtime pin google-genai2.34.0/httpx0.28.1 giữ nguyên; SDK thực qua MockTransport/socket cấm kiểm một dispatch cho400/401/403/429/500/503/504/timeout/disconnect. Không đổi dependency/model.
+
 ## Tiếp tục khắc phục và nghiệm thu — quyền mới 30/10/2026
 
 Chủ dự án yêu cầu sửa hết lỗi còn lại, xác nhận thêm tối đa100HTTP Gemini/trần dự phòng bổ sung1.50USD. Đây là quyền mới sau checkpoint2669ea4, không sử dụng9lượt cũ đã bàn giao thủ công. Baseline PostgreSQL104rows(Gemini99/Knowledge5), grant cũ91used/reserve1.2290194USD. Giữ ledger/reviews/keys/flags, Knowledge/LlamaParse/BGE mới0; tối đa95lượt Codex trong phần bổ sung, giữ5lượt mới và9lượt cũ cho chủ dự án. Chỉ điều chỉnh cap local có kiểm soát trước live; dừng nhóm khi lỗi hệ thống/unknown usage, không retry tự động.

@@ -1,0 +1,388 @@
+{
+  "format": "chatsar-locked-generalization",
+  "data_classification": "synthetic",
+  "fixtures": [
+    "datasets/generalization.sql"
+  ],
+  "policy": "Two new schemas/names/values, handwritten SQL and expected locked before any model execution; author knows labels. Bare reviewed metadata, no AI-derived mappings.",
+  "sources": {
+    "museum": {
+      "table": "recovery_oracle.pieces",
+      "columns": {
+        "piece_ref": "text",
+        "wing": "text",
+        "insured_value": "numeric",
+        "catalogued": "boolean",
+        "received_on": "date"
+      },
+      "metadata": {
+        "piece_ref": {
+          "role": "identifier",
+          "aliases": [
+            "mã hiện vật"
+          ]
+        },
+        "insured_value": {
+          "aliases": [
+            "giá trị bảo hiểm"
+          ]
+        },
+        "catalogued": {
+          "aliases": [
+            "đã lập danh mục"
+          ]
+        },
+        "received_on": {
+          "aliases": [
+            "ngày tiếp nhận"
+          ]
+        }
+      }
+    },
+    "bakery": {
+      "table": "recovery_oracle.batches",
+      "columns": {
+        "batch_ref": "text",
+        "oven": "text",
+        "flour_kg": "numeric",
+        "baked_at": "timestamp"
+      },
+      "metadata": {
+        "batch_ref": {
+          "role": "identifier",
+          "aliases": [
+            "mã mẻ"
+          ]
+        },
+        "flour_kg": {
+          "aliases": [
+            "khối lượng bột"
+          ]
+        },
+        "baked_at": {
+          "aliases": [
+            "thời điểm nướng"
+          ]
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "museum_east_sum",
+      "domain": "museum",
+      "group": "generalization",
+      "split": "held-out",
+      "question": "Tổng giá trị bảo hiểm tại wing east?",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "SUM",
+            "column": "insured_value"
+          }
+        ],
+        "filters": {
+          "operator": "EQ",
+          "column": "wing",
+          "value": "east"
+        }
+      },
+      "oracle_sql": "SELECT SUM(insured_value) total FROM recovery_oracle.pieces WHERE wing='east'",
+      "column_types": {
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "total": "0.30"
+        }
+      ]
+    },
+    {
+      "case_id": "museum_boolean",
+      "domain": "museum",
+      "group": "generalization",
+      "split": "held-out",
+      "question": "Đếm các hiện vật có catalogued bằng false.",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          }
+        ],
+        "filters": {
+          "operator": "EQ",
+          "column": "catalogued",
+          "value": "false"
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) total FROM recovery_oracle.pieces WHERE catalogued=false",
+      "column_types": {
+        "total": "integer"
+      },
+      "expected_rows": [
+        {
+          "total": 2
+        }
+      ]
+    },
+    {
+      "case_id": "museum_top",
+      "domain": "museum",
+      "group": "generalization",
+      "split": "held-out",
+      "question": "Hai hiện vật có giá trị bảo hiểm cao nhất, bỏ NULL; hiện mã và giá trị, xếp giá trị giảm rồi mã tăng.",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "selection": [
+          "piece_ref",
+          "insured_value"
+        ],
+        "filters": {
+          "operator": "IS_NOT_NULL",
+          "column": "insured_value"
+        },
+        "order": [
+          {
+            "field": "insured_value",
+            "direction": "desc"
+          },
+          {
+            "field": "piece_ref",
+            "direction": "asc"
+          }
+        ],
+        "limit": 2
+      },
+      "oracle_sql": "SELECT piece_ref,insured_value FROM recovery_oracle.pieces WHERE insured_value IS NOT NULL ORDER BY insured_value DESC,piece_ref LIMIT 2",
+      "column_types": {
+        "piece_ref": "text",
+        "insured_value": "numeric"
+      },
+      "expected_rows": [
+        {
+          "piece_ref": "A0010",
+          "insured_value": "0.20"
+        },
+        {
+          "piece_ref": "A0009",
+          "insured_value": "0.10"
+        }
+      ]
+    },
+    {
+      "case_id": "museum_month",
+      "domain": "museum",
+      "group": "generalization",
+      "split": "held-out",
+      "question": "Đếm hiện vật và tổng giá trị bảo hiểm tiếp nhận tháng 9 năm 2026.",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          },
+          {
+            "operator": "SUM",
+            "column": "insured_value"
+          }
+        ],
+        "filters": {
+          "operator": "AND",
+          "children": [
+            {
+              "operator": "GTE",
+              "column": "received_on",
+              "value": "2026-09-01"
+            },
+            {
+              "operator": "LT",
+              "column": "received_on",
+              "value": "2026-10-01"
+            }
+          ]
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) n,SUM(insured_value) total FROM recovery_oracle.pieces WHERE received_on>='2026-09-01' AND received_on<'2026-10-01'",
+      "column_types": {
+        "n": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "n": 2,
+          "total": "0.15"
+        }
+      ]
+    },
+    {
+      "case_id": "museum_missing",
+      "domain": "museum",
+      "group": "generalization",
+      "split": "held-out",
+      "question": "Hiện mã hiện vật có insured_value IS NULL, xếp mã tăng dần.",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "selection": [
+          "piece_ref"
+        ],
+        "filters": {
+          "operator": "IS_NULL",
+          "column": "insured_value"
+        },
+        "order": [
+          {
+            "field": "piece_ref",
+            "direction": "asc"
+          }
+        ]
+      },
+      "oracle_sql": "SELECT piece_ref FROM recovery_oracle.pieces WHERE insured_value IS NULL ORDER BY piece_ref",
+      "column_types": {
+        "piece_ref": "text"
+      },
+      "expected_rows": [
+        {
+          "piece_ref": "A0200"
+        }
+      ]
+    },
+    {
+      "case_id": "bakery_lookup",
+      "domain": "bakery",
+      "group": "generalization",
+      "split": "held-out",
+      "question": "Hiện mã mẻ 0038 và khối lượng bột của mẻ đó.",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "selection": [
+          "batch_ref",
+          "flour_kg"
+        ],
+        "filters": {
+          "operator": "EQ",
+          "column": "batch_ref",
+          "value": "0038"
+        }
+      },
+      "oracle_sql": "SELECT batch_ref,flour_kg FROM recovery_oracle.batches WHERE batch_ref='0038'",
+      "column_types": {
+        "batch_ref": "text",
+        "flour_kg": "numeric"
+      },
+      "expected_rows": [
+        {
+          "batch_ref": "0038",
+          "flour_kg": "1.25"
+        }
+      ]
+    },
+    {
+      "case_id": "bakery_count",
+      "domain": "bakery",
+      "group": "generalization",
+      "split": "held-out",
+      "question": "Đếm số mẻ có flour_kg khác NULL.",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_NON_NULL",
+            "column": "flour_kg"
+          }
+        ]
+      },
+      "oracle_sql": "SELECT COUNT(flour_kg) n FROM recovery_oracle.batches",
+      "column_types": {
+        "n": "integer"
+      },
+      "expected_rows": [
+        {
+          "n": 3
+        }
+      ]
+    },
+    {
+      "case_id": "bakery_min",
+      "domain": "bakery",
+      "group": "generalization",
+      "split": "held-out",
+      "question": "Khối lượng bột thấp nhất là bao nhiêu?",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "MIN",
+            "column": "flour_kg"
+          }
+        ]
+      },
+      "oracle_sql": "SELECT MIN(flour_kg) total FROM recovery_oracle.batches",
+      "column_types": {
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "total": "-0.50"
+        }
+      ]
+    },
+    {
+      "case_id": "bakery_month",
+      "domain": "bakery",
+      "group": "generalization",
+      "split": "held-out",
+      "question": "Tổng khối lượng bột nướng tháng 9 năm 2026 theo giờ Việt Nam?",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "SUM",
+            "column": "flour_kg"
+          }
+        ],
+        "filters": {
+          "operator": "AND",
+          "children": [
+            {
+              "operator": "GTE",
+              "column": "baked_at",
+              "value": "2026-08-31T17:00:00Z"
+            },
+            {
+              "operator": "LT",
+              "column": "baked_at",
+              "value": "2026-09-30T17:00:00Z"
+            }
+          ]
+        }
+      },
+      "oracle_sql": "SELECT SUM(flour_kg) total FROM recovery_oracle.batches WHERE baked_at>='2026-08-31T17:00:00Z' AND baked_at<'2026-09-30T17:00:00Z'",
+      "column_types": {
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "total": "4.00"
+        }
+      ]
+    },
+    {
+      "case_id": "bakery_fx",
+      "domain": "bakery",
+      "group": "generalization",
+      "split": "held-out",
+      "question": "Quy đổi tổng khối lượng bột sang giá tiền khi chưa có đơn giá?",
+      "expected_status": "clarify",
+      "expected_semantics": {
+        "execution_allowed": false
+      },
+      "oracle_sql": null,
+      "column_types": {},
+      "expected_rows": []
+    }
+  ]
+}

@@ -1,5 +1,53 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Final root-cause repair — checkpoint 31/10/2026
+
+### A. Trạng thái
+
+**NOT_ACCEPTED.** Đã sửa/audit503 và lỗi bỏ filter đã có repro critical, nhưng chất lượng cuối chưa đủ95% hoặc mẫu rộng. Không gộp các source/prompt khác phiên bản. Chưa merge PR1/main hoặc Phase2. Yêu cầu tiếp nối đơn giản hóa ingestion/AI/before-after đang được thực hiện sau checkpoint này; không coi checkpoint là nghiệm thu luồng mới.
+
+### B. Provider reliability
+
+Mở rộng đúng provider_usage_reviews hiện hữu: full JSONB snapshot (ID/provider/model/grant/status/error/reserve/NULLusage) khớp row, direct HTTP503/PROVIDER_TEMPORARY, evidence hook/UNKNOWN/NOT_VERIFIED. Admin CLI ngoài API preview/apply, cùng advisory lock, duplicate bị chặn, tối đa3review503/grant. Đúng a4755acf-0039-4928-890e-0f57b6b4322d được review theo quyền31/10; original row/http503/dispatch1/NULLtokens/cost/reserve0.0141532USD giữ nguyên. API vẫn chỉ SELECT reviews, không admin credentials. Lỗi sau dùng công cụ quản trị thay SQL thủ công, vẫn cần quyền/evidence cụ thể; không tự duyệt mọi lỗi.
+
+Một reservation/một HTTP, hidden SDK retry vẫn chặn. Không automatic retry: cooldown60s từ hoàn tất cho429/500/503; hai503liền300s; qua restart vì đọc ledger. Unknown transport/timeout/504/mismatch/pending vẫn chặn. SDK exception status không tự thành bằng chứng response. Mock SDK thật/socket cấm + PG kiểm taxonomy, quyền, cap/budget/concurrency/fullreserve/restart pending/snapshot/duplicate/repeated503. 72HTTP mới đều200, không usage unknown mới, không tái hiện outage503 live; guard phục hồi đã được chứng minh bằng những request thật sau review, không chứng minh billing miễn phí.
+
+### C. SQL và root cause
+
+Một QueryRequest→QueryPlan→binder/compiler→reader. current_value_mentions tách giá trị nguồn được nhắc hiện tại khỏi toàn vocabulary/context, không vá output model. Follow-up3→quận3 giảm lỗi trong một đợt nhưng vẫn tái xuất hiện: guard trảCLARIFY, giữFAIL. List output hướng dẫn projection tối thiểu chưa hoàn toàn đạt: basic_logistics_and_or còn dư cột. basic_logistics_null trả đúng mã/filter nhưng thiếu order theo gold. Không đổi gold để coi các ca đóPASS.
+
+Critical mới edge09: model bỏ điều kiện TEXT không tồn tại trong nguồn, trảSUM30.20 thayNULL. Dừng nhóm, mở rộng **validate_structure hiện hữu** để nhận so sánh bằng TEXT có tên/alias cột và ranh giới tường minh, kể cả giá trị không có trong DB. Cùng helper cung cấp explicit_text_mentions cho model. Thiếu/sai cột/operator/rawphrase bị chặn trước SQL; không tự thêm filter/candidate. Parser chỉ hỗ trợ cú pháp tường minh đã nêu, không là semantic oracle toàn NL; câu có dấu câu trong literal cần quote.6biến thể đa tên/alias/English/Vietnamese/multiword/leadingzero/quote cùng missing/wrong predicate được kiểm. PG/API missingfilter không execute, đúng filter choSUMemptyNULL/no_match. Live retest edge09 đạtNULL và giữ filter. Không giấu response critical cũ; chưa suy zero silent error toàn hệ thống.
+
+Tháng/năm: positive live nhiều lầnSUM10.10; câu đếm+tổng paraphrase08/edge07 đúngCOUNT3+SUM10.10; catalog timezone ViệtNam, source bounds giữ nguyên. Bộ chấm thêm OR-EQ cùng cột↔IN với PG chứng minh NULL semantics/counterexamples; projection/order sai vẫnFAIL.
+
+### D. Benchmark
+
+Audit90annotations/whole-case hashes trong annotation_review.json trước live. Original semantic/manifest/gold/checksums/hai plan bất biến. Câu tháng9 chỉSUM, goldCOUNT+SUM: adjudication riêng SQLSUM viết tay/PG kiểm10.10, lưu original_reference_pass và adjudicated, không ghi đè. Các convention order/projection không tường minh và câu emptyset mơ hồ đã ghi notes trước live; vẫn giữ originalFAIL, không sửa sau khi thấy output. Edge09 tường minh là phép kiểm độc lập đã khóa, đã phát hiện critical và được sửa.
+
+68query attempts thuộc5source fingerprints tách biệt, cộng4setup browser=72HTTP tác vụ. Các nhóm lần lượt1/1,8/9,25/26,21/25,6/7PASS; không cộng thành release accuracy. Nhóm25/26 có24/25in-scope nhưng đã bị phiên bản sau/thử rộng lộ critical, không dùng đạt95% để đóng gate. Nhóm21/25 có4FAIL (projection/order/clarify/critical). **Source cuối7unique cases6PASS/1FAIL, false refusal1/7,0answered mismatch trong mẫu7**; gold gốc còn thêmFAILtháng doCOUNTconflict. Chỉ5/90gốc đã chạy trên source cuối,85NOT_RUN trên source này;2schema mới retest2/2 báo riêng. Không gọi7case là đủ rộng.
+
+Museum/bakery10cases/9SQLgold+1clarify đã khóa trước model trên schema/tên/giá trị mới, cảhai đợt trước guard đều10/10; sau sửa guard chỉ2cases được retest2/2, không gộp10/10 thành kết quả sourcecuối. Nguồn được review metadata trước query, bare catalog mới chỉ aliases/roles do tác giả fixture xác nhận; không tuning theo outputheldout, không gọi external blind.6domain cũ dùng catalogAI đã review, không so ngang baseline bare.
+
+### E. Kiểm thử và browser
+
+183backendunit/43API-PGintegration(8auth+29dataset+6guest)/37evaluation cóPG thật khôngskip/25oracle/75gold+5replacement/9goldschema mới+1adjudicationSQL/14frontendSSR PASS. Ruff/format/mypy19modules/types/build đạt. PersistenceHTTP/SQL mock provider, readiness và prepare-only199→199/0generation PASS. Một Starlette/httpx deprecation warning còn nguyên. Bằng chứng unit/API không thay model-live.
+
+Browser guest: CSV2rows/4cols→GeminiSetup thật→review→private/Geminionly→SUM0.30/prose0,30→actualSQL/provenance→history sauAPIrestart; reload nguồn/chat rỗng, server dataset0, ledger giữ. Account Google user tựlogin: tạo không gian tổng hợp riêng Kiểm thử nghiệm thu31-10, upload cùngCSV→Setup thật; mở lại đề xuất đã lưu không cloud→review/publish→Gemini0.30+SQL→whole-stackrestart/reload→chọnworkspace/history, nguồn/result/SQL còn nguyên. DB full source/setup/plan/envelope trước-sau chính xác. AccountAchat0.3 cũ và accountBsourceprivate2rows giữ nguyên; không xóa dữ liệu Google. Hai tài khoản manual30/10 vẫn là bằng chứng lịch sử, không lặp2accounts độc lập31/10.
+
+Login31/10 banđầu bịclock_early, user sau đóloginđược. w32tm báo unsynchronized/LocalCMOS; GoogleHEADkhôngcache cho thấy host chậm khoảng10.55s ở phép đo, vượt/sát dung sai10s. Usercho phépw32tm/resync nhưngOS từ chốiAccessDenied0x80070005; không vượt quyền/nới xác minh hoặc đổiOAuthclient. Cần ownerWindows đồng bộgiờ. Console còn observationGSIoriginerror14:22:02UTC dùloginthànhcông; không tuyên bố console sạch. Ảnh/raw bằng chứng local ignored root-cause-*.png/json.
+
+### F. Usage
+
+Grant69d37b9b-fd6d-4296-9189-9fb5303b46a1 giữ cap95/budget1.50USD/baseline104. Đầu tác vụ127rows/23used; cuối199rows=194Gemini/5Knowledge,95used. **72HTTP mới=68query+4setup browser**,95dispatch cho95reservations trong grant. Reserve1.3337723USD, known estimate0.1561360USD (không hóa đơn;1HTTP503unknown đã giữ fullreserve). Grant known input168295/output42259; old503 vẫnNULL. Codex đã đạt95, dừng generation; giữ5mới và9cũmanual, không đổi cap/grant/.env/keys/flags để dùng thêm. Knowledge/LlamaParse/BGE mới0.
+
+### G. Git/infra/data
+
+Feature/sql-foundation,PR1Draft/open, chưa merge/Phase2. MộtComposechatsar/9migrations/web-api-dbhealthy; volumes/nguồn gốc giữ nguyên.127originalledgerrows MD5JSONB2c0d7d57f2f936b90f16f1655764c1fa không đổi;104baselinehash/envsha đúng bằng chứng grant.11protectedfiles bất biến,19runtime apphash khớp; tracked107files+2servedassets không secret, quét staged/untracked mới trướcpush. Không tác độngShopQuery/sharedLangfuse, không prune/force/reset. Exactcommit/remote/CI báo theo milestone đã push, không dùng CI cũ cho code mới.
+
+### H. Kết luận
+
+**NOT_ACCEPTED.** Provider audit/guard/calendar và hai luồng browser có bằng chứng; critical omitted-filter repro đã retest đúng. Follow-up còn false refusal, output contract chưa ổn định, sourcecuối chưa đủ mẫu/95%,85/90gốc chưa chạy cùng source, clocksync bị quyềnOS. Không tự ACCEPT/merge/Phase2. Công việc offline/UX tiếp tục theo chỉ đạo mới, cloud đã dừng đúngtrần95; không sửa annotation hoặc mở hạn mức để đóng nghiệm thu.
+
 ## Khắc phục bổ sung và nghiệm thu tiếp — 30/10/2026
 
 **Trạng thái: NOT_ACCEPTED.** Phần mã sửa đã được kiểm tra, không thể tuyên bố “hết mọi lỗi/hoàn thành Giai đoạn1” vì lượt Gemini cuối trảHTTP503 thiếu usage; nhóm live đã dừng theo guard. Không giấu/xóa FAIL lịch sử, không tự đổi gold hoặc bỏ gate để đóng giai đoạn. Checkpoint trước2669ea4; các báo cáo bên dưới là lịch sử từng đợt.

@@ -6,6 +6,28 @@ from evaluations.model_live import semantic_shape, semantics_match
 
 
 class SemanticScoringTests(unittest.TestCase):
+    def test_semantic_prepare_only_cannot_dispatch(self):
+        from types import SimpleNamespace
+        from unittest.mock import patch
+        from evaluations.model_live import run_semantic
+
+        with patch("evaluations.model_live.TestSession") as session:
+            with self.assertRaises(RuntimeError):
+                run_semantic(SimpleNamespace(prepare_only=True, max_requests=95))
+            session.assert_not_called()
+
+    def test_same_column_or_equality_is_in_but_other_predicates_are_not(self):
+        expected = {"filters": {"operator": "OR", "children": [
+            {"operator": "EQ", "column": "x", "value": "a"},
+            {"operator": "EQ", "column": "x", "value": "b"}]}}
+        actual = {"filters": {"operator": "IN", "column": "x", "values": ["a", "b"]}}
+        self.assertTrue(semantics_match(actual, expected))
+        for change in ({"column": "y"}, {"operator": "NE"}, {"value": None}):
+            different = {"filters": {"operator": "OR", "children": [
+                {"operator": "EQ", "column": "x", "value": "a"},
+                {"operator": "EQ", "column": "x", "value": "b", **change}]}}
+            self.assertFalse(semantics_match(actual, different))
+
     def test_scalar_filtered_count_rows_equals_only_the_same_nonnull_count(self):
         actual = {"metrics": [{"operator": "COUNT_ROWS", "column": None}], "filters": {"operator": "IS_NOT_NULL", "column": "fee"}}
         expected = {"metrics": [{"operator": "COUNT_NON_NULL", "column": "fee"}]}

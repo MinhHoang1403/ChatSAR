@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, Mock
 
 import httpx
 import pytest
-from google.genai._gaos.lib.compat_errors import APITimeoutError
+from google.genai._gaos.lib.compat_errors import APIConnectionError, APIStatusError, APITimeoutError
 from pydantic import SecretStr
 
 from app import providers
@@ -467,7 +467,7 @@ def test_total_and_provider_limits_are_separate(
         assert error.value.code == "CALL_LIMIT_REACHED"
 
 
-@pytest.mark.parametrize("failure", [503, 429, "timeout"])
+@pytest.mark.parametrize("failure", [503, 429, 400, 401, 403, 500, 504, "timeout", "disconnect"])
 def test_real_sdk_transport_does_not_retry(
     monkeypatch: pytest.MonkeyPatch, failure: int | str
 ) -> None:
@@ -482,6 +482,8 @@ def test_real_sdk_transport_does_not_retry(
         requests.append(request)
         if failure == "timeout":
             raise httpx.ReadTimeout("offline", request=request)
+        if failure == "disconnect":
+            raise httpx.ReadError("offline", request=request)
         return httpx.Response(
             int(failure),
             json={"error": {"code": int(failure), "message": "offline", "status": "UNAVAILABLE"}},
@@ -497,7 +499,9 @@ def test_real_sdk_transport_does_not_retry(
                 timeout=1000,
             ),
         ) as client:
-            with pytest.raises((AppError, APITimeoutError)) as error:
+            with pytest.raises(
+                (AppError, APITimeoutError, APIStatusError, APIConnectionError)
+            ) as error:
                 client.interactions.create(
                     model="gemini-3.5-flash-lite",
                     input="offline",
@@ -507,7 +511,82 @@ def test_real_sdk_transport_does_not_retry(
                 )
             if failure == "timeout":
                 assert isinstance(error.value, APITimeoutError)
+            elif failure == "disconnect":
+                assert isinstance(error.value, APIConnectionError)
+            elif failure in (400, 401, 403):
+                assert isinstance(error.value, APIStatusError)
+                assert error.value.status_code == failure
             else:
                 assert isinstance(error.value, AppError)
                 assert error.value.code == "PROVIDER_RETRY_BLOCKED"
     assert len(requests) == 1
+
+
+@pytest.mark.parametrize(
+    "failure,code",
+    [
+        (503, "PROVIDER_TEMPORARY"),
+        (500, "PROVIDER_INTERNAL"),
+        (504, "PROVIDER_DEADLINE"),
+        (429, "PROVIDER_RATE_LIMIT"),
+        (400, "PROVIDER_SCHEMA"),
+        (401, "PROVIDER_AUTH"),
+        (403, "PROVIDER_FORBIDDEN"),
+        ("disconnect", "PROVIDER_NETWORK"),
+        ("timeout", "PROVIDER_TIMEOUT"),
+    ],
+)
+def test_sdk_exception_alone_is_not_trusted_http_evidence(
+    adapter: tuple, monkeypatch: pytest.MonkeyPatch, failure: int | str, code: str
+) -> None:
+    _, revision, reserve, finish = adapter
+
+    class SDKFailure(Exception):
+        status_code = failure
+
+    error = (
+        httpx.ReadError("offline")
+        if failure == "disconnect"
+        else httpx.ReadTimeout("offline")
+        if failure == "timeout"
+        else SDKFailure()
+    )
+    create = Mock(side_effect=error)
+    monkeypatch.setattr(
+        providers.genai,
+        "Client",
+        lambda **kw: nullcontext(SimpleNamespace(interactions=SimpleNamespace(create=create))),
+    )
+    with pytest.raises(providers.ProviderError) as caught:
+        providers.generate_proposal("?", revision, "gemini")
+    assert caught.value.code == code
+    assert reserve.call_count == create.call_count == finish.call_count == 1
+    assert finish.call_args.kwargs["cost"] is None
+    assert finish.call_args.kwargs["http_status"] is None
+
+
+@pytest.mark.parametrize(
+    "question,values,expected",
+    [
+        ("Còn khu vực 3?", ["quận 3", "3"], ["3"]),
+        ("Chỉ quận 3?", ["quận 3", "3"], ["quận 3"]),
+        ("redwood rồi red", ["red", "redwood"], ["red", "redwood"]),
+        ("mã 0019", ["19", "0019"], ["0019"]),
+    ],
+)
+def test_current_value_evidence_does_not_rewrite_verified_context(
+    question: str, values: list[str], expected: list[str]
+) -> None:
+    context = {"question": "previous", "plan": {"filters": {"value": values[0]}}}
+    revision = {
+        "id": "r",
+        "dataset_id": "d",
+        "timezone": "UTC",
+        "grain": "row",
+        "columns": [],
+        "grounding_values": {"column": values},
+    }
+    payload = providers.query_payload(question, revision, context)
+    assert payload["current_value_mentions"] == {"column": expected}
+    assert payload["verified_context"] is context
+    assert payload["catalog"]["grounding_values"] == {"column": values}
