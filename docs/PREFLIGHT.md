@@ -1,5 +1,11 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Đối chiếu COUNT với khóa chính — 01/11/2026
+
+Đợt78NL dừng ở55/56PASS theo evaluator cũ:edge_07 trảCOUNT_DISTINCT(shipment_code)+SUM=3/10.10, goldCOUNT_ROWS+SUM=3/10.10. Đây không chỉ là trùng số ngẫu nhiên: snapshot catalog của nguồn có shipment_code là PK duy nhất/nullable=false; publish hiện hữu tạo PRIMARY KEY thật. Integration mới đọc pg_constraint/pg_attribute, kiểm đúngPK/NOTNULL và PostgreSQL từ chối duplicate23505/NULL23502. PG oracle chứng minh COUNT(*)=COUNT(pk)=COUNT(DISTINCT pk) cả filter/group/empty, đồng thời có counterexample nullableUNIQUE/compositePK. Bộ chấm chỉ nhận tương đương này cho một bảng đã publish, một PK/NOTNULL được xác nhận; không suy từ role identifier hoặc sampleunique. Filter/projection/group/metrics khác vẫn phải khớp, gold không đổi.
+
+Giữ nguyên JSONFAIL ban đầu và tạo audit đối chiếu từ output/rows/catalog đã đóng băng; không gọi lại model để đổi kết quả. App19modules byte không đổi, sửa evaluator/tests;49integration và45evaluationPG đạt. Chạy tiếp22ca chưa đo, cần3lượt baseline live để dựng lại verifiedcontext vì TestSession cũ đã đóng; ba baseline được báo riêng, không tính trùng accuracy và phải đều đạt. Chưa kết luận nghiệm thu trước khi đo xong.
+
 ## Kiểm bản sửa 1c9880c qua HTTP và browser — 01/11/2026
 
 211unit/48integration(8auth+34dataset+6guest)/42evaluationPG và ruff/mypy19modules đạt. CI push41228742120 + PR41228747119 cùng SHA1c9880c7923aa012a78fdad688ac28d04b9fd495 SUCCESS. App19modules cùng bytes trong toàn bộ các phép đo dưới; chưa lấy77/77 của source cũ làm điểm source này.

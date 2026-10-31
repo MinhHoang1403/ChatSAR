@@ -11,7 +11,8 @@ from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 from openpyxl import Workbook
-from sqlalchemy import MetaData, Table, create_engine, delete, insert, select, update
+from sqlalchemy import MetaData, Table, create_engine, delete, insert, select, text, update
+from sqlalchemy.exc import IntegrityError
 
 from app import database as db
 from app.auth import SESSION_COOKIE, create_session, digest
@@ -35,6 +36,32 @@ from app.tabular import wire
 
 
 class DatasetIntegration(unittest.TestCase):
+    def test_confirmed_single_primary_key_is_enforced_by_postgres(self) -> None:
+        revision = self.published(b"code,amount\n0007,0.10\n0012,0.20\n0100,\n")
+        code = revision["columns"][0]
+        self.assertTrue(code["primary_key"])
+        self.assertFalse(code["nullable"])
+        engine = db.get_engine()
+        with engine.connect() as connection:
+            key_columns, nonnull = connection.execute(
+                text(
+                    "SELECT array_agg(a.attname ORDER BY k.ordinality),bool_and(a.attnotnull) "
+                    "FROM pg_constraint p CROSS JOIN LATERAL unnest(p.conkey) "
+                    "WITH ORDINALITY k(attnum,ordinality) "
+                    "JOIN pg_attribute a ON a.attrelid=p.conrelid AND a.attnum=k.attnum "
+                    "WHERE p.contype='p' AND p.conrelid=to_regclass(:name)"
+                ),
+                {"name": "data." + revision["physical_table"]},
+            ).one()
+        self.assertEqual(key_columns, [code["id"]])
+        self.assertTrue(nonnull)
+        table = Table(revision["physical_table"], MetaData(), schema="data", autoload_with=engine)
+        for value, sqlstate in (("0007", "23505"), (None, "23502")):
+            with self.assertRaises(IntegrityError) as caught:
+                with engine.begin() as connection:
+                    connection.execute(insert(table).values({"_source_row": 99, code["id"]: value}))
+            self.assertEqual(caught.exception.orig.sqlstate, sqlstate)
+
     def test_disabled_provider_and_failed_answer_cannot_supply_followup_context(self) -> None:
         revision = self.published(b"code,amount\n0007,0.10\n")
         chat = self.client.post(

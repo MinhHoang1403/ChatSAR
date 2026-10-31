@@ -162,7 +162,34 @@ def semantic_shape(plan: dict, columns: list[dict], bindings: list[dict] | None 
     }
 
 
-def semantics_match(actual: dict, expected: dict) -> bool:
+def semantics_match(actual: dict, expected: dict, catalog_columns: list[dict] | None = None) -> bool:
+    # Chỉ một bảng đã publish: PK một cột/NOT NULL được PostgreSQL cưỡng chế.
+    # Không suy uniqueness từ dữ liệu mẫu, role identifier hoặc một phần composite PK.
+    columns = catalog_columns or []
+    keys = [c for c in columns if c.get("primary_key") is True]
+    names = [c.get("name") for c in columns]
+    key = keys[0]["name"] if (
+        len(keys) == 1 and keys[0].get("nullable") is False
+        and len(names) == len(set(names))
+    ) else None
+
+    def primary_key_counts(shape):
+        shape = dict(shape)
+        if key is None:
+            return shape
+        shape["metrics"] = [
+            {**m, "operator": "COUNT_ROWS", "column": None}
+            if m.get("column") == key and m["operator"] in {"COUNT_DISTINCT", "COUNT_NON_NULL"}
+            else m for m in shape.get("metrics", [])
+        ]
+        if "order" in shape:
+            shape["order"] = [
+                {**o, "field": "COUNT_ROWS:None"}
+                if o.get("field") in {"COUNT_DISTINCT:" + key, "COUNT_NON_NULL:" + key}
+                else o for o in shape["order"]
+            ]
+        return shape
+
     def scalar_nonnull_count(shape):
         shape = dict(shape)
         predicate = shape.get("filters")
@@ -226,6 +253,7 @@ def semantics_match(actual: dict, expected: dict) -> bool:
         remove_redundant_null_filter(actual),
         remove_redundant_null_filter(expected),
     )
+    actual, expected = primary_key_counts(actual), primary_key_counts(expected)
 
     def canonical(value):
         if isinstance(value, dict):
@@ -525,7 +553,7 @@ get_engine().dispose()
                 except (ValueError, TypeError, ArithmeticError):
                     result_ok = False
                 semantics_ok = bool(
-                    shape and semantics_match(shape, case["expected_semantics"])
+                    shape and semantics_match(shape, case["expected_semantics"], source["preview"]["columns"])
                 )
             passed = (
                 status_ok and (result_ok is not False) and (semantics_ok is not False)
@@ -572,7 +600,7 @@ get_engine().dispose()
                 original_expected = [[r[k] for k in original.get("column_types", {})]
                                      for r in original.get("expected_rows", [])]
                 item["original_reference_pass"] = bool(
-                    status_ok and shape and semantics_match(shape, original["expected_semantics"])
+                    status_ok and shape and semantics_match(shape, original["expected_semantics"], source["preview"]["columns"])
                     and normalized(actual, list(original.get("column_types", {}).values()))
                     == normalized(original_expected, list(original.get("column_types", {}).values()))
                 ) if original["expected_status"] == "answered" else passed

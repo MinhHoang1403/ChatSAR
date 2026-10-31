@@ -6,6 +6,25 @@ from evaluations.model_live import semantic_shape, semantics_match
 
 
 class SemanticScoringTests(unittest.TestCase):
+    def test_single_nonnull_primary_key_counts_are_equivalent_with_other_metrics_and_groups(self):
+        columns = [{"name": "id", "primary_key": True, "nullable": False}, {"name": "amount"}]
+        expected = {"metrics": [{"operator": "COUNT_ROWS", "column": None}, {"operator": "SUM", "column": "amount"}], "selection": ["kind"], "group_by": ["kind"], "order": [{"field": "COUNT_ROWS:None", "direction": "desc"}]}
+        for op in ("COUNT_DISTINCT", "COUNT_NON_NULL"):
+            actual = {**expected, "metrics": [{"operator": op, "column": "id"}, expected["metrics"][1]], "order": [{"field": op + ":id", "direction": "desc"}]}
+            self.assertTrue(semantics_match(actual, expected, columns))
+            self.assertFalse(semantics_match(actual, {**expected, "group_by": []}, columns))
+            self.assertFalse(semantics_match(actual, {**expected, "metrics": expected["metrics"][:1]}, columns))
+        self.assertTrue(semantics_match(
+            {"metrics": [{"operator": "COUNT_ROWS", "column": None}], "filters": {"operator": "IS_NOT_NULL", "column": "id"}},
+            {"metrics": [{"operator": "COUNT_ROWS", "column": None}]}, columns,
+        ))
+
+    def test_count_equivalence_does_not_assume_identifier_unique_nullable_or_composite(self):
+        actual = {"metrics": [{"operator": "COUNT_DISTINCT", "column": "id"}]}
+        expected = {"metrics": [{"operator": "COUNT_ROWS", "column": None}]}
+        for columns in (None, [{"name": "id", "role": "identifier", "nullable": False}], [{"name": "id", "primary_key": True, "nullable": True}], [{"name": "id", "primary_key": True, "nullable": False}, {"name": "other", "primary_key": True, "nullable": False}], [{"name": "other", "primary_key": True, "nullable": False}], [{"name": "id", "primary_key": True, "nullable": False}, {"name": "id"}]):
+            self.assertFalse(semantics_match(actual, expected, columns))
+
     def test_span_only_actual_requires_bound_evidence_and_keeps_text_and_period_bounds(self):
         columns = [{"id":"c", "name":"region", "data_type":"text"}]
         node = {"operator":"EQ", "column_id":"c", "literal":{"raw_phrase":"3", "value_type":"text"}}

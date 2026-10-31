@@ -10,6 +10,23 @@ from evaluations.oracle import ROOT, postgres
 
 @unittest.skipUnless(os.getenv("CHATSAR_POSTGRES_TESTS") == "1", "Chạy riêng với PostgreSQL thật")
 class PostgresTests(unittest.TestCase):
+    def test_primary_key_count_equality_and_nullable_composite_counterexamples(self) -> None:
+        output = postgres("""BEGIN;
+        CREATE TEMP TABLE verified_key(id text PRIMARY KEY,category text,amount numeric);
+        INSERT INTO verified_key VALUES ('0001','a',NULL),('0002','a',0),('0003','b',0.10);
+        SELECT count(*)=count(id) AND count(*)=count(DISTINCT id) FROM verified_key;
+        SELECT bool_and(n=d AND n=c) FROM (SELECT count(*) n,count(DISTINCT id) d,count(id) c FROM verified_key GROUP BY category) x;
+        SELECT count(*)=count(DISTINCT id) FROM verified_key WHERE amount IS NULL OR amount>=0;
+        SELECT count(*)=count(DISTINCT id) FROM verified_key WHERE false;
+        CREATE TEMP TABLE nullable_key(id text UNIQUE);
+        INSERT INTO nullable_key VALUES ('a'),(NULL),(NULL);
+        SELECT count(*)<>count(DISTINCT id) FROM nullable_key;
+        CREATE TEMP TABLE composite_key(a text,b int,PRIMARY KEY(a,b));
+        INSERT INTO composite_key VALUES ('x',1),('x',2);
+        SELECT count(*)<>count(DISTINCT a) FROM composite_key;
+        ROLLBACK;""")
+        self.assertEqual(output.strip().splitlines(), ["t"] * 6)
+
     @classmethod
     def setUpClass(cls) -> None:
         cls.table = "r_" + uuid4().hex

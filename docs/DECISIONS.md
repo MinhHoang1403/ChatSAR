@@ -1,5 +1,9 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+## 01/11/2026 — COUNT tương đương chỉ với PK đơn đã cưỡng chế
+
+Bộ chấm một bảng chấp nhận COUNT(DISTINCT pk)/COUNT(pk) tương đương COUNT(*) khi catalog đã publish xác nhận đúng một PRIMARY KEY và NOTNULL. Đây là suy luận đại số từ ràng buộc [PostgreSQL17](https://www.postgresql.org/docs/17/ddl-constraints.html#DDL-CONSTRAINTS-PRIMARY-KEYS), có PG oracle độc lập và API publish kiểm physical constraint, duplicate/NULL bị từ chối. Không dùng observed uniqueness, roleidentifier, nullableUNIQUE hoặc một cột trong compositePK; không đổi các filter, projection, grouping hay số metrics khác. Gold và modeloutput giữ nguyên; rawFAIL của evaluator cũ lưu cùng audit đối chiếu. Không thay runtime, prompt hay SQLcompiler.
+
 ## 01/11/2026 — Ngữ cảnh cùng hợp đồng và phạm vi câu tiếp
 
 Quyết định nội bộ: serialize read-only verified QueryPlan thành hình thức conditions hậu thứ tự của QueryRequest, giữ nguyên cột/operator/raw literals/cấu trúc Boolean, không tạo planner mới hoặc sửa kế hoạch model sau lỗi. context_scope phân biệt câu độc lập, refine, reset; guard refine chỉ kiểm có context cùng source và không mất cột lọc cũ. Giá trị mới trên cùng cột vẫn được phép thay cũ; hệ thống không tự thêm điều kiện. Kiểm round-trip AND/OR/IN/NULL/Boolean/TEXT zero đầu và context bất biến; canary một HTTP trên context SQL đã xác minh đạt. Cần đo rộng cùng source trước nghiệm thu.
