@@ -1,5 +1,9 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Khoảng tháng là một điều kiện — 31/10/2026
+
+Sau repro model tự sinh ngày không có trong câu, QueryRequest thêm leaf IN_MONTH với literal nguyên văn tháng/năm. Adapter chỉ hạ thành AND(GTE,LT) cùng raw span; binder/calendar_month hiện hữu kiểm năm/timezone và tính hai mốc. Không thêm parser/planner/compiler khác hoặc tự sửa filter sau model. Unit date/timestamp, leap/DST/rollover/missingyear, API/PG và canary timestamp thật1/1 trước promote đạt. Điểm source trước không gộp vào source mới. Câu basic_logistics_empty_sum có tranh chấp nghĩa “không có tên” (IS_NULL hay literal “không có”); giữ gold/FAIL riêng, sẽ đo tách ca này, không dùng kết quả NULL trùng để nâng semantic accuracy.
+
 ## Kiểm tra hợp đồng giá trị và quota mở rộng — 31/10/2026
 
 Đã áp dụng quyền owner **500 lượt Gemini tổng / 10 USD dự phòng**, giữ cùng grant69d37b9b-fd6d-4296-9189-9fb5303b46a1. Migration grant_limits chỉ mở CHECK tối đa500/10, readiness/CI/vận hành yêu cầu migration10. Grant thực tế495/10 để giữ5manual; globalcap604/Gemini599/Knowledge5, keys/flags/globalbudget20/baseline không đổi. Snapshot toàn199rows trước mở quota giữ nguyên. Admin review vẫn tối đa3 verified503/grant, không tự tạo audit hay sửa UNKNOWN.

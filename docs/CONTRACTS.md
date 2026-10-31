@@ -1,5 +1,9 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## Khoảng tháng là một điều kiện — 31/10/2026
+
+Sau repro model tự sinh ngày không có trong câu, QueryRequest thêm leaf IN_MONTH với literal nguyên văn tháng/năm. Adapter chỉ hạ thành AND(GTE,LT) cùng raw span; binder/calendar_month hiện hữu kiểm năm/timezone và tính hai mốc. Không thêm parser/planner/compiler khác hoặc tự sửa filter sau model. Unit date/timestamp, leap/DST/rollover/missingyear, API/PG và canary timestamp thật1/1 trước promote đạt. Điểm source trước không gộp vào source mới. Câu basic_logistics_empty_sum có tranh chấp nghĩa “không có tên” (IS_NULL hay literal “không có”); giữ gold/FAIL riêng, sẽ đo tách ca này, không dùng kết quả NULL trùng để nâng semantic accuracy.
+
 ## Trích giá trị và xác nhận metadata — 31/10/2026
 
 QueryRequest wire literal có raw_phrase/value_type, không candidate_value. QueryPlan nội bộ đọc legacy candidate và kiểm khớp nghiêm; span-only bind bằng logic typed/mapping/calendar hiện hữu, không fuzzy hoặc đoán năm. Evidence raw/canonical/span giữ đủ. Direct record/list/list_all chưa cóORDER dùng những identifier catalog có trong select_columns tăng dần; aggregate/ranking/thứ tự tường minh giữ nguyên. Đây là mặc định hiển thị khi LIMIT, không tự thêm cột/filter.

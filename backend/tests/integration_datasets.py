@@ -1703,6 +1703,36 @@ class DatasetIntegration(unittest.TestCase):
         for condition in plan.filters.children:
             condition.literal.candidate_value = None
         self.assertEqual(execute_query(compile_query(plan, revision, phrase))[0], [["0.30"]])
+        from app.planning import QueryRequest
+
+        request = QueryRequest.model_validate(
+            {
+                "task": "SQL",
+                "table_id": str(revision["dataset_id"]),
+                "source_revision_id": str(revision["id"]),
+                "result_shape": "scalar",
+                "required_columns": [],
+                "raw_user_spans": [phrase],
+                "select_columns": [],
+                "aggregations": [{"operator": "SUM", "column_id": amount, "output_id": "total"}],
+                "conditions": [
+                    {
+                        "operator": "IN_MONTH",
+                        "column_id": at,
+                        "literal": {"raw_phrase": phrase, "value_type": "timestamp"},
+                        "values": [],
+                        "children": [],
+                    }
+                ],
+                "group_by": [],
+                "order_by": [],
+                "limit": 100,
+                "unresolved": [],
+            }
+        )
+        self.assertEqual(
+            execute_query(compile_query(request.to_plan(), revision, phrase))[0], [["0.30"]]
+        )
 
     def test_row_reordering_and_irrelevant_records_preserve_filtered_sum(self) -> None:
         for content in [

@@ -272,10 +272,14 @@ def run_semantic(args) -> None:
         raise RuntimeError("Semantic prepare-only chưa hỗ trợ; không được gọi model.")
     manifest = load_scenarios()
     if getattr(args, "generalization", False):
-        locked = json.loads((EVALUATIONS / "generalization_checksums.json").read_text(encoding="utf-8"))
+        suite_name = args.generalization if isinstance(args.generalization, str) else "generalization.json"
+        if "/" in suite_name or "\\" in suite_name or not suite_name.endswith(".json"):
+            raise RuntimeError("Tên manifest phải là file JSON trong evaluations.")
+        locked = json.loads((EVALUATIONS / (suite_name[:-5] + "_checksums.json")).read_text(encoding="utf-8"))
         for name, digest in locked.items():
             assert hashlib.sha256((EVALUATIONS / name).read_bytes()).hexdigest() == digest, name
-        manifest = json.loads((EVALUATIONS / "generalization.json").read_text(encoding="utf-8"))
+        assert suite_name in locked
+        manifest = json.loads((EVALUATIONS / suite_name).read_text(encoding="utf-8"))
         SOURCES.update({name: (source["table"], source["columns"])
                         for name, source in manifest["sources"].items()})
     original_cases = {c["case_id"]: c for c in manifest["cases"]}
@@ -619,7 +623,7 @@ def main() -> None:
     parser.add_argument("--semantic", action="store_true")
     suite = parser.add_mutually_exclusive_group()
     suite.add_argument("--replacement", action="store_true", help="Bộ held-out thay thế đã khóa")
-    suite.add_argument("--generalization", action="store_true", help="Schema mới khóa độc lập")
+    suite.add_argument("--generalization", nargs="?", const="generalization.json", default=False, help="Schema mới khóa độc lập; tùy chọn tên manifest")
     suite.add_argument("--adjudicated", action="store_true", help="Chấm riêng adjudication, giữ điểm gốc")
     parser.add_argument("--max-requests", type=int, default=0)
     parser.add_argument("--output", default="artifacts/semantic-live.json")

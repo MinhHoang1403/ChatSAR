@@ -34,6 +34,11 @@ class GeneralizationTests(unittest.TestCase):
                 reviewed["annotation_sha256"],
             )
         self.assertEqual(set(audit["overrides"]), {"basic_logistics_month_boundary"})
+        unseen = json.loads((EVALUATIONS / "unseen.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(unseen["cases"]), 12)
+        self.assertEqual(set(unseen["sources"]), {"observatory", "recycling"})
+        for name, digest in json.loads((EVALUATIONS / "unseen_checksums.json").read_text()).items():
+            self.assertEqual(hashlib.sha256((EVALUATIONS / name).read_bytes()).hexdigest(), digest)
 
     @unittest.skipUnless(
         os.getenv("CHATSAR_POSTGRES_TESTS") == "1", "Cần PostgreSQL thật"
@@ -45,13 +50,15 @@ class GeneralizationTests(unittest.TestCase):
         audit = json.loads(
             (EVALUATIONS / "annotation_review.json").read_text(encoding="utf-8")
         )
-        cases = [c for c in manifest["cases"] if c["oracle_sql"]] + list(
+        unseen = json.loads((EVALUATIONS / "unseen.json").read_text(encoding="utf-8"))
+        cases = [c for c in manifest["cases"] + unseen["cases"] if c["oracle_sql"]] + list(
             audit["overrides"].values()
         )
         sql = [
             "BEGIN;",
             (EVALUATIONS / "datasets/fixtures.sql").read_text(encoding="utf-8"),
             (EVALUATIONS / "datasets/generalization.sql").read_text(encoding="utf-8"),
+            (EVALUATIONS / "datasets/unseen.sql").read_text(encoding="utf-8"),
         ]
         sql += [
             "SELECT coalesce(jsonb_agg(t),'[]'::jsonb) FROM ("

@@ -107,6 +107,21 @@ def test_time_and_multiple_metrics_are_preserved_without_inference() -> None:
 
 
 @pytest.mark.parametrize(
+    "kind,phrase", [("date", "tháng 2 năm 2024"), ("timestamp", "month 12 year 2026")]
+)
+def test_calendar_membership_lowers_to_existing_half_open_pair(kind: str, phrase: str) -> None:
+    item = {**leaf(), "operator": "IN_MONTH", "literal": {"raw_phrase": phrase, "value_type": kind}}
+    plan = request(conditions=[item]).to_plan()
+    assert plan.filters and plan.filters.operator == "AND"
+    assert [c.operator for c in plan.filters.children] == ["GTE", "LT"]
+    assert all(
+        c.literal.raw_phrase == phrase and c.literal.candidate_value is None
+        for c in plan.filters.children
+    )
+    assert all(c.column_id == "time" for c in plan.filters.children)
+
+
+@pytest.mark.parametrize(
     "conditions",
     [
         [{"operator": "AND", "column_id": None, "literal": None, "values": [], "children": []}],

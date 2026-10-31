@@ -1,5 +1,9 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+## Khoảng tháng là một điều kiện — 31/10/2026
+
+Sau repro model tự sinh ngày không có trong câu, QueryRequest thêm leaf IN_MONTH với literal nguyên văn tháng/năm. Adapter chỉ hạ thành AND(GTE,LT) cùng raw span; binder/calendar_month hiện hữu kiểm năm/timezone và tính hai mốc. Không thêm parser/planner/compiler khác hoặc tự sửa filter sau model. Unit date/timestamp, leap/DST/rollover/missingyear, API/PG và canary timestamp thật1/1 trước promote đạt. Điểm source trước không gộp vào source mới. Câu basic_logistics_empty_sum có tranh chấp nghĩa “không có tên” (IS_NULL hay literal “không có”); giữ gold/FAIL riêng, sẽ đo tách ca này, không dùng kết quả NULL trùng để nâng semantic accuracy.
+
 ## Trích span, mặc định thứ tự và đơn vị — 31/10/2026
 
 Quyết định nội bộ từ repro3→quận3: bỏ trường candidate model phải chép lại, giữ một QueryRequest→QueryPlan→binder/compiler. Giá trị typed do binder hiện hữu quyết định từ span/format/mapping owner hoặc cặp tháng/năm; stored candidate cũ vẫn phải khớp. Không thêm parser NL tổng quát/filter sau model. Canary cô lập4/4 và offline trước promote. Gemini structured output chỉ bảo đảm hình dạng JSON, không bảo đảm ngữ nghĩa: https://ai.google.dev/gemini-api/docs/structured-output .
