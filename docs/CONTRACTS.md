@@ -1,5 +1,9 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## Nghiệm thu kỹ thuật 01/11/2026 — phạm vi single-table
+
+Owner ủy quyền chốt PHASE_1_TECHNICALLY_ACCEPTED — READY_FOR_PHASE_2 sau nghiệm thu ngắn; không đổi publicAPI/model/QueryRequest/QueryPlan/SQL/answer/owner/usage contracts. Bằng chứng cùngbytes được tái sử dụng, không nângđiểm hoặc đổi gold. Single-table đã nghiệmthu trong phạmvi côngbố, JOIN/RAG chưa triểnkhai. Chi tiết gate/handoff vàgiớihạn ởđầuPREFLIGHT. Tốiđa8HTTP đượcphép trong36cònlại nhưng dùng0; cùnggrant464/500,36manualcòn,10USDgiữ. Không mergePR1 hoặc bắtđầuPhase2 trongnhiệmvụnày.
+
 ## Chốt phạm vi kiểm rút gọn 01/11/2026
 
 Theo chỉ đạo trực tiếp mới nhất, ưu tiên luồng người dùng và6câu tự nhiên, không lặp lại toàn bộ model benchmark. Production contract/prompt19module vẫn fb50d49; một QueryRequest→QueryPlan→binder/compiler/PGreadonly→facts→naturalanswer. Nguồn, gold gốc, kiểu/literal/owner/CSRF/quota không đổi. 52bộgốc +8heldout +6natural có báo raw/adjudicated/provider riêng trong PREFLIGHT;26NLgốc và12reg bổ sung chưa chạy không được báoPASS. Top2 tự nhiên khớp SQL/rows đã khóa; rawFAIL do expectedorder thiếu tie-breaker giữ cùng audit. READY_FOR_USER_ACCEPTANCE cho phạm vi mới, ownerchưaACCEPTED, chưa JOIN/Phase2.

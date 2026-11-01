@@ -1,5 +1,9 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+## 01/11/2026 — Ủy quyền chốt nghiệm thu kỹ thuật ngắn
+
+Yêu cầu “FINAL SHORT ACCEPTANCE & PHASE 2 READINESS” mới cho phép Codex quyết định PHASE_1_TECHNICALLY_ACCEPTED — READY_FOR_PHASE_2 khi gate đạt. Đây là quyền rõ ràng thay điều kiện chỉ READY_FOR_USER_ACCEPTANCE trước đó; vẫn không mergePR1 hoặc triển khaiPhase2. Tận dụng bằng chứng live cùngbytes đãđạt là yêu cầu trực tiếp: audit lại nguồn/ledger/migrations/persistence/secrets vàhai panelUI, không replay model. Quyền tốiđa8HTTP trong36manual đã dùng0, budget/grant/ledgergiữ. Không cóproductionbugmới cần sửa. Giữ26NL/12regNOT_RUN,điểmstrict/adjudicatedvàrawrankingFAILvới audit. HandoffR1/R2/hợpđồng/baselineDB/xácnhậnphạmvi ởđầuPREFLIGHT; không tạo vòngtesthoặcframeworkmới.
+
 ## 01/11/2026 — Rút gọn kiểm thử theo yêu cầu trực tiếp, không lặp model
 
 Owner yêu cầu giảm số lượt test, hỏi như người dùng thực tế và sớm chốt Giai đoạn1. Dừng bộ gốc ở52/78NL, giữ26NOT_RUN; không chạy12reg bổ sung chỉ để đủ số. Khóa6câu tự nhiên trên catalog hotel đã review, SQL/typed rows độc lập, không dùng tên cột kỹ thuật trong câu hỏi. 52kết quả bị gián đoạn harness được đọc lại từ messages/plan/revision/ledger, không replay; usage vẫn đủcount. Source19module fb50d49 giữ nguyên. Kết luận READY_FOR_USER_ACCEPTANCE chỉ cho phạm vi rút gọn đã đo, không tuyên bố đủ90 hoặc ACCEPTED thay owner. Xem đầuPREFLIGHT về điểm gốc/phân xử/503/NOT_RUN.

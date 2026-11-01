@@ -1,5 +1,34 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Nghiệm thu kỹ thuật cuối — 01/11/2026
+
+**PHASE_1_TECHNICALLY_ACCEPTED — READY_FOR_PHASE_2.** Chủ dự án đã ủy quyền Codex chốt nghiệm thu kỹ thuật trong yêu cầu “FINAL SHORT ACCEPTANCE & PHASE 2 READINESS”. Trạng thái này thay READY_FOR_USER_ACCEPTANCE của checkpoint trước; không phải quyền merge PR #1 hoặc triển khai code Giai đoạn 2. Không còn lỗi nghiêm trọng mới được phát hiện trong phạm vi nghiệm thu ngắn đã thống nhất.
+
+| Hạng mục | Kết quả và bằng chứng sử dụng |
+|---|---|
+| Gemini live / Text-to-SQL / PostgreSQL oracle / Natural Answer | PASS: dùng lại report thật trên cùng bytes app19module fb50d49, không gọi lại để lặp kết quả. Tổng tiền300.15; hỏi tiếp phòng tiêu chuẩn100.05; tháng9/2026 tổng300.15; timestamp tháng theo Asia/Ho_Chi_Minh tổng10.10; lookup mã0028→1.65; top2H02/H01; thiếu năm→QUERY_CLARIFY; xóa dữ liệu→UNSUPPORTED. Các SQL oracle/typed rows và plan đã đối chiếu, không thêm COUNT vào câu chỉ hỏi SUM. |
+| SQL provenance / Persistence | PASS: snapshot nguồn/metadata/message/QueryPlan/typed rows/SQL0.35,0.40,0.47→0.43→0.26 và COUNT4 còn nguyên; bằng chứng restart/reload trước còn hiệu lực. Kiểm đọc mới hai panel đúng acceptance-context.csv/Gemini3.5FlashLite/backend1.875s/model1.812s/SQL1.32ms, SQL parameterized COUNT thật và execution succeeded. Mở panel không chạy lại SQL/model. |
+| AI Smart Data Setup / Giao diện | PASS theo evidence browser cùng setup/frontend bytes: CSV/XLSX→AIauto→gốc/sau→Save, chọn sheet nếu cần, cache, đổi nguồn/chat, sidebar/tìm lịch sử/profile/renameẩnhiện; không lặp upload mới hoặc xóa lịch sử. Kiểm mới viewport478/document478 không tràn ngang; desktop/mobile evidence trước giữ nguyên. |
+| Google/session/security | PASS theo evidence Google thật hai tài khoản do owner đăng nhập trước, auth code không đổi; snapshot2accounts/privateB/history0.30 còn nguyên. Owner/CSRF/read-only/literal/guest guards theo CI hiện hành. Không đổi OAuth, verifier hoặc quyền tài khoản. |
+| Docker/CI/secrets | PASS: web/api/db healthy/readiness;10migrations hiện hữu;128trackedfiles+2servedassets scan không có key. CIpush41241999628/PR41242003891 PASS tại e681eb2; commit tài liệu bàn giao kế tiếp kiểm CI exact SHA trước trả kết quả. |
+
+Không có lỗi production mới cần sửa; không refactor, không thay model/prompt/contract, không migration hoặc thay đổi dữ liệu. Audit artifacts/short-acceptance.json kiểm nguồn19module/hashledger và các ca live còn hiệu lực; các assertion kiểm task model không được nhầm với status cuối của validator: ca thiếu năm có SQL proposal nhưng bị QUERY_CLARIFY trước thực thi. Không sửa gold hoặc báo ca này là SQL đã chạy.
+
+**Giới hạn giữ nguyên:**66caseIDs trước, in-scope strict61/63=96.8254%, adjudicated62/63=98.4127%, không nâng điểm.26NLgốc và12reg bổ sung NOT_RUN; held-out nội bộ không external blind. Gold tháng SUM/COUNT và ranking thiếu mô tả tie-breaker vẫn giữ rawreports/gold/hash/audit, không đổi thành autoPASS. Đây là nghiệm thu kỹ thuật cho phạm vi single-table đã thống nhất, không khẳng định mọi câu hỏi đều đúng hoặc đã chạy đủ90.
+
+**Usage đầu/cuối:** ledger568(Gemini563/Knowledge5), grant464/500, **0 HTTP dispatch mới trong quyền tối đa8**, còn36choowner (nhiều hơn mức28bắtbuộc). Fullledgerhash aa596d60e87d37c5a0dacfbe5239dbdd trước/sau khớp; reserve6.8002886USD, knownestimate0.7158162USD,6cost/tokensUNKNOWN đãreviewfullsnapshot/fullreserve/count, effectiveunreviewedunknown0, duplicate0. Không đổi grant/cap/budget/keys/flags/.env hoặc dùng Knowledge/LlamaParse/BGE;2reviewverified429/503 còn trongmax8 không dùng thêm. Quyền8 là mức tối đa của nhiệm vụ này, không cộng vào500 và không tiêu để đủ số.
+
+### Handoff ngắn cho Giai đoạn 2
+
+- **Source:** branch feature/sql-foundation, app19module đúng fb50d496a900a4b6e253252fdf5ff65f96a7a145, baseline nghiệm thu e681eb2f7eb24c8ce647a5e3b40772c3a02ef8b9. Commit chốt này chỉ tài liệu/quyền nghiệm thu; SHA cuối và CI xác nhận trong PR #1 và báo cáo bàn giao. Giữ Draft, chưa merge/main, chưa viết code Giai đoạn2.
+- **Hợp đồng bảo toàn:** một Question→groundedcatalog→QueryRequest→QueryPlan→binder/compilerSQLAlchemyCore→PGreadonly→verifiedfacts→naturalanswer. Server quyết định owner/revision/metadata/permission/quota; literal typed/Decimal/NULL/TEXT0đầu và timezone không tự đổi; nguồn/SQL permessage, idempotency/recovery không replay provider. Guest chỉ tạm, Google data/history riêng; ingestion gốc/sau fulltablevalidate trước Save.
+- **Database:** giữ PostgreSQL/Compose chính thức và dữ liệu/volumes hiện có; migrations foundation,identity,datasets,conversation,catalog,provider_grants,chat_management,usage_review,guest_sessions,grant_limits. Schema app quản lý tài khoản/workspace/catalog/chat/ledger/audit, schema data chứa bảng r_<revision UUID hex>. Không resetDB/ledger hoặc sửa revision đãpublish.
+- **R1:** theo docs/IMPLIMENT_PLAN.md mục17, Approved JOINs2–3bảng; owner xác nhận PK/FK/cardinality/grain/join direction, kiểm uniqueness/NULL/orphan; oracle1:N/N:1/LEFTJOIN và guardfanout chống nhân bản SUM/COUNT. Mở nhiều nguồn trong query cần quan hệ được phê duyệt, không chỉ đổi combobox thành multiselect.
+- **R2:** document ingestion/RAG theo kế hoạch hiện có: TXT/MD/DOCX/PDFtext, source/revision/pageanchors, chunking, chọn embedding qua đo, lexical+vector rồi BGE có quyền. Quyền cloud/LlamaParse/BGE chưa được cấp trong nhiệm vụ này; không tự dùng36requestmanual để mở thêm dịch vụ.
+- **Theo dõi:** lỗi429/503/quota upstream; UNKNOWN giữreserve/count; guardcontext không chứng minh mọi ngữ nghĩa; benchmark chưachạy/annotationtranhchấp; NTPserviceunsync nhưng đo trước~0.33s. Chỉ mở lại Giai đoạn1 nếu có critical regression mới, không chạy lại90 hoặc redesign vì cònquota.
+
+**Giai đoạn 1 đã hoàn tất nghiệm thu kỹ thuật trong phạm vi đã thống nhất. Không còn lỗi nghiêm trọng được phát hiện trong bộ kiểm thử cuối. ChatSAR sẵn sàng chuyển sang Giai đoạn 2.** Các checkpoint bên dưới giữ lịch sử, không thay trạng thái hiện hành đầu trang.
+
 ## Chốt kỹ thuật theo phạm vi kiểm thử rút gọn của chủ dự án — 01/11/2026
 
 **READY_FOR_USER_ACCEPTANCE cho luồng Giai đoạn 1 đã kiểm bên dưới; chưa tự ghi ACCEPTED, chưa merge PR #1 hoặc triển khai Giai đoạn 2.** Chủ dự án vừa yêu cầu giảm kiểm thử lặp, ưu tiên câu hỏi người dùng thường hỏi và hoàn thành nhanh. Vì vậy dừng bộ gốc sau 52 câu, không chạy tiếp chỉ để đủ mẫu số cũ; bổ sung đúng 6 câu tự nhiên và 1 lượt browser rồi dừng Gemini. Đây là kết luận cho phạm vi rút gọn mới, không phải chứng nhận đã đo đủ 90 scenario hay mọi câu hỏi có thể có.
