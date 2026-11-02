@@ -1,5 +1,18 @@
 # Vận hành ChatSAR
 
+## Kh?i ph?c m?i tr??ng ph?t tri?n Windows v? VS Code ? 02/11/2026
+
+N?u Python g?c trong `%AppData%` b? x?a, `.venv` c? th? v?n t?n t?i nh?ng kh?ng kh?i ch?y ???c. D?ng Python3.11 c?n h?p l? tr?n m?y v? ??ng b? ??ng file kh?a, kh?ng n?ng dependency ho?c t?o m?i tr??ng th? hai:
+
+```powershell
+uv sync --project backend --frozen --python 3.11
+npm ci --ignore-scripts --prefix frontend # Ch? khi frontend/node_modules thi?u ho?c h?ng
+```
+
+M? th? m?c g?c `ChatSAR` trong VS Code. `.vscode/settings.json` ch?n executable `backend/.venv/Scripts/python.exe` tr?n Windows, gi?i h?n t?m m?i tr??ng v?o ??ng th? m?c n?y v? b?t k?ch ho?t terminal; `.vscode/extensions.json` ?? xu?t Python/Pylance/Python Environments/Ruff. C?u h?nh c? nh?n ngo?i Git d?ng `python-envs.terminal.autoActivationType = shellStartup` v? theme `Light Modern`. Ch?n interpreter c?a workspace n?u VS Code ?? l?u l?a ch?n c?; m? terminal m?i sau khi thay m?i tr??ng. Ki?m nhanh `python -c "import sys; print(sys.executable)"` ph?i tr? t?i `backend\.venv\Scripts\python.exe`. Theo [t?i li?u Python Environments ch?nh th?c](https://code.visualstudio.com/docs/python/environments), ch? ?? shellStartup k?ch ho?t m?i tr??ng khi terminal kh?i ??ng; kh?ng c?n h? ExecutionPolicy ho?c ??a secrets t? `.env` v?o terminal.
+
+??t kh?i ph?c02/11: t?o l?i c?ng `backend/.venv` b?ng Python3.11.9 c?n tr?n m?y,65g?i ??nguv.lock; Node24.19.0/npm11.17.0/frontenddeps c?n ??, typecheck/build ??t. Container ChatSAR tr??c ?? ?? d?ng; `docker compose up -d --no-build --wait` ??a ??ng web/api/db l?n healthy v?i volumes c?. Readiness/migrations/sourcebytes/l?ch s?/ledger568(grant464) gi? nguy?n, kh?ng g?i provider ho?c ??i keys/flags/quota. Kh?ng c?n t?i l?i Docker/model weights/extension c?n nguy?n. Theme l? l?a ch?n c? nh?n, kh?ng ?p v?o repo. ?? x?c minh terminal t? hi?n `(chatsar-backend)` v? `sys.executable` ??ng venv. M?t l?i t??ng th?ch extension d?ng ???ng d?n th? m?c l?m l?nh g?y Mypy/Ruff spawn ENOENT ???c s?a b?ng ???ng d?n executable r? r?ng; Mypy d?ng g?i trong m?i tr??ng kh?a v? cwd backend ?? ??c ??ng pyproject.toml.
+
 ## Bàn giao vận hành 01/11/2026 — ngừng gọi model, còn36manual
 
 Nguồn ứng dụng19module fb50d49 không thay; web/api/db healthy sau fullrestart. Ledger568(Gemini563/Knowledge5), grant464used, reserve6.8002886USD, knownestimate0.7158162USD. Sáu unknowncost vẫnNULL/fullreserve, đềuđãreview fullsnapshot; khôngunreviewedunknown/duplicate dispatch. Cùnggrant max495→500 chỉ sau toàn bộCodexcalls dừng; budget10/baseline/ledger/envkeysflags giữ, before/afterhashkhớp. Còn36lượt dànhowner, không tựgọi thêm để hoàn tất mẫu số benchmark đã giảm.
