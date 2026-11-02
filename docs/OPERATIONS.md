@@ -1,17 +1,19 @@
 # Vận hành ChatSAR
 
-## Kh?i ph?c m?i tr??ng ph?t tri?n Windows v? VS Code ? 02/11/2026
+## Khôi phục môi trường phát triển Windows và VS Code — 02/11/2026
 
-N?u Python g?c trong `%AppData%` b? x?a, `.venv` c? th? v?n t?n t?i nh?ng kh?ng kh?i ch?y ???c. D?ng Python3.11 c?n h?p l? tr?n m?y v? ??ng b? ??ng file kh?a, kh?ng n?ng dependency ho?c t?o m?i tr??ng th? hai:
+Nếu Python gốc trong `%AppData%` bị xóa, `.venv` có thể vẫn tồn tại nhưng không chạy được. Dùng Python 3.11 còn hợp lệ và đồng bộ đúng file khóa, không nâng dependency hoặc tạo môi trường thứ hai:
 
 ```powershell
 uv sync --project backend --frozen --python 3.11
-npm ci --ignore-scripts --prefix frontend # Ch? khi frontend/node_modules thi?u ho?c h?ng
+npm ci --ignore-scripts --prefix frontend # Chỉ khi node_modules thiếu hoặc hỏng
 ```
 
-M? th? m?c g?c `ChatSAR` trong VS Code. `.vscode/settings.json` ch?n executable `backend/.venv/Scripts/python.exe` tr?n Windows, gi?i h?n t?m m?i tr??ng v?o ??ng th? m?c n?y v? b?t k?ch ho?t terminal; `.vscode/extensions.json` ?? xu?t Python/Pylance/Python Environments/Ruff. C?u h?nh c? nh?n ngo?i Git d?ng `python-envs.terminal.autoActivationType = shellStartup` v? theme `Light Modern`. Ch?n interpreter c?a workspace n?u VS Code ?? l?u l?a ch?n c?; m? terminal m?i sau khi thay m?i tr??ng. Ki?m nhanh `python -c "import sys; print(sys.executable)"` ph?i tr? t?i `backend\.venv\Scripts\python.exe`. Theo [t?i li?u Python Environments ch?nh th?c](https://code.visualstudio.com/docs/python/environments), ch? ?? shellStartup k?ch ho?t m?i tr??ng khi terminal kh?i ??ng; kh?ng c?n h? ExecutionPolicy ho?c ??a secrets t? `.env` v?o terminal.
+Mở thư mục gốc `ChatSAR` trong VS Code. `.vscode/settings.json` chọn executable `backend/.venv/Scripts/python.exe` trên Windows, giới hạn tìm venv vào đúng thư mục và khai báo project dùng venv; `.vscode/extensions.json` đề xuất các extension Python/Pylance/Python Environments/Ruff/Mypy. Cấu hình cá nhân ngoài Git dùng `python-envs.terminal.autoActivationType = command` và theme `Light Modern`. Chọn môi trường `chatsar-backend` nếu VS Code đã lưu lựa chọn cũ; mở terminal mới sau khi thay môi trường. Kiểm nhanh `python -c "import sys; print(sys.executable)"` phải trỏ tới `backend\.venv\Scripts\python.exe`. Theo [tài liệu chính thức](https://code.visualstudio.com/docs/python/environments), chế độ command tự chạy lệnh kích hoạt khi mở terminal, không phụ thuộc PowerShell profile đã mất. Không đưa secrets từ `.env` vào terminal hoặc thay chính sách hệ thống.
 
-??t kh?i ph?c02/11: t?o l?i c?ng `backend/.venv` b?ng Python3.11.9 c?n tr?n m?y,65g?i ??nguv.lock; Node24.19.0/npm11.17.0/frontenddeps c?n ??, typecheck/build ??t. Container ChatSAR tr??c ?? ?? d?ng; `docker compose up -d --no-build --wait` ??a ??ng web/api/db l?n healthy v?i volumes c?. Readiness/migrations/sourcebytes/l?ch s?/ledger568(grant464) gi? nguy?n, kh?ng g?i provider ho?c ??i keys/flags/quota. Kh?ng c?n t?i l?i Docker/model weights/extension c?n nguy?n. Theme l? l?a ch?n c? nh?n, kh?ng ?p v?o repo. ?? x?c minh terminal t? hi?n `(chatsar-backend)` v? `sys.executable` ??ng venv. M?t l?i t??ng th?ch extension d?ng ???ng d?n th? m?c l?m l?nh g?y Mypy/Ruff spawn ENOENT ???c s?a b?ng ???ng d?n executable r? r?ng; Mypy d?ng g?i trong m?i tr??ng kh?a v? cwd backend ?? ??c ??ng pyproject.toml.
+Khôi phục 02/11: tạo lại cùng `backend/.venv` bằng Python 3.11.9 còn trên máy, đủ 65 gói đúng uv.lock. Đã tải lại Python 3.11.9 do uv quản lý và sửa launcher `python`/`python3`; chỉ đổi tên launcher Python3.12 đã hỏng thành `.exe.disabled` để có thể khôi phục, không xóa interpreter đang hoạt động. GitHub CLI được phục hồi metadata tài khoản và dùng lại credential còn trong Windows keyring, không cấp thêm quyền. Node24.19.0/npm11.17.0 và frontend dependencies còn đủ, typecheck/build đạt. Mypy/Ruff từng nhận nhầm đường dẫn thư mục làm executable gây spawn ENOENT; đã sửa đường dẫn rõ ràng, Mypy dùng đúng gói khóa và cwd backend. Log xác nhận Mypy1.20.2/Ruff0.17.3/Pylance hoạt động; terminal mới tự kích hoạt venv. Kiểm pip dependency compatibility, Mypy19module và Ruff đều đạt.
+
+Container ChatSAR trước đó đã dừng; `docker compose up -d --no-build --wait` đưa đúng web/api/db lên healthy với volumes cũ. Readiness/migrations/source bytes/lịch sử/ledger568(grant464) giữ nguyên; không gọi provider hoặc đổi keys/flags/quota. Không tải lại Docker/model weights/extension còn nguyên. Theme là lựa chọn cá nhân, không ép vào repo.
 
 ## Bàn giao vận hành 01/11/2026 — ngừng gọi model, còn36manual
 

@@ -9,5 +9,12 @@
     "${workspaceFolder}/backend"
   ],
   "mypy-type-checker.importStrategy": "fromEnvironment",
-  "mypy-type-checker.cwd": "${workspaceFolder}/backend"
+  "mypy-type-checker.cwd": "${workspaceFolder}/backend",
+  "python-envs.pythonProjects": [
+    {
+      "path": ".",
+      "envManager": "ms-python.python:venv",
+      "packageManager": "ms-python.python:pip"
+    }
+  ]
 }
