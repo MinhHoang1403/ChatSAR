@@ -123,7 +123,7 @@ Mỗi literal phải giữ `raw_phrase`, `value_type`, `candidate_value`, và sa
 ## Wire API
 
 | Endpoint | Request | Response và bảo vệ |
-|---|---|---|
+| --- | --- | --- |
 | GET `/live` | Không auth | 200 `{status:"ok",request_id}`; không gọi DB/provider |
 | GET `/ready` | Không auth | 200/503 `{status:"ok" hoặc "unavailable",request_id}`; DB + version migration đúng |
 | GET `/health` | Không auth | Readiness + cờ `cloud_calls_allowed` boolean; không trả URL/key/exception; không gọi model |
