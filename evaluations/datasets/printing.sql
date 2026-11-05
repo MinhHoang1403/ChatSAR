@@ -1,0 +1,6 @@
+CREATE TEMP TABLE print_jobs (job_code TEXT, sheets INTEGER, minutes NUMERIC, fee NUMERIC, completed_on DATE);
+INSERT INTO print_jobs VALUES
+('0004',120,1.25,2.40,'2026-04-01'),
+('0008',80,0.35,1.60,'2026-04-15'),
+('0012',100,NULL,2.00,'2026-05-01'),
+('0020',NULL,0.90,NULL,'2026-04-30');

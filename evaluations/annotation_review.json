@@ -1,0 +1,583 @@
+{
+  "semantic_sha256": "2056ba406bc54d09ab4d24dfe69b4489da34b7c75338d3b42db0b1952153fa95",
+  "reviewed_at": "2026-10-31",
+  "method": "Review question/shape/metrics/filter/group/order against independent SQL; original immutable. Author knows labels; not external blind.",
+  "cases": [
+    {
+      "case_id": "basic_logistics_count_rows",
+      "annotation_sha256": "529203b4398619743dcac5e7113bdfd38ae2ef44be0789dd54bbec26f20b9f8f",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_logistics_count_fee",
+      "annotation_sha256": "5d8dec05584cd12fa3f2f08cd6629b50c91e9af04fd49016572b4a09906a6cb5",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_logistics_count_status",
+      "annotation_sha256": "8f725009280fff85acd76700e4c1963903a2a4fee40f8438203a2c4785492224",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_logistics_sum",
+      "annotation_sha256": "02857efaba8edd02e6128fe8b19b50470ff81ae0b95ea5e636e1cf600274a682",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_logistics_exact_district",
+      "annotation_sha256": "120b8a4f057beb6b06d24c73021ee715ab419e9f7169c58458fc3ddc4132d166",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_logistics_numeric_text",
+      "annotation_sha256": "f13d4dd53311d616ae154d58801ec627abad9554578b9d86c54922ee2c4900f4",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_logistics_text_id",
+      "annotation_sha256": "df04377ba4335f5efaa835f26b4b03334c5b7cda286212dd6737c19d481e9625",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_logistics_month_boundary",
+      "annotation_sha256": "3ee43951aa826ca4ae7a1fedf9ec9c41ee28f605b5bec0c7615e377126a144b3",
+      "review": "CONFLICT",
+      "notes": "SUM-only question vs COUNT+SUM gold"
+    },
+    {
+      "case_id": "basic_logistics_and_or",
+      "annotation_sha256": "3ac036d3dddba5d2faeaa40e5bb939d0ae80069bc4f273324aa96d9518161c8a",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_logistics_null",
+      "annotation_sha256": "17fb2b79589840cd69b61cb352f888190fda861f5c7a0b103945089a46b3653a",
+      "review": "CONSISTENT",
+      "notes": "Ordering/identifier are output conventions where question is implicit; preserve original scoring. Empty SUM question vague: original retained."
+    },
+    {
+      "case_id": "basic_logistics_empty_sum",
+      "annotation_sha256": "dde927291ffa4cea81435fe5c8fe14324de730e97fd008a1f9a02e9f4e4fad9d",
+      "review": "CONSISTENT",
+      "notes": "Ordering/identifier are output conventions where question is implicit; preserve original scoring. Empty SUM question vague: original retained."
+    },
+    {
+      "case_id": "basic_hotel_count",
+      "annotation_sha256": "ae34db20c2464db6b5f9b804d21e5a7d64fcd4b5f116ced189ede04fc01b0dcd",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_hotel_sum",
+      "annotation_sha256": "52a2be8629dcd342da61ddd6c640cca277d19353dcfe2df18d6a0a8dac9bf74d",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_hotel_avg",
+      "annotation_sha256": "aae39a79b55aebab7eae949d6b6fd93be455cd1780ae2a4207aeaf17d6b8640b",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_hotel_group",
+      "annotation_sha256": "86f2211d3c783fefe426880fdc9ac4c9348cdc30dd5ea6a1aa71391f2810fa45",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_hotel_top",
+      "annotation_sha256": "65314429dcc2f625b791491825de9e7b6f2c213cc5a1d55ad5f3b81d50bddd36",
+      "review": "CONSISTENT",
+      "notes": "Ordering/identifier are output conventions where question is implicit; preserve original scoring. Empty SUM question vague: original retained."
+    },
+    {
+      "case_id": "basic_hotel_date",
+      "annotation_sha256": "9c7ae67861d559c68ea9b3a0346a271fb34251021ab5eb48ef915905d2a5c05f",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_energy_decimal",
+      "annotation_sha256": "621f91c0087f8574b7ec66a4ef2b3fc63971aa62a2ef00563e289a367313e6e1",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_energy_null",
+      "annotation_sha256": "70f82480423b713ff3a1b629dfc7eba2f6973c5ab057a9d110ee50789551bd48",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_agriculture_sum",
+      "annotation_sha256": "88012fffa8e7465a0353651e60b6e6114ce9b4eaa6f1e0d7c561463cb4a297fb",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_agriculture_boolean",
+      "annotation_sha256": "4b284389fa2fdd4ab1f35cb5a495b16dc71280bcd7a368bd8c4bb424cc1d557f",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_library_count",
+      "annotation_sha256": "9b1bef4d73e672414473e92840749a839792f52d8246a1772f96e6a7d8643caf",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_library_sum",
+      "annotation_sha256": "751c15cf301212133cedd8661e9373349df816512cd7869cb998260894dfd708",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_library_missing",
+      "annotation_sha256": "8dc4aeb31a31c80cd924da7e834f06088eee11db2a838af3e74a84a2a27f7e94",
+      "review": "CONSISTENT",
+      "notes": "Ordering/identifier are output conventions where question is implicit; preserve original scoring. Empty SUM question vague: original retained."
+    },
+    {
+      "case_id": "basic_library_distinct",
+      "annotation_sha256": "a600d3045381ccc520635269d6c8384df374bf572ffb7a4ba04677543fa65d45",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_maintenance_orders",
+      "annotation_sha256": "0413b8017fdd9d4e11c6749ac9990c32442b14a491972abd69744aeb7a4a6ccc",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_maintenance_assets",
+      "annotation_sha256": "ce22c6e916d755cc330f40f78d328b15455f5fdfde5838723e5af3e051a95916",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_maintenance_labor",
+      "annotation_sha256": "61265b89d719f6913f59791ac7513cd1ae624cf47d8f8f8ea287e4576b61f035",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_maintenance_minimum",
+      "annotation_sha256": "850a480c48f655d1a2f23494450baaf43c6647677645bd010b7d99feab98519f",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "basic_maintenance_completed",
+      "annotation_sha256": "2f164fe177a4588747b33a8aa57e346c21869f4739ea061480590679aa629e15",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_01",
+      "annotation_sha256": "5ecc8651613f38748facf6924375e7cbececad848a75c70bfc1b538b1c08c3de",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_02",
+      "annotation_sha256": "e2c3142af8bdb0265b53296c7c7e7f5a67ec0183a321c2552bf8753661d8f7b5",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_03",
+      "annotation_sha256": "6daf6fa76595f786482e4b84d294c2f0942e6d0e568fc05d0c9d7084f12a5bd1",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_04",
+      "annotation_sha256": "99179a9771c25cdbe93daf244f697b2f0dc3b8bdd165e94eff15cefe0cc6617a",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_05",
+      "annotation_sha256": "3dfb8322766b108af5de10bf1e305d0f6d20cc5b10f8e780e56910c931940248",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_06",
+      "annotation_sha256": "4becad4e458dfde7b6c2842042d5113d854051f4b65c185d137860223ee1c314",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_07",
+      "annotation_sha256": "4965cdfb5ebb24a6131afd6c04c5555a44bfba9c3716a7181c44d9c4e5fc01c6",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_08",
+      "annotation_sha256": "c9a277d800c6e9b519282b3d75031649046d221fad6f118db9b9dc0056a01bdf",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_09",
+      "annotation_sha256": "67c28b0602fe15660d63492aa70ea55e79d0c2148d85baca3caf964e19f6ef56",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_10",
+      "annotation_sha256": "1f1ac220e95d2aed5e9841a0fe4327b96dca775710322f0c8c6ae2f78bd859d7",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_11",
+      "annotation_sha256": "81860afd2bc3582a4301c8bdd777f0f71dd5adc4fddc9e4eb9abb18b0373922d",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_12",
+      "annotation_sha256": "eda3831a790759a0915ebdf5ea7032fdef61f2bcfca73d5cb6043c0937c3b684",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_13",
+      "annotation_sha256": "aa9c7cd6960ecc2d53f0ed0cff1ba488299a4c0d9549618d8984e858ec965495",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_14",
+      "annotation_sha256": "983997434f6aa0ca261074f88e5ee2339f67b0e1a69e716f63ba08778451158a",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_15",
+      "annotation_sha256": "f9a8864a43b50e2bea880a304bc14f639b02da837332b3a5ba8f19e177d43d3d",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_16",
+      "annotation_sha256": "3eea060b4048dd3c07e9b254380e7afa27227c99966956b1202aa644d45c5050",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_17",
+      "annotation_sha256": "ed63e9fae7c4ae74b1b75770b9c22a8079f180f8ea355c1bcc7240b30ec5d8b9",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_18",
+      "annotation_sha256": "e66dbb01f6e6b183260dc521f11a96aa51d8834226d4802f40511e3bf0469c80",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_19",
+      "annotation_sha256": "04f21db544ec3874cd51803c2428b921b6f58d3806ac38404f78534261016463",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "paraphrase_20",
+      "annotation_sha256": "9ab57a5254139bc1f8ebb3ed8f6f7093b28091e6a9ff3c342afbd9b83e16ccb3",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_01",
+      "annotation_sha256": "43fc3d7759412c3eb559bdceedc8362690764a39c89e46ff5363932c997bfe20",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_02",
+      "annotation_sha256": "689cc7249e37cd25d05ca67b4cce0951094c4002647781e4324b8b0861ebc59c",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_03",
+      "annotation_sha256": "25ef71e2c0ec7b0b09985836704403166d1724df68244f86eb20e8d30fa590e3",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_04",
+      "annotation_sha256": "2acdd53317c0ffe94eaa706c2de43dd9f98d9e977105feb9e3eccb5c8ed6dfe7",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_05",
+      "annotation_sha256": "4de32dd41e6327b6a946a79448f99dbc0c462596d68c2b31f4e9217c62345b3c",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_06",
+      "annotation_sha256": "85beec01d7f5a3b16ef40313ea150efaaa72906a5f724c503bae5d9ae8546d8d",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_07",
+      "annotation_sha256": "c8edffa0123fc3a725d26ca843ca96d1ff574bb88d64d866573d5fe8f63464ce",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_08",
+      "annotation_sha256": "3c5c316352ce42f2dfc4263589f9eaa1205cf837e1cf70a8b7cf6419e2b88cf3",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_09",
+      "annotation_sha256": "5420d5825ef13146df8b191b9c8e8cb0928734056c8ae5718cb97150f344548f",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_10",
+      "annotation_sha256": "74766a75c9d8b53df1fa614765b99cf0945c312a1f1df940df8e32dac744d979",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_11",
+      "annotation_sha256": "d83ee2f41de498c03c83c2324b4cd06014f1873921fe31b5acfc604d23a4dbe4",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_12",
+      "annotation_sha256": "dbf528f7d9185a132ff220a17a05528cd1614b86f85932ee547e36d30e6b76f7",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_13",
+      "annotation_sha256": "b76264340ecc14c612768ebf25d89a446e56ccba652a23f51f2fa164afc4e0b9",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_14",
+      "annotation_sha256": "eb4a69ce19975b0827b8997f477e93e3a2d54765ca259d9140c3355849c8f6d8",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "edge_15",
+      "annotation_sha256": "b73e776e302bac82253bda1fbc723d0cb64890c859d3250a0a12ddb3ddf9a151",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "negative_01",
+      "annotation_sha256": "b85cd953bd89774573b2234883e198f264e94340e6029307ac56f285d3acdd06",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "negative_02",
+      "annotation_sha256": "ff669ee42b519ab229f8a72d74c84a2bcfad82ee3d73652a8ae459daa5515ce5",
+      "review": "SYSTEM_HARNESS_REQUIRED",
+      "notes": "State/mutation test, no standalone NL/model score"
+    },
+    {
+      "case_id": "negative_03",
+      "annotation_sha256": "f992ab5f390a9c147fb19bff6d9d75979c63364a494200c607a4061cf0141b07",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "negative_04",
+      "annotation_sha256": "389429d644d884979f58ff9888974479010095a91390bf4d76de5cd7c2a24174",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "negative_05",
+      "annotation_sha256": "32a3f45518db1669c8f8ba058039c7176242f5edbeeefdd20ac356ca88fa5b92",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "negative_06",
+      "annotation_sha256": "de6456bd4683f478ba369155fb9100a19596552a1b14298f4151172d245a3e92",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "negative_07",
+      "annotation_sha256": "813733ab1b1842d8cf06e77f6d43c753cc1826a0162aafd025d658d450716110",
+      "review": "SYSTEM_HARNESS_REQUIRED",
+      "notes": "State/mutation test, no standalone NL/model score"
+    },
+    {
+      "case_id": "negative_08",
+      "annotation_sha256": "00e22d8cd2e0bc972d20fabf7c53574a8c69a9eb4d649f108cd8b95fdf77426c",
+      "review": "SYSTEM_HARNESS_REQUIRED",
+      "notes": "State/mutation test, no standalone NL/model score"
+    },
+    {
+      "case_id": "negative_09",
+      "annotation_sha256": "a9325d09df1b434f178d986d80d80b36c9b692a893cf9371aea6215cc0d0d80f",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "negative_10",
+      "annotation_sha256": "817b56b3377c952aec5e5319a3693dd4ce2fe01aa45d493401e277012f9a98fb",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "followup_01",
+      "annotation_sha256": "46522c5853aac16e5a472a9c9771438bfa7f4314751cfb35def20a4aa30004bb",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "followup_02",
+      "annotation_sha256": "2e6efe5236b241c7442ec51bb4377a919e667ee4efe059e0403b2f444ae396fe",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "followup_03",
+      "annotation_sha256": "25844a004c44bc19c8ede16339bad0fbd5e3d748eca1d4d0952601b7d369a4dc",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "followup_04",
+      "annotation_sha256": "4b75a6ffc6c5eb9dd5438123474c8de7add16059828ddd0bdad879aed4aae3ed",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "followup_05",
+      "annotation_sha256": "05cb032b41e5a892bc37ca1d7d593558c74921588f148f0122d779efc1d74380",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "followup_06",
+      "annotation_sha256": "bd7b7fd2ef7d50aac78af609b4db061c00c0388ee36693c681c3021f3e0fd0e4",
+      "review": "CONSISTENT",
+      "notes": "Independent SQL/expected retained; source metadata must be confirmed."
+    },
+    {
+      "case_id": "followup_07",
+      "annotation_sha256": "666171338199bafaff37197ff7646fc4ab883ab284fe2947c11016649b5f25c4",
+      "review": "SYSTEM_HARNESS_REQUIRED",
+      "notes": "State/mutation test, no standalone NL/model score"
+    },
+    {
+      "case_id": "followup_08",
+      "annotation_sha256": "c178cfc47a5552523c9247ae7ef4a95aff427bca910cc0a34ad868a23275f04e",
+      "review": "SYSTEM_HARNESS_REQUIRED",
+      "notes": "State/mutation test, no standalone NL/model score"
+    },
+    {
+      "case_id": "followup_09",
+      "annotation_sha256": "b06f092b162c5bef1591d4cc22d2944daace6de94212c64b8dbfc66245e2e285",
+      "review": "SYSTEM_HARNESS_REQUIRED",
+      "notes": "State/mutation test, no standalone NL/model score"
+    },
+    {
+      "case_id": "followup_10",
+      "annotation_sha256": "4845008658d3c1745c72f573687713e79770bd10257b9afd215a55124304dd80",
+      "review": "SYSTEM_HARNESS_REQUIRED",
+      "notes": "State/mutation test, no standalone NL/model score"
+    },
+    {
+      "case_id": "metamorphic_01",
+      "annotation_sha256": "4597c8b7e64deb7ac9593971ca89bd47f6823018fe20dbeb0a0045ab723f14b8",
+      "review": "SYSTEM_HARNESS_REQUIRED",
+      "notes": "State/mutation test, no standalone NL/model score"
+    },
+    {
+      "case_id": "metamorphic_02",
+      "annotation_sha256": "0311e9daf50a1206d98b316188b246d7ea5b5a32c29245fcca6cccf9c8d1308f",
+      "review": "SYSTEM_HARNESS_REQUIRED",
+      "notes": "State/mutation test, no standalone NL/model score"
+    },
+    {
+      "case_id": "metamorphic_03",
+      "annotation_sha256": "05f9024f8396fdc3dc717513745dc50bb5de90df38da86dead3781aed3bd03f9",
+      "review": "SYSTEM_HARNESS_REQUIRED",
+      "notes": "State/mutation test, no standalone NL/model score"
+    },
+    {
+      "case_id": "metamorphic_04",
+      "annotation_sha256": "6443c0446ff86f6df8457870ec2e23dc0570db5fc39c66706aa4063fa112542a",
+      "review": "SYSTEM_HARNESS_REQUIRED",
+      "notes": "State/mutation test, no standalone NL/model score"
+    },
+    {
+      "case_id": "metamorphic_05",
+      "annotation_sha256": "20dcfc1086020b8c7f8c2eb3166002a3d47e3a7a24bd59f668c8d981abfafde4",
+      "review": "SYSTEM_HARNESS_REQUIRED",
+      "notes": "State/mutation test, no standalone NL/model score"
+    }
+  ],
+  "overrides": {
+    "basic_logistics_month_boundary": {
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "SUM",
+            "column": "fee"
+          }
+        ],
+        "filters": {
+          "operator": "AND",
+          "children": [
+            {
+              "operator": "GTE",
+              "column": "shipped_at",
+              "value": "2026-08-31T17:00:00Z"
+            },
+            {
+              "operator": "LT",
+              "column": "shipped_at",
+              "value": "2026-09-30T17:00:00Z"
+            }
+          ]
+        }
+      },
+      "expected_rows": [
+        {
+          "total": "10.10"
+        }
+      ],
+      "column_types": {
+        "total": "numeric"
+      },
+      "oracle_sql": "SELECT SUM(fee) AS total FROM oracle_fixture.shipments WHERE shipped_at >= TIMESTAMPTZ '2026-08-31T17:00:00Z' AND shipped_at < TIMESTAMPTZ '2026-09-30T17:00:00Z'"
+    }
+  }
+}

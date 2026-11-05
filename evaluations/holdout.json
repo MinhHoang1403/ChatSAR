@@ -1,0 +1,83 @@
+{
+  "description": "Replacement unseen-by-model cases locked after old maintenance MIN was used for development. Author knows labels; not third-party blind benchmark.",
+  "fixtures": [
+    "datasets/printing.sql"
+  ],
+  "cases": [
+    {
+      "case_id": "printing_lookup",
+      "question": "Cho xem mã lệnh 0004 cùng phí in của lệnh đó.",
+      "oracle_sql": "SELECT job_code,fee FROM print_jobs WHERE job_code='0004'",
+      "column_types": {
+        "job_code": "text",
+        "fee": "numeric"
+      },
+      "expected_rows": [
+        {
+          "job_code": "0004",
+          "fee": "2.40"
+        }
+      ]
+    },
+    {
+      "case_id": "printing_minimum",
+      "question": "Thời gian in nhỏ nhất là bao nhiêu phút?",
+      "oracle_sql": "SELECT MIN(minutes) AS minimum FROM print_jobs",
+      "column_types": {
+        "minimum": "numeric"
+      },
+      "expected_rows": [
+        {
+          "minimum": "0.35"
+        }
+      ]
+    },
+    {
+      "case_id": "printing_count_sum",
+      "question": "Từ 2026-04-01 đến trước 2026-05-01 có bao nhiêu dòng lệnh và tổng phí in bao nhiêu?",
+      "oracle_sql": "SELECT COUNT(*) AS count,SUM(fee) AS total FROM print_jobs WHERE completed_on >= DATE '2026-04-01' AND completed_on < DATE '2026-05-01'",
+      "column_types": {
+        "count": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "count": 3,
+          "total": "4.00"
+        }
+      ]
+    },
+    {
+      "case_id": "printing_count_non_null",
+      "question": "Có bao nhiêu dòng đã ghi số tờ in (không trống)?",
+      "oracle_sql": "SELECT COUNT(sheets) AS count FROM print_jobs",
+      "column_types": {
+        "count": "integer"
+      },
+      "expected_rows": [
+        {
+          "count": 3
+        }
+      ]
+    },
+    {
+      "case_id": "printing_empty_sum",
+      "question": "Tổng phí in của mã lệnh 0999?",
+      "oracle_sql": "SELECT SUM(fee) AS total FROM print_jobs WHERE job_code='0999'",
+      "column_types": {
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "total": null
+        }
+      ]
+    },
+    {
+      "case_id": "printing_missing_fx",
+      "question": "Đổi tổng phí in sang USD mà chưa có tỷ giá.",
+      "expected_status": "clarify",
+      "expected_reason": "missing_conversion_rate"
+    }
+  ]
+}

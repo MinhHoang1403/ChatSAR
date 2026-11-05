@@ -1,0 +1,171 @@
+"""Health endpoints tối thiểu cho nền tảng ChatSAR."""
+
+import asyncio
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager, suppress
+from uuid import uuid4
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
+from starlette.responses import Response
+
+from app.auth import router as auth_router
+from app.config import get_settings
+from app.conversation import recover_messages
+from app.conversation import router as conversation_router
+from app.database import database_ready
+from app.datasets import recover_ingestion
+from app.datasets import router as dataset_router
+from app.errors import AppError
+from app.guest import guest_maintenance, reap_guests
+from app.guest import router as guest_router
+from app.observability import flush_observations
+from app.providers import router as provider_router
+from app.setup import router as setup_router
+from app.workspace import router as workspace_router
+
+
+@asynccontextmanager
+async def lifespan(application: FastAPI) -> AsyncIterator[None]:
+    get_settings()
+    maintenance = None
+    if application.state.recover_jobs:
+        try:
+            recover_ingestion()
+            recover_messages()
+            reap_guests()
+        except SQLAlchemyError:
+            pass
+        maintenance = asyncio.create_task(guest_maintenance())
+    yield
+    if maintenance is not None:
+        maintenance.cancel()
+        with suppress(asyncio.CancelledError):
+            await maintenance
+    flush_observations()
+
+
+def create_app(*, recover_jobs: bool = True) -> FastAPI:
+    application = FastAPI(title="ChatSAR", version="0.1.0", lifespan=lifespan)
+    application.state.recover_jobs = recover_jobs
+    application.include_router(auth_router)
+    application.include_router(guest_router)
+    application.include_router(workspace_router)
+    application.include_router(dataset_router)
+    application.include_router(setup_router)
+    application.include_router(provider_router)
+    application.include_router(conversation_router)
+
+    @application.exception_handler(AppError)
+    async def application_error(request: Request, error: AppError) -> JSONResponse:
+        return JSONResponse(
+            {
+                "error": {"code": error.code, "message": error.message},
+                "request_id": request.state.request_id,
+                **(
+                    {
+                        "diagnostics": error.diagnostics
+                        or {
+                            "failed_stage": error.stage,
+                            "error_code": error.code,
+                            "sql": {
+                                "compiled": False,
+                                "statement": None,
+                                "execution_status": "not_started",
+                            },
+                            "source_unchanged": True,
+                        }
+                    }
+                    if error.stage or error.diagnostics
+                    else {}
+                ),
+            },
+            status_code=error.status,
+        )
+
+    @application.exception_handler(RequestValidationError)
+    async def invalid_request(request: Request, error: RequestValidationError) -> JSONResponse:
+        return JSONResponse(
+            {
+                "error": {"code": "INVALID_REQUEST", "message": "Dữ liệu gửi lên không hợp lệ."},
+                "request_id": request.state.request_id,
+            },
+            status_code=422,
+        )
+
+    @application.exception_handler(SQLAlchemyError)
+    async def database_error(request: Request, error: SQLAlchemyError) -> JSONResponse:
+        return JSONResponse(
+            {
+                "error": {
+                    "code": "DATABASE_UNAVAILABLE",
+                    "message": "Chưa thể xử lý yêu cầu. Vui lòng thử lại.",
+                },
+                "request_id": request.state.request_id,
+                "diagnostics": {
+                    "failed_stage": "session_and_result_retrieval"
+                    if request.method == "GET"
+                    else "authorization",
+                    "error_code": "DATABASE_UNAVAILABLE",
+                    "source_unchanged": True,
+                },
+            },
+            status_code=503,
+        )
+
+    @application.middleware("http")
+    async def request_identifier(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        request.state.request_id = str(uuid4())
+        if request.method not in ("GET", "HEAD", "OPTIONS") and request.url.path.startswith(
+            "/api/"
+        ):
+            if request.headers.get("Origin") != get_settings().app_origin:
+                return JSONResponse(
+                    {
+                        "error": {
+                            "code": "ORIGIN_REJECTED",
+                            "message": "Nguồn yêu cầu không hợp lệ.",
+                        },
+                        "request_id": request.state.request_id,
+                    },
+                    status_code=403,
+                )
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request.state.request_id
+        return response
+
+    @application.get("/live")
+    def live(request: Request) -> JSONResponse:
+        return JSONResponse({"status": "ok", "request_id": request.state.request_id})
+
+    @application.get("/ready")
+    def ready(request: Request) -> JSONResponse:
+        available = database_ready()
+        return JSONResponse(
+            {
+                "status": "ok" if available else "unavailable",
+                "request_id": request.state.request_id,
+            },
+            status_code=200 if available else 503,
+        )
+
+    @application.get("/health")
+    def health(request: Request) -> JSONResponse:
+        available = database_ready()
+        return JSONResponse(
+            {
+                "status": "ok" if available else "unavailable",
+                "cloud_calls_allowed": get_settings().generation_allowed,
+                "request_id": request.state.request_id,
+            },
+            status_code=200 if available else 503,
+        )
+
+    return application
+
+
+app = create_app()

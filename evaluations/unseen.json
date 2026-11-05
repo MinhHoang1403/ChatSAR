@@ -1,0 +1,469 @@
+{
+  "format": "chatsar-locked-generalization",
+  "data_classification": "synthetic",
+  "fixtures": [
+    "datasets/unseen.sql"
+  ],
+  "policy": "Locked before first model execution on source with IN_MONTH. Handwritten source metadata, SQL and expected; author knows labels. No runtime changes from these labels.",
+  "sources": {
+    "observatory": {
+      "table": "observatory_fixture.readings",
+      "columns": {
+        "obs_code": "text",
+        "band": "text",
+        "exposure_seconds": "numeric",
+        "observed_on": "date"
+      },
+      "metadata": {
+        "obs_code": {
+          "role": "identifier"
+        },
+        "exposure_seconds": {
+          "unit": "seconds",
+          "role": "amount"
+        },
+        "observed_on": {
+          "role": "time"
+        }
+      }
+    },
+    "recycling": {
+      "table": "recycling_fixture.batches",
+      "columns": {
+        "batch_code": "text",
+        "material": "text",
+        "mass_kg": "numeric",
+        "recovered": "boolean",
+        "closed_at": "timestamp"
+      },
+      "metadata": {
+        "batch_code": {
+          "role": "identifier"
+        },
+        "mass_kg": {
+          "unit": "kg",
+          "role": "amount"
+        },
+        "closed_at": {
+          "role": "time"
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "observatory_lookup",
+      "domain": "observatory",
+      "question": "Hiện obs_code và exposure_seconds của obs_code C0002.",
+      "group": "unseen",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "selection": [
+          "obs_code",
+          "exposure_seconds"
+        ],
+        "filters": {
+          "operator": "EQ",
+          "column": "obs_code",
+          "value": "C0002"
+        }
+      },
+      "oracle_sql": "SELECT obs_code,exposure_seconds FROM observatory_fixture.readings WHERE obs_code='C0002'",
+      "column_types": {
+        "obs_code": "text",
+        "exposure_seconds": "numeric"
+      },
+      "expected_rows": [
+        {
+          "obs_code": "C0002",
+          "exposure_seconds": "0.75"
+        }
+      ]
+    },
+    {
+      "case_id": "observatory_sum",
+      "domain": "observatory",
+      "question": "Tổng exposure_seconds?",
+      "group": "unseen",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "SUM",
+            "column": "exposure_seconds"
+          }
+        ]
+      },
+      "oracle_sql": "SELECT SUM(exposure_seconds) total FROM observatory_fixture.readings",
+      "column_types": {
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "total": "2.00"
+        }
+      ]
+    },
+    {
+      "case_id": "observatory_nonnull",
+      "domain": "observatory",
+      "question": "Có bao nhiêu exposure_seconds khác NULL?",
+      "group": "unseen",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_NON_NULL",
+            "column": "exposure_seconds"
+          }
+        ]
+      },
+      "oracle_sql": "SELECT COUNT(exposure_seconds) total FROM observatory_fixture.readings",
+      "column_types": {
+        "total": "integer"
+      },
+      "expected_rows": [
+        {
+          "total": 3
+        }
+      ]
+    },
+    {
+      "case_id": "observatory_month",
+      "domain": "observatory",
+      "question": "Đếm dòng và tổng exposure_seconds trong tháng 2 năm 2024 theo observed_on.",
+      "group": "unseen",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          },
+          {
+            "operator": "SUM",
+            "column": "exposure_seconds"
+          }
+        ],
+        "filters": {
+          "operator": "AND",
+          "children": [
+            {
+              "operator": "GTE",
+              "column": "observed_on",
+              "value": "2024-02-01"
+            },
+            {
+              "operator": "LT",
+              "column": "observed_on",
+              "value": "2024-03-01"
+            }
+          ]
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) count,SUM(exposure_seconds) total FROM observatory_fixture.readings WHERE observed_on>='2024-02-01' AND observed_on<'2024-03-01'",
+      "column_types": {
+        "count": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "count": 2,
+          "total": "2.00"
+        }
+      ]
+    },
+    {
+      "case_id": "observatory_group",
+      "domain": "observatory",
+      "question": "Tổng exposure_seconds theo từng band, xếp band tăng dần.",
+      "group": "unseen",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "selection": [
+          "band"
+        ],
+        "metrics": [
+          {
+            "operator": "SUM",
+            "column": "exposure_seconds"
+          }
+        ],
+        "group_by": [
+          "band"
+        ],
+        "order": [
+          {
+            "field": "band",
+            "direction": "asc"
+          }
+        ]
+      },
+      "oracle_sql": "SELECT band,SUM(exposure_seconds) total FROM observatory_fixture.readings GROUP BY band ORDER BY band",
+      "column_types": {
+        "band": "text",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "band": "infrared",
+          "total": "1.25"
+        },
+        {
+          "band": "optical",
+          "total": "0.75"
+        }
+      ]
+    },
+    {
+      "case_id": "observatory_missing_year",
+      "domain": "observatory",
+      "question": "Tổng exposure_seconds trong tháng 2?",
+      "group": "unseen",
+      "split": "held-out",
+      "expected_status": "clarify",
+      "expected_semantics": {
+        "execution_allowed": false
+      },
+      "oracle_sql": null,
+      "column_types": {},
+      "expected_rows": []
+    },
+    {
+      "case_id": "recycling_distinct",
+      "domain": "recycling",
+      "question": "Có bao nhiêu material khác nhau?",
+      "group": "unseen",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_DISTINCT",
+            "column": "material"
+          }
+        ]
+      },
+      "oracle_sql": "SELECT COUNT(DISTINCT material) total FROM recycling_fixture.batches",
+      "column_types": {
+        "total": "integer"
+      },
+      "expected_rows": [
+        {
+          "total": 2
+        }
+      ]
+    },
+    {
+      "case_id": "recycling_ranking",
+      "domain": "recycling",
+      "question": "Top 2 batch_code theo mass_kg giảm dần, bỏ NULL; bằng nhau xếp batch_code tăng dần. Hiện batch_code và mass_kg.",
+      "group": "unseen",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "selection": [
+          "batch_code",
+          "mass_kg"
+        ],
+        "filters": {
+          "operator": "IS_NOT_NULL",
+          "column": "mass_kg"
+        },
+        "order": [
+          {
+            "field": "mass_kg",
+            "direction": "desc"
+          },
+          {
+            "field": "batch_code",
+            "direction": "asc"
+          }
+        ],
+        "limit": 2
+      },
+      "oracle_sql": "SELECT batch_code,mass_kg FROM recycling_fixture.batches WHERE mass_kg IS NOT NULL ORDER BY mass_kg DESC,batch_code LIMIT 2",
+      "column_types": {
+        "batch_code": "text",
+        "mass_kg": "numeric"
+      },
+      "expected_rows": [
+        {
+          "batch_code": "R1001",
+          "mass_kg": "2.50"
+        },
+        {
+          "batch_code": "R1002",
+          "mass_kg": "1.50"
+        }
+      ]
+    },
+    {
+      "case_id": "recycling_false_metrics",
+      "domain": "recycling",
+      "question": "Đếm dòng và tổng mass_kg khi recovered bằng false.",
+      "group": "unseen",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          },
+          {
+            "operator": "SUM",
+            "column": "mass_kg"
+          }
+        ],
+        "filters": {
+          "operator": "EQ",
+          "column": "recovered",
+          "value": "false"
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) count,SUM(mass_kg) total FROM recycling_fixture.batches WHERE recovered=false",
+      "column_types": {
+        "count": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "count": 3,
+          "total": "3.00"
+        }
+      ],
+      "baseline_ref": "recycling_false_metrics"
+    },
+    {
+      "case_id": "recycling_followup",
+      "domain": "recycling",
+      "question": "Nếu chỉ material glass thì sao?",
+      "group": "unseen",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          },
+          {
+            "operator": "SUM",
+            "column": "mass_kg"
+          }
+        ],
+        "filters": {
+          "operator": "AND",
+          "children": [
+            {
+              "operator": "EQ",
+              "column": "recovered",
+              "value": "false"
+            },
+            {
+              "operator": "EQ",
+              "column": "material",
+              "value": "glass"
+            }
+          ]
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) count,SUM(mass_kg) total FROM recycling_fixture.batches WHERE recovered=false AND material='glass'",
+      "column_types": {
+        "count": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "count": 2,
+          "total": "1.50"
+        }
+      ],
+      "context": {
+        "previous_case": "recycling_false_metrics"
+      }
+    },
+    {
+      "case_id": "recycling_rollover",
+      "domain": "recycling",
+      "question": "Đếm dòng và tổng mass_kg trong tháng 12 năm 2026 theo closed_at, giờ Việt Nam.",
+      "group": "unseen",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          },
+          {
+            "operator": "SUM",
+            "column": "mass_kg"
+          }
+        ],
+        "filters": {
+          "operator": "AND",
+          "children": [
+            {
+              "operator": "GTE",
+              "column": "closed_at",
+              "value": "2026-12-01T00:00:00+07:00"
+            },
+            {
+              "operator": "LT",
+              "column": "closed_at",
+              "value": "2027-01-01T00:00:00+07:00"
+            }
+          ]
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) count,SUM(mass_kg) total FROM recycling_fixture.batches WHERE closed_at>='2026-12-01T00:00:00+07:00' AND closed_at<'2027-01-01T00:00:00+07:00'",
+      "column_types": {
+        "count": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "count": 2,
+          "total": "4.00"
+        }
+      ]
+    },
+    {
+      "case_id": "recycling_empty",
+      "domain": "recycling",
+      "question": "Tổng mass_kg với material bằng văn bản 'absent'?",
+      "group": "unseen",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "SUM",
+            "column": "mass_kg"
+          }
+        ],
+        "filters": {
+          "operator": "EQ",
+          "column": "material",
+          "value": "absent"
+        }
+      },
+      "oracle_sql": "SELECT SUM(mass_kg) total FROM recycling_fixture.batches WHERE material='absent'",
+      "column_types": {
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "total": null
+        }
+      ]
+    }
+  ]
+}

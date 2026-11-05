@@ -1,0 +1,347 @@
+{
+  "format": "chatsar-locked-generalization",
+  "data_classification": "synthetic",
+  "fixtures": [
+    "datasets/fresh_schemas.sql"
+  ],
+  "policy": "Locked before first model call on these two new schemas after context-shape repair. Handwritten SQL/metadata/expected, author knows labels; internal held-out, not external blind. Earlier observatory/recycling suite is now regression. No runtime changes may be tuned to these labels and still called held-out. Pre-call offline manifest review corrected order_by key to evaluator order and removed nonoperand null-test value; SQL/rows unchanged, no model results observed.",
+  "sources": {
+    "ceramics": {
+      "table": "ceramics_fixture.firings",
+      "columns": {
+        "kiln_tag": "text",
+        "glaze": "text",
+        "weight_g": "numeric",
+        "ready": "boolean",
+        "fired_on": "date"
+      },
+      "metadata": {
+        "kiln_tag": {
+          "role": "identifier"
+        },
+        "weight_g": {
+          "role": "amount",
+          "unit": "g"
+        },
+        "fired_on": {
+          "role": "time"
+        }
+      }
+    },
+    "marine": {
+      "table": "marine_fixture.samples",
+      "columns": {
+        "station_code": "text",
+        "sector": "text",
+        "depth_m": "numeric",
+        "calibrated": "boolean",
+        "logged_at": "timestamp"
+      },
+      "metadata": {
+        "station_code": {
+          "role": "identifier"
+        },
+        "depth_m": {
+          "role": "amount",
+          "unit": "m"
+        },
+        "logged_at": {
+          "role": "time"
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "ceramics_lookup",
+      "domain": "ceramics",
+      "question": "Hiện kiln_tag và weight_g của kiln_tag 0015.",
+      "group": "fresh_schemas",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "selection": [
+          "kiln_tag",
+          "weight_g"
+        ],
+        "filters": {
+          "operator": "EQ",
+          "column": "kiln_tag",
+          "value": "0015"
+        }
+      },
+      "oracle_sql": "SELECT kiln_tag,weight_g FROM ceramics_fixture.firings WHERE kiln_tag='0015'",
+      "column_types": {
+        "kiln_tag": "text",
+        "weight_g": "numeric"
+      },
+      "expected_rows": [
+        {
+          "kiln_tag": "0015",
+          "weight_g": "0.60"
+        }
+      ]
+    },
+    {
+      "case_id": "ceramics_group",
+      "domain": "ceramics",
+      "question": "Tổng weight_g theo từng glaze, xếp glaze tăng dần.",
+      "group": "fresh_schemas",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "SUM",
+            "column": "weight_g"
+          }
+        ],
+        "selection": [
+          "glaze"
+        ],
+        "group_by": [
+          "glaze"
+        ],
+        "order": [
+          {
+            "field": "glaze",
+            "direction": "asc"
+          }
+        ]
+      },
+      "oracle_sql": "SELECT glaze,SUM(weight_g) total FROM ceramics_fixture.firings GROUP BY glaze ORDER BY glaze",
+      "column_types": {
+        "glaze": "text",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "glaze": "amber",
+          "total": null
+        },
+        {
+          "glaze": "teal",
+          "total": "3.00"
+        }
+      ]
+    },
+    {
+      "case_id": "ceramics_month",
+      "domain": "ceramics",
+      "question": "Dùng fired_on xác định thời gian. Đếm dòng và tổng weight_g trong cả tháng 2 năm 2024, trả một kết quả chung không chia theo ngày.",
+      "group": "fresh_schemas",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          },
+          {
+            "operator": "SUM",
+            "column": "weight_g"
+          }
+        ],
+        "filters": {
+          "operator": "AND",
+          "children": [
+            {
+              "operator": "GTE",
+              "column": "fired_on",
+              "value": "2024-02-01"
+            },
+            {
+              "operator": "LT",
+              "column": "fired_on",
+              "value": "2024-03-01"
+            }
+          ]
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) count,SUM(weight_g) total FROM ceramics_fixture.firings WHERE fired_on>='2024-02-01' AND fired_on<'2024-03-01'",
+      "column_types": {
+        "count": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "count": 2,
+          "total": "3.00"
+        }
+      ]
+    },
+    {
+      "case_id": "ceramics_missing_year",
+      "domain": "ceramics",
+      "question": "Tổng weight_g trong tháng 2?",
+      "group": "fresh_schemas",
+      "split": "held-out",
+      "expected_status": "clarify",
+      "expected_semantics": {},
+      "oracle_sql": null,
+      "column_types": {},
+      "expected_rows": []
+    },
+    {
+      "case_id": "marine_false_metrics",
+      "domain": "marine",
+      "question": "Đếm dòng và tổng depth_m khi calibrated bằng false.",
+      "group": "fresh_schemas",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          },
+          {
+            "operator": "SUM",
+            "column": "depth_m"
+          }
+        ],
+        "filters": {
+          "operator": "EQ",
+          "column": "calibrated",
+          "value": "false"
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) count,SUM(depth_m) total FROM marine_fixture.samples WHERE calibrated=false",
+      "column_types": {
+        "count": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "count": 4,
+          "total": "7.00"
+        }
+      ],
+      "baseline_ref": "marine_false_metrics"
+    },
+    {
+      "case_id": "marine_followup",
+      "domain": "marine",
+      "question": "Nếu chỉ sector east thì sao?",
+      "group": "fresh_schemas",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          },
+          {
+            "operator": "SUM",
+            "column": "depth_m"
+          }
+        ],
+        "filters": {
+          "operator": "AND",
+          "children": [
+            {
+              "operator": "EQ",
+              "column": "calibrated",
+              "value": "false"
+            },
+            {
+              "operator": "EQ",
+              "column": "sector",
+              "value": "east"
+            }
+          ]
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) count,SUM(depth_m) total FROM marine_fixture.samples WHERE calibrated=false AND sector='east'",
+      "column_types": {
+        "count": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "count": 3,
+          "total": "2.00"
+        }
+      ],
+      "context": {
+        "previous_case": "marine_false_metrics"
+      }
+    },
+    {
+      "case_id": "marine_ranking",
+      "domain": "marine",
+      "question": "Hai station_code có depth_m nhỏ nhất khác NULL? Hiện station_code và depth_m, nếu bằng nhau xếp station_code tăng dần.",
+      "group": "fresh_schemas",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "selection": [
+          "station_code",
+          "depth_m"
+        ],
+        "filters": {
+          "operator": "IS_NOT_NULL",
+          "column": "depth_m"
+        },
+        "limit": 2,
+        "order": [
+          {
+            "field": "depth_m",
+            "direction": "asc"
+          },
+          {
+            "field": "station_code",
+            "direction": "asc"
+          }
+        ]
+      },
+      "oracle_sql": "SELECT station_code,depth_m FROM marine_fixture.samples WHERE depth_m IS NOT NULL ORDER BY depth_m,station_code LIMIT 2",
+      "column_types": {
+        "station_code": "text",
+        "depth_m": "numeric"
+      },
+      "expected_rows": [
+        {
+          "station_code": "B0004",
+          "depth_m": "0.80"
+        },
+        {
+          "station_code": "B0001",
+          "depth_m": "1.20"
+        }
+      ]
+    },
+    {
+      "case_id": "marine_empty",
+      "domain": "marine",
+      "question": "Tổng depth_m khi sector bằng văn bản 'missing'?",
+      "group": "fresh_schemas",
+      "split": "held-out",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "SUM",
+            "column": "depth_m"
+          }
+        ],
+        "filters": {
+          "operator": "EQ",
+          "column": "sector",
+          "value": "missing"
+        }
+      },
+      "oracle_sql": "SELECT SUM(depth_m) total FROM marine_fixture.samples WHERE sector='missing'",
+      "column_types": {
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "total": null
+        }
+      ]
+    }
+  ]
+}

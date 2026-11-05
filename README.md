@@ -1,18 +1,42 @@
 # ChatSAR
 
-ChatSAR là MVP demo hỏi đáp dữ liệu bằng tiếng Việt, hướng đến kết quả chính xác, có nguồn đối chiếu và dễ bảo trì:
+ChatSAR là MVP hỏi đáp dữ liệu bằng tiếng Việt, có kết quả có kiểu và nguồn đối
+chiếu. Hiện có CSV/XLSX → tự chuẩn bị → preview trước/sau → Save → hỏi SQL một
+bảng, chat/history và SQL thực theo từng message; backend dùng một QueryRequest
+→ QueryPlan/binder/compiler SQLAlchemy Core → PostgreSQL chỉ đọc.
 
-- **Text-to-SQL:** hỏi dữ liệu CSV/XLSX; backend kiểm tra kế hoạch truy vấn có kiểu và biên dịch truy vấn chỉ đọc bằng SQLAlchemy Core.
-- **RAG:** tìm nội dung trong PDF/DOCX/TXT/Markdown rồi trả lời kèm trích dẫn nguồn.
-- **Hybrid:** kết hợp số liệu SQL với tài liệu giải thích hoặc đánh giá quy tắc ngưỡng đơn giản.
+**Trạng thái hiện hành:** Giai đoạn 1 **PHASE_1_TECHNICALLY_ACCEPTED** trong
+phạm vi single-table đã thống nhất ngày01/11/2026. Giữ nguyên giới
+hạn/điểm/rawFAIL;26NL gốc và12reg bổ sung vẫn NOT_RUN, không tuyên bố đã chạy
+đủ90 hay mọi câu đều đúng. Chi tiết [PREFLIGHT](docs/PREFLIGHT.md). PR#1 vẫn
+Draft, chưa merge.
 
-**Trạng thái:** Đang lập kế hoạch, chưa có mã nguồn ứng dụng hoặc hệ thống để chạy. Thiết lập repository không phải phê duyệt bắt đầu triển khai. Các thông số và ngưỡng trong kế hoạch là đề xuất, chưa phải kết quả kiểm thử.
+**Giai đoạn 2: PLANNED / PENDING OWNER APPROVAL.** Kế hoạch đã cập nhật theo yêu
+cầu05/11; chưa có code JOIN/RAG/embedding/reranker/parser/worker/UI mới. Đọc
+[Implementation Plan mục17](docs/IMPLIMENT_PLAN.md#17-phase-2--automatic-relationships-document-ingestion-rag--unified-chat):
 
-## Thiết kế dự kiến
+- R0: readiness, nghiên cứu, hợp đồng và benchmark độc lập trước coding.
+- R1: tự tìm quan hệ, backend kiểm toàn dữ liệu và semantic/grain evidence rồi
+  auto-approval; không yêu cầu user chọn/duyệt PK/FK. Thiếu bằng chứng thì không
+  JOIN, single-table tiếp tục.
+- R2: document ingestion, parser/license benchmark, durable jobs và chọn
+  embedding bằng đo.
+- R3: so dense/dense+lexical/dense+lexical+BGE, grounded answers/citations, một
+  production retrieval path.
+- R4: unified chat, tự chọn năng lực/provider trong quyền, nguồn và follow-up
+  đáng tin.
 
-Kiến trúc một ứng dụng chia module: React/TypeScript/Vite, FastAPI/Pydantic, PostgreSQL/pgvector, SQLAlchemy Core và Docker Compose. Kế hoạch có Google Login, Gemini/Knowledge, BGE reranker chạy local, LlamaParse có điều kiện và Langfuse project riêng. Tính tương thích và phiên bản phải được xác minh khi được giao triển khai.
+Hybrid SQL+tài liệu/policy evaluator giữ ở Giai đoạn3. Zero-config không là
+quyền gửi private documents sang cloud. Cấu hình, khả dụng, quyền dữ liệu và
+budget được kiểm riêng;36Gemini manual cũ không là ngân sách Giai đoạn2. Nhiệm
+vụ cleanup/plan không sử dụng cloud credits mới.
 
-Ưu tiên giải pháp đơn giản nhất đáp ứng MVP; không tự mở rộng công nghệ. Cloud trả phí mặc định tắt, ngân sách bằng 0 đến khi được người dùng phê duyệt. ChatSAR độc lập với ShopQuery AI; không sửa source, dữ liệu hay dịch vụ của dự án khác.
+Kiến trúc hiện hữu: React/TypeScript/Vite + FastAPI/Pydantic +
+PostgreSQL/pgvector + SQLAlchemy Core, một Compose project `chatsar`. Web local
+`http://localhost:18181`; API `http://127.0.0.1:18081`.
+[OPERATIONS](docs/OPERATIONS.md) ghi lệnh kiểm thử/vận hành và quy tắc giữ
+DB/uploads/ledger/volumes. Không restart/dọn tài nguyên ShopQuery AI, Langfuse
+hoặc dự án khác.
 
 ## Tài liệu và cách làm việc
 
@@ -21,8 +45,17 @@ Kiến trúc một ứng dụng chia module: React/TypeScript/Vite, FastAPI/Pyda
 - [Master Plan](docs/ChatSAR_MASTER_PLAN.md)
 - [Implementation Plan](docs/IMPLIMENT_PLAN.md)
 
-Giữ nguyên tên hai file kế hoạch hiện có. Tên file cũ được nhắc bên trong tài liệu không yêu cầu tạo thêm bản sao.
+Giữ nguyên tên hai file kế hoạch hiện có. Tên file cũ được nhắc bên trong tài
+liệu không yêu cầu tạo thêm bản sao.
 
-Codex phải đọc Rules và kế hoạch liên quan trước khi thay đổi. Trước lần sửa mã nguồn đầu tiên, đọc toàn bộ Implementation Plan. Codex được giao quản lý Git/GitHub theo RULE 09; thay đổi lớn cần nhánh riêng và người dùng phê duyệt hợp nhất. Mọi thay đổi phải được kiểm tra phù hợp trước khi commit/push lên `main` hoặc nhánh công việc.
+Codex phải đọc Rules và kế hoạch liên quan trước khi thay đổi. Trước lần sửa mã
+nguồn đầu tiên, đọc toàn bộ Implementation Plan. Codex được giao quản lý
+Git/GitHub theo RULE 09; thay đổi lớn cần nhánh riêng và người dùng phê duyệt
+hợp nhất. Mọi thay đổi phải được kiểm tra phù hợp trước khi commit/push lên
+`main` hoặc nhánh công việc.
 
-Repository [MinhHoang1403/ChatSAR](https://github.com/MinhHoang1403/ChatSAR) là **Public**: không commit secrets, dữ liệu nội bộ, tài liệu người dùng, model weights, database dumps hoặc logs nhạy cảm. `.gitignore` hỗ trợ loại trừ file local; vẫn phải kiểm tra phần thay đổi đã chọn để commit. Khi cần cấu hình, dùng `.env.example` chỉ chứa placeholder.
+Repository [MinhHoang1403/ChatSAR](https://github.com/MinhHoang1403/ChatSAR) là
+**Public**: không commit secrets, dữ liệu nội bộ, tài liệu người dùng, model
+weights, database dumps hoặc logs nhạy cảm. `.gitignore` hỗ trợ loại trừ file
+local; vẫn phải kiểm tra phần thay đổi đã chọn để commit. Khi cần cấu hình, dùng
+`.env.example` chỉ chứa placeholder.

@@ -1,0 +1,150 @@
+{
+  "format": "chatsar-locked-generalization",
+  "data_classification": "synthetic",
+  "fixtures": [
+    "datasets/unseen.sql"
+  ],
+  "policy": "Clarified wording only: theo time-column can request a daily grouping or refer to a filter column. Original unseen.json and FAIL retained; source code unchanged. Observatory failure was observed; recycling original had not yet been inspected when replacements were locked. Expected SQL/rows unchanged and independently checked before these questions run. Do not report replacements as original held-out passes.",
+  "sources": {
+    "observatory": {
+      "table": "observatory_fixture.readings",
+      "columns": {
+        "obs_code": "text",
+        "band": "text",
+        "exposure_seconds": "numeric",
+        "observed_on": "date"
+      },
+      "metadata": {
+        "obs_code": {
+          "role": "identifier"
+        },
+        "exposure_seconds": {
+          "unit": "seconds",
+          "role": "amount"
+        },
+        "observed_on": {
+          "role": "time"
+        }
+      }
+    },
+    "recycling": {
+      "table": "recycling_fixture.batches",
+      "columns": {
+        "batch_code": "text",
+        "material": "text",
+        "mass_kg": "numeric",
+        "recovered": "boolean",
+        "closed_at": "timestamp"
+      },
+      "metadata": {
+        "batch_code": {
+          "role": "identifier"
+        },
+        "mass_kg": {
+          "unit": "kg",
+          "role": "amount"
+        },
+        "closed_at": {
+          "role": "time"
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "observatory_month_clarified",
+      "domain": "observatory",
+      "question": "Dùng observed_on để xác định thời gian. Trong tháng 2 năm 2024, trả một kết quả chung gồm số dòng và tổng exposure_seconds cho cả tháng, không chia theo ngày.",
+      "group": "clarified",
+      "split": "replacement",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          },
+          {
+            "operator": "SUM",
+            "column": "exposure_seconds"
+          }
+        ],
+        "filters": {
+          "operator": "AND",
+          "children": [
+            {
+              "operator": "GTE",
+              "column": "observed_on",
+              "value": "2024-02-01"
+            },
+            {
+              "operator": "LT",
+              "column": "observed_on",
+              "value": "2024-03-01"
+            }
+          ]
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) count,SUM(exposure_seconds) total FROM observatory_fixture.readings WHERE observed_on>='2024-02-01' AND observed_on<'2024-03-01'",
+      "column_types": {
+        "count": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "count": 2,
+          "total": "2.00"
+        }
+      ],
+      "replaces": "observatory_month"
+    },
+    {
+      "case_id": "recycling_rollover_clarified",
+      "domain": "recycling",
+      "question": "Dùng closed_at để xác định thời gian theo giờ Việt Nam. Trong tháng 12 năm 2026, trả một kết quả chung gồm số dòng và tổng mass_kg cho cả tháng, không chia nhóm.",
+      "group": "clarified",
+      "split": "replacement",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "COUNT_ROWS",
+            "column": null
+          },
+          {
+            "operator": "SUM",
+            "column": "mass_kg"
+          }
+        ],
+        "filters": {
+          "operator": "AND",
+          "children": [
+            {
+              "operator": "GTE",
+              "column": "closed_at",
+              "value": "2026-12-01T00:00:00+07:00"
+            },
+            {
+              "operator": "LT",
+              "column": "closed_at",
+              "value": "2027-01-01T00:00:00+07:00"
+            }
+          ]
+        }
+      },
+      "oracle_sql": "SELECT COUNT(*) count,SUM(mass_kg) total FROM recycling_fixture.batches WHERE closed_at>='2026-12-01T00:00:00+07:00' AND closed_at<'2027-01-01T00:00:00+07:00'",
+      "column_types": {
+        "count": "integer",
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "count": 2,
+          "total": "4.00"
+        }
+      ],
+      "replaces": "recycling_rollover"
+    }
+  ],
+  "original_manifest_sha256": "a73f80828b06d709eb8c81f1f3a1af8fa8470c4164667cabbe28a27593db1971"
+}

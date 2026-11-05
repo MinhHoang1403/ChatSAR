@@ -1,0 +1,245 @@
+{
+  "format": "chatsar-locked-generalization",
+  "data_classification": "synthetic",
+  "fixtures": [
+    "datasets/fixtures.sql"
+  ],
+  "policy": "User requested reduced tests and ordinary natural-language questions on 01/11/2026. Existing reviewed hotel metadata and fixed data; questions/oracles locked before model. Regression, not blind held-out. Original benchmark unchanged.",
+  "sources": {
+    "hotel": {
+      "table": "oracle_fixture.stays",
+      "columns": {
+        "booking_ref": "text",
+        "room_type": "text",
+        "nights": "integer",
+        "room_charge": "numeric",
+        "checked_in": "date"
+      },
+      "metadata": {
+        "booking_ref": {
+          "primary_key": true,
+          "description": "Mã đặt phòng",
+          "aliases": [
+            "mã đặt phòng",
+            "số booking"
+          ],
+          "role": "identifier",
+          "value_mappings": [],
+          "aggregation_policy": "unspecified"
+        },
+        "room_type": {
+          "primary_key": false,
+          "description": "Loại phòng",
+          "aliases": [
+            "kiểu phòng",
+            "hạng phòng"
+          ],
+          "role": "name",
+          "value_mappings": [
+            {
+              "phrase": "tiêu chuẩn",
+              "value": "standard"
+            },
+            {
+              "phrase": "phòng suite",
+              "value": "suite"
+            }
+          ],
+          "aggregation_policy": "unspecified"
+        },
+        "nights": {
+          "primary_key": false,
+          "description": "Số đêm lưu trú",
+          "aliases": [
+            "số đêm",
+            "đêm"
+          ],
+          "role": "quantity",
+          "value_mappings": [],
+          "aggregation_policy": "additive"
+        },
+        "room_charge": {
+          "primary_key": false,
+          "description": "Tiền phòng",
+          "aliases": [
+            "chi phí phòng",
+            "tiền phòng khách sạn"
+          ],
+          "role": "amount",
+          "value_mappings": [],
+          "aggregation_policy": "additive"
+        },
+        "checked_in": {
+          "primary_key": false,
+          "description": "Ngày nhận phòng",
+          "aliases": [
+            "ngày check-in",
+            "ngày đến"
+          ],
+          "role": "time",
+          "value_mappings": [],
+          "aggregation_policy": "unspecified"
+        }
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "natural_total",
+      "domain": "hotel",
+      "question": "Khách sạn thu tổng cộng bao nhiêu tiền phòng?",
+      "group": "natural_usage",
+      "split": "regression",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "SUM",
+            "column": "room_charge"
+          }
+        ]
+      },
+      "oracle_sql": "SELECT SUM(room_charge) total FROM oracle_fixture.stays",
+      "column_types": {
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "total": "300.15"
+        }
+      ],
+      "baseline_ref": "natural_total"
+    },
+    {
+      "case_id": "natural_followup",
+      "domain": "hotel",
+      "question": "Chỉ tính phòng tiêu chuẩn thì sao?",
+      "group": "natural_usage",
+      "split": "regression",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "SUM",
+            "column": "room_charge"
+          }
+        ],
+        "filters": {
+          "operator": "EQ",
+          "column": "room_type",
+          "value": "standard"
+        }
+      },
+      "oracle_sql": "SELECT SUM(room_charge) total FROM oracle_fixture.stays WHERE room_type='standard'",
+      "column_types": {
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "total": "100.05"
+        }
+      ],
+      "context": {
+        "previous_case": "natural_total"
+      }
+    },
+    {
+      "case_id": "natural_month",
+      "domain": "hotel",
+      "question": "Trong tháng 9 năm 2026, tổng tiền phòng là bao nhiêu?",
+      "group": "natural_usage",
+      "split": "regression",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "metrics": [
+          {
+            "operator": "SUM",
+            "column": "room_charge"
+          }
+        ],
+        "filters": {
+          "operator": "AND",
+          "children": [
+            {
+              "operator": "GTE",
+              "column": "checked_in",
+              "value": "2026-09-01"
+            },
+            {
+              "operator": "LT",
+              "column": "checked_in",
+              "value": "2026-10-01"
+            }
+          ]
+        }
+      },
+      "oracle_sql": "SELECT SUM(room_charge) total FROM oracle_fixture.stays WHERE checked_in>='2026-09-01' AND checked_in<'2026-10-01'",
+      "column_types": {
+        "total": "numeric"
+      },
+      "expected_rows": [
+        {
+          "total": "300.15"
+        }
+      ]
+    },
+    {
+      "case_id": "natural_ranking",
+      "domain": "hotel",
+      "question": "Cho tôi hai đặt phòng có tiền phòng cao nhất.",
+      "group": "natural_usage",
+      "split": "regression",
+      "expected_status": "answered",
+      "expected_semantics": {
+        "selection": [
+          "booking_ref",
+          "room_charge"
+        ],
+        "order": [
+          {
+            "field": "room_charge",
+            "direction": "desc"
+          }
+        ],
+        "limit": 2
+      },
+      "oracle_sql": "SELECT booking_ref,room_charge FROM oracle_fixture.stays ORDER BY room_charge DESC NULLS LAST,booking_ref LIMIT 2",
+      "column_types": {
+        "booking_ref": "text",
+        "room_charge": "numeric"
+      },
+      "expected_rows": [
+        {
+          "booking_ref": "H02",
+          "room_charge": "200.10"
+        },
+        {
+          "booking_ref": "H01",
+          "room_charge": "100.05"
+        }
+      ]
+    },
+    {
+      "case_id": "natural_missing_year",
+      "domain": "hotel",
+      "question": "Tháng 9 có bao nhiêu lượt nhận phòng?",
+      "group": "natural_usage",
+      "split": "regression",
+      "expected_status": "clarify",
+      "expected_semantics": {
+        "execution_allowed": false
+      }
+    },
+    {
+      "case_id": "natural_delete",
+      "domain": "hotel",
+      "question": "Xóa hết các đặt phòng này giúp tôi.",
+      "group": "natural_usage",
+      "split": "regression",
+      "expected_status": "unsupported",
+      "expected_semantics": {
+        "execution_allowed": false
+      }
+    }
+  ]
+}
