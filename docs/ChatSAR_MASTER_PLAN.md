@@ -1,11 +1,13 @@
 # ChatSAR — MASTER PROJECT PLAN
 
 **Ngày:** 29/10/2026  
-**Trạng thái:** Thiết kế đề xuất — chưa phê duyệt coding/chi phí cloud; không phải chứng cứ phần mềm đã chạy.  
+**Trạng thái cập nhật 05/11/2026:** Giai đoạn 1 đã nghiệm thu kỹ thuật single-table theo PREFLIGHT; Giai đoạn 2 **PLANNED / PENDING OWNER APPROVAL**. Chưa có quyền coding/cloud cho kế hoạch mới.
 **Đầu vào:** `ChatSAR_PROJECT_HANDOFF(1).md`, trao đổi về Text-to-SQL, RAG, Hybrid, Gemini 3.5 Flash-Lite, Knowledge, BGE reranker, LlamaParse, Langfuse và Google Login.  
 **Mục đích:** Một đặc tả triển khai nhất quán cho MVP demo, không xây hệ thống enterprise, không tái sử dụng mặc định source/DB/Docker/phiên đăng nhập của ShopQuery AI.
 
 ## 0. Tóm tắt quyết định
+
+**Quyết định sản phẩm mới 05/11:** Upload → tự chuẩn bị → backend tự kiểm quan hệ → tự chọn năng lực phù hợp → chat có nguồn. Bỏ yêu cầu người dùng chọn/approve PK/FK/JOIN; “approved” bên dưới nghĩa backend vượt validation/evidence gate. LLM chỉ đề xuất, tên/tập giá trị giống nhau không đủ chứng minh nghĩa quan hệ; uncertain không JOIN nhưng single-table vẫn dùng được. Hợp đồng chi tiết duy nhất ở [Implementation Plan mục17](IMPLIMENT_PLAN.md#17-phase-2--automatic-relationships-document-ingestion-rag--unified-chat), thứ tự R0→R1→R2→R3→R4→Exit. Hybrid vẫn Giai đoạn3. Các chi tiết cũ về review quan hệ được thay bằng quyết định này; checklist nền tảng không thay bằng chứng nghiệm thu.
 
 **MVP hoàn thành** khi người dùng đăng nhập Google, tạo workspace, upload CSV/XLSX và PDF/DOCX/TXT/MD có kiểm soát, hỏi SQL/RAG/Hybrid giới hạn bằng tiếng Việt, xem kết quả và nguồn, hỏi tiếp, giữ lịch sử sau restart; các bài kiểm thử thực và benchmark đạt ngưỡng đã chốt.
 
@@ -34,7 +36,7 @@
 ### Đối tượng sử dụng và kịch bản demo
 
 - Người dùng Google login, thấy danh sách workspace và chat của chính mình.
-- Tạo workspace; upload CSV/XLSX, xem preview, sửa data types và xác nhận quan hệ; hỏi các thống kê có căn cứ.
+- Upload CSV/XLSX, workspace mặc định nếu cần; tự chuẩn bị, xem trước/sau và Save; backend kiểm quan hệ, không yêu cầu người dùng duyệt liên kết; hỏi các thống kê có căn cứ.
 - Upload tài liệu PDF text, DOCX, TXT, Markdown; xem trạng thái parse, nội dung và nguồn; hỏi nội dung và thấy trích dẫn đúng trang/đoạn.
 - Hỏi câu kết hợp: số liệu theo SQL + giải thích tài liệu, hoặc câu hỏi threshold theo chính sách có đủ điều kiện.
 - Hỏi tiếp đổi thời gian/lọc đối tượng mà không phải gõ lại; truy vết được nguồn và cách tính.
@@ -42,7 +44,7 @@
 ### In-scope
 
 - SQL: 1 bảng; count rows/count non-null/count distinct, sum, avg, min/max, group, order, limit, filter AND/OR không nhập nhằng, dates có mốc rõ, JOIN 2–3 bảng có quan hệ được phê duyệt; đơn vị và Decimal.
-- Data: CSV UTF-8/BOM, CSV delimiter thường gặp và XLSX nhiều sheet (chọn sheet), mapping tên cột, xác nhận kiểu/khóa/quan hệ, source revision. Lỗi data rõ và có preview trước khi publish.
+- Data: CSV UTF-8/BOM, CSV delimiter thường gặp và XLSX nhiều sheet (chọn sheet), mapping metadata và source revision; preview trước publish. Khóa/quan hệ được backend kiểm chứng toàn dữ liệu và semantics theo Implementation Plan§17.4, không bắt user xác nhận.
 - RAG: tài liệu vừa phải; trích text có nguồn; retrieval có metadata lọc quyền; rerank; trả lời grounded và partial/insufficient.
 - Hybrid: hai loại đã mô tả, policy đơn giản kiểu threshold + đơn vị + metric + population + hiệu lực + applicability, có oracle.
 - Conversation: lưu session/chat; tham chiếu typed verified result; đổi scope và hồi phục lỗi; không dùng assistant prose làm fact.
@@ -76,7 +78,7 @@
 | Đăng nhập | Google login, lỗi thân thiện | valid/invalid login, expiry, logout |
 | Workspace home | Workspace hiện có, create/select | owner isolation, empty state |
 | Chat | Sidebar conversations, central chat, input, dataset/doc scope | send, cancel display, retry rõ, follow-up, history |
-| Data | Upload CSV/XLSX, chọn sheet, bảng preview, inferred types, confirm mapping/relation | type review, null, locale, duplicate keys |
+| Data | Upload CSV/XLSX, chọn sheet, tự chuẩn bị, preview và Save, quan hệ tự kiểm | type review, null, locale, duplicate keys, uncertain relation |
 | Documents | Upload, parse job progress, list revisions, document viewer | failed parser, retry permission, citation page |
 | Evidence panel | Source tab SQL/table/filters; Documents tab with matched excerpt/page | không lộ nội dung không thuộc owner |
 | Settings (nhỏ) | Provider status (không lộ keys), usage summary, logout | user-friendly diagnostics |
@@ -169,7 +171,7 @@ Hợp đồng không buộc mỗi dòng trở thành một class; chỉ tách kh
 2. Lưu original với checksum và scope; tạo ingestion job durable.
 3. Parse streaming/chunks theo định dạng; CSV encoding/BOM/delimiter; XLSX sheet selection; tránh thực thi công thức; thông báo cached formula values nếu không đáng tin.
 4. Profile: names, type candidates, null counts, sample values chỉ trong quyền được cấp, duplicates, keys candidate, dates/decimal locale, precision.
-5. Cho người dùng review type/key/grain/unit/relationship/synonyms, preview expected rows.
+5. Tự chuẩn bị metadata và preview trước/sau cho người dùng Save; chi tiết có thể chỉnh khi cần. Quan hệ do backend tự kiểm uniqueness/NULL/orphan/inclusion/composite/cardinality/grain và semantic evidence; không user approval, không đoán nghĩa từ overlap.
 6. Publish revision vào bảng vật lý, transaction/atomic readiness; không đánh dấu ready nếu chưa xác nhận integrity.
 7. Invalid rows: báo lỗi và cho sửa/reupload; không âm thầm bỏ dòng hay ép kiểu mất giá trị.
 8. Restart: jobs recover/dedupe theo checksum+config; giữ idempotency và trạng thái rõ.
@@ -220,7 +222,7 @@ Hợp đồng không buộc mỗi dòng trở thành một class; chỉ tách kh
 ### Tài liệu ingestion
 
 1. Upload file, check type/size/authorization, hash, store original/revision.
-2. Chọn parser theo loại và chất lượng: TXT/MD direct; DOCX local; PDF text local PyMuPDF; LlamaParse khi file khó và cloud allowed. Docling là phương án local để benchmark nếu cần.
+2. Chọn parser theo loại/chất lượng/license bằng benchmark: TXT/MD local, DOCX parser local; PDF so PyMuPDF và Docling, chưa chọn mặc định. PyMuPDF cần AGPL/commercial license gate trước phục vụ sản phẩm bên ngoài; Docling code MIT nhưng kiểm model/transitive licenses. LlamaParse chỉ với dữ liệu và ngân sách được phép, không tự gửi toàn private document. Scan/OCR chưa có gold thì partial/unsupported rõ.
 3. Parse ra normalized document: raw/clean text, headings, tables, page numbers, page text spans, offsets, parser/version/status, checksum.
 4. Clean an toàn: Unicode, whitespace, line wrapping, header/footer repeat có xác nhận; không loại mất phủ định, số, đơn vị, ngữ cảnh heading.
 5. Structure-aware chunking: heading/paragraph/list/table trước, tokenizer-aware sau; thử 350–600 token, overlap chỉ khi cần; row table gắn header/caption, source ID bất biến.
@@ -427,11 +429,13 @@ Các tỷ lệ chỉ là mục tiêu đề xuất, không phải số liệu đ�
 
 ### Phase 2 — Generalized SQL + RAG/BGE + Conversation
 
-**Phải làm:** approved 2–3 table join, value grounding and nullable/grain hardening; PDF/DOCX/TXT ingestion + local/LlamaParse parser selection, structure-aware chunk, embedding/pgvector, lexical+dense retrieval, BGE local GPU, citation/answerability, trusted follow-up, Langfuse detailed spans.
+**PLANNED / PENDING OWNER APPROVAL. Phải làm theo Implementation Plan§17:** R0 readiness/contracts/benchmark trước coding; R1 automatic relationship discovery + backend auto-approval, safe JOIN2–3bảng/grain/ambiguity; R2 TXT/MD/DOCX/PDF ingestion/parser license+fidelity benchmark/durable jobs/embedding selection; R3 đo dense, dense+lexical, dense+lexical+BGE và chọn một production path, grounded citations; R4 zero-config chat/source UX, automatic provider routing trong quyền, verified follow-up. Không user approve relation, không Hybrid.
 
 **Deliverable:** SQL multi-table + RAG real documents across domains; evidence panel; provider cost/latency comparison and job recovery.
 
 **Gate:** SQL oracle for joins/date/COUNT/NULL; RAG gold evidence/citation + correct insufficiency; reranker contribution measured; permissions/restart/model-live/browser E2E PASS.
+
+Critical false-positive relationship activation=0 trong tập nghiệm thu; SQL multi-table target≥95%, security/fanout/Decimal critical100%; relation precision/recall/activation coverage và abstention chấm riêng, không PASS bằng uncertain tất cả. Latency/resources/recall/fidelity floors khóa tại R0 trước held-out. Configured/verified/available/authorized/budget là các trạng thái riêng; không paid readiness probe hoặc dùng36Gemini manual cũ. Parser/embedding/topology còn cần benchmark, không technology được coi đã triển khai.
 
 ### Phase 3 — Hybrid + UX completion + MVP release
 

@@ -1,5 +1,17 @@
 # Vận hành ChatSAR
 
+## Kiểm kê và đồng bộ 05/11/2026 — không triển khai Giai đoạn 2
+
+Source backend19module + requirements.lock và frontend HTML/JS/CSS build local đã đối chiếu byte với runtime. Image API `sha256:a64386015a2824bd640d2bbfadf3f2b5602e5ffcace7cf9450c407c5cc2cf058`, web `sha256:07a8e6baa4a0a5f2e27e4209fa0df6e2751d3d3d60fc7471b3469c52e8387ada`; DB giữ digest pin trong compose. Không đổi Dockerfiles/dependencies nên không rebuild image; CI exact commit vẫn kiểm Docker build. Local restartapi/web đã kiểm, không restartDB hoặc dịch vụ khác.
+
+Trong phiên kiểm kê, owner xác nhận tự cập nhật `GEMINI_API_KEY` trong `.env`; đây là thay đổi hợp lệ của owner, Codex không khôi phục/ghi đè khóa. Kiểm drift chỉ hiển thị tên biến, không giá trị; chỉ API cần nạp lại cấu hình. Dùng `docker compose -p chatsar up -d --no-build --no-deps --wait api` sau kiểm không có thao tác pending để recreate đúng API bằng image cũ, giữ uploads/database và không gọi model. Không dùng rebuild hoặc sửa quota để thử key; key được nạp không chứng minh provider live đã được kiểm.
+
+Snapshot trước/sau phải so hash toàn rows25bảngapp/data,10migrations,14originalfiles và appsource; ledger568/grants/reviews giữ nguyên. `.env` hash khác snapshot đầu do owner đổi khóa, so cuối với bản owner vừa cập nhật; không công khai hash secret/config hoặc raw data. Evidence local tại `artifacts/cleanup-2026-11-05/`, Git bỏ qua; kết quả/giới hạn tại đầuPREFLIGHT.
+
+Docker inventory không có image ChatSAR cũ/dangling đủ điều kiện xóa; chỉ2appimages đang dùng. Giữ `chatsar_database`, `chatsar_uploads`, `chatsar_default`, image rollback/current và toàn resources dự án khác. Build cache38.62GB là cache dùng chung, không có bằng chứng layer ownership đủ để dọn riêng ChatSAR nên giữ REVIEW. Không chạy prune.
+
+12đường dẫn cache/build có thể tái tạo đã kiểm root/reparse point và kiểm kê84files/66,069,038bytes, nhưng lệnh xóa bị cơ chế xét duyệt tự động từ chối (`blocked by policy`), kể cả danh sách LiteralPath cố định. **Chưa xóa, giải phóng0byte**; không thay công cụ để lách chặn. Không coi cleanup cache đã PASS. Source/tests/migrations/oracle và artifacts nghiệm thu được giữ vì còn dependency/audit value. Kế hoạch Giai đoạn2 ở Implementation Plan§17 là **PLANNED / PENDING OWNER APPROVAL**, chưa coding/cloud mới;36Gemini manual không được dùng.
+
 ## Khôi phục môi trường phát triển Windows và VS Code — 02/11/2026
 
 Nếu Python gốc trong `%AppData%` bị xóa, `.venv` có thể vẫn tồn tại nhưng không chạy được. Dùng Python 3.11 còn hợp lệ và đồng bộ đúng file khóa, không nâng dependency hoặc tạo môi trường thứ hai:

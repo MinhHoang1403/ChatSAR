@@ -1,5 +1,16 @@
 # Phạm vi năng lực và nghiệm thu
 
+## Hiện hành 05/11/2026
+
+Giai đoạn1 đã **PHASE_1_TECHNICALLY_ACCEPTED** cho single-table theo [PREFLIGHT](PREFLIGHT.md); giới hạn26NL/12regNOT_RUN, rawFAIL/gold và số đo lịch sử giữ nguyên. QueryRequest→QueryPlan/compiler chỉ đọc, CSV/XLSX/SmartSetup/typed facts/SQL provenance/history/guest+Google đã có; JOIN/RAG/embedding/BGE/document ingestion chưa triển khai.
+
+Giai đoạn2 **PLANNED / PENDING OWNER APPROVAL** theo [Implementation Plan§17](IMPLIMENT_PLAN.md#17-phase-2--automatic-relationships-document-ingestion-rag--unified-chat), không dùng các checkpoint bên dưới làm current status. R0 contracts/benchmark→R1 backend auto-discovery/validation quan hệ, không user approval→R2 documents/jobs/embedding→R3 retrieval/BGE/citations→R4 unified chat/provider routing. Uncertain relationships không JOIN nhưng single-table tiếp tục. Critical false-positive activation0/SQL≥95% là targets, chưa là số đo. Parser/license, embeddings, GPU/latency phải benchmark; private transfer và ngân sách cần quyền riêng. Hybrid vẫn Giai đoạn3, chưa coding/merge/cloud mới.
+
+## Lịch sử phạm vi và các checkpoint trước nghiệm thu
+
+Các đoạn sau giữ nguyên để đối chiếu; NOT_ACCEPTED/blocked/provider candidates tại thời điểm cũ không thay nghiệm thu01/11 hoặc thiết kế đề xuất05/11.
+
+
 **Tiếp tục khắc phục 30/10 — trạng thái mới nhất:** quyền mới thêm100Gemini/trần1.50USD, baseline104; grant riêng, Codex<=95. Đã dùng23HTTP(7setup+16query), reserve0.3117407USD, known estimate0.0364535USD; ledger127=122Gemini/5Knowledge. HTTP503 cuối a4755acf-0039-4928-890e-0f57b6b4322d thiếu usage, giữ reserve0.0141532USD và dừng generation/USAGE_UNKNOWN, không thêm review/đổi grant để vượt chặn.157unit/42integration/28evaluation/25oracle/75gold+5replacement/14frontend PASS; Google mới và chuyển hai tài khoản đã kiểm browser với user tự đăng nhập. Ranking/follow-up và mapping đã review có repro đúng;13ca NL khác nhau mới12PASS/1providerFAIL sau đối chiếu typed equivalence, không là nghiệm thu90ca. Tháng/năm tường minh đã sửa/offlinePG PASS, model retest bị503; gold tháng còn conflict SUM-only question nhưng yêu cầu COUNT+SUM, giữ nguyên gold. NOT_ACCEPTED, PR1Draft, chưa merge/Phase2. Báo cáo chi tiết đầu PREFLIGHT thay checkpoint khách/UI bên dưới.
 
 **Bổ sung hiện hành 30/10 — trang chủ khách và header:** lần đầu/đăng xuất mở trang chủ, nút Đăng nhập ở chân sidebar mở `/login`. Khách dùng CSV/XLSX/setup/chat/SQL cùng pipeline và guard; token chỉ trong bộ nhớ trang, reload mở guest mới. Login mở dữ liệu tài khoản, không nhập phiên khách. Chỉ hiện “Chế độ khách”; bộ chọn không gian không nền/viền, co theo chữ, cách title6px.148unit/40integration/14frontend PASS; mypy19modules/types/build đạt. Guest provider được mock khi kiểm tích hợp, không thêm HTTP model;9lượt đã bàn giao chủ dự án giữ nguyên. Chất lượng tổng thể vẫn NOT_ACCEPTED với4FAIL và57/90NOT_RUN; báo cáo Usage/SQL bên dưới là checkpoint trước bổ sung khách.

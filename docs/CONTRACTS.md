@@ -1,5 +1,22 @@
 # Hợp đồng Phase 1 trước khi lập trình
 
+## 05/11/2026 — Hợp đồng đề xuất Giai đoạn 2, chưa thay runtime
+
+**PLANNED / PENDING OWNER APPROVAL.** Hợp đồng runtime Giai đoạn1 dưới đây giữ nguyên; các đoạn theo ngày là lịch sử, không lấy candidate/NOT_ACCEPTED cũ thay checkpoint nghiệm thu01/11. Source hiện tại vẫn QueryRequest→QueryPlan/binder/compilerSQLAlchemyCore→PGreadonly. Chưa có relationship/document/vector job contracts triển khai.
+
+Nguồn đặc tả duy nhất là [Implementation Plan§17.2–17.8](IMPLIMENT_PLAN.md#172-nền-tảng-tái-sử-dụng-và-hợp-đồng-tương-thích). Extension dự kiến khóa R0 trước coding:
+
+| Boundary | Quy tắc mới dự kiến | Invariant giữ |
+|---|---|---|
+| Relationship | Candidate/validating/active/uncertain/rejected/stale/disabled; full-table structural + independent semantic/grain evidence; backend auto-approval | Không user approve PK/FK, không LLM quyết định active, không tên/overlap/confidence làm proof; owner/workspace/revision-bound, mọi activation có audit |
+| Graph/query | Server cấp authorized source bindings/edge IDs; explicit column-pair ON, metric/root grain; revalidate quyền/revision/policy trước execute | Một QueryRequest/QueryPlan/compiler, không raw SQL; single-table legacy giữ; chặn fanout/ambiguous paths, no DISTINCT patch/NULL→0/TEXT-ID cast |
+| Document/index | Original checksum/parser+model revision/sections/tables/source anchors/chunks/index generation/model dimension/status/coverage/errors | Owner-scoped sources/citations, raw-to-normalized mapping, không bịa page DOCX, atomic ready/reindex, không mix vector spaces |
+| Job | Durable checkpoints/lease/attempt/idempotency + permission/budget blocked states | Restart không replay UNKNOWN hoặc charge lặp, original và ledger giữ; worker chỉ theo evidence |
+| Chat/evidence | Typed SQL hoặc RAG source snapshot, actual provider, backend-issued citations và verified references | Legacy SQL/plan/envelope đọc được, không rebuild SQL khi mở history; partial/error/stale không premise verified |
+| Routing/privacy | Configured≠verified≠available≠authorized≠budget; Gemini default/Knowledge conditional | Không cloud polling/fallback/data transfer ngầm; upload private không cấp quyền gửi toàn tài liệu;36manualGemini không là grantGiai đoạn2 |
+
+Wire field names/DTO/error codes và schema migrations còn cần design approval R0; đây không phải API đã có. Auto-approval policy/grain/counterexamples, parser-license/embedding benchmarks, A/B/C retrieval, security/metrics/rollback xem mục17; Hybrid vẫn mục18/Giai đoạn3. Không sửa historical contracts/gold/usage để tạo cảm giác implementation mới đã chạy.
+
 ## Nghiệm thu kỹ thuật 01/11/2026 — phạm vi single-table
 
 Owner ủy quyền chốt PHASE_1_TECHNICALLY_ACCEPTED — READY_FOR_PHASE_2 sau nghiệm thu ngắn; không đổi publicAPI/model/QueryRequest/QueryPlan/SQL/answer/owner/usage contracts. Bằng chứng cùngbytes được tái sử dụng, không nângđiểm hoặc đổi gold. Single-table đã nghiệmthu trong phạmvi côngbố, JOIN/RAG chưa triểnkhai. Chi tiết gate/handoff vàgiớihạn ởđầuPREFLIGHT. Tốiđa8HTTP đượcphép trong36cònlại nhưng dùng0; cùnggrant464/500,36manualcòn,10USDgiữ. Không mergePR1 hoặc bắtđầuPhase2 trongnhiệmvụnày.

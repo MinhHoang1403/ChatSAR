@@ -1,12 +1,14 @@
 # ChatSAR — IMPLEMENTATION PLAN FOR CODEX
 
-> **Tên file theo yêu cầu:** `Impliment_plan.md`  
+> **Tên file thực tế:** `docs/IMPLIMENT_PLAN.md` — giữ nguyên tên, không tạo bản sao.
 > **Ngày lập:** 29/10/2026  
-> **Tình trạng:** **IMPLEMENTATION SPECIFICATION — CHƯA ĐƯỢC PHÊ DUYỆT ĐỂ THỰC THI**  
+> **Tình trạng ngày 05/11/2026:** Giai đoạn 1 đã nghiệm thu kỹ thuật trong phạm vi single-table; Giai đoạn 2 **PLANNED / PENDING OWNER APPROVAL**. Yêu cầu cleanup chỉ cho phép kiểm kê, đồng bộ và lập kế hoạch, chưa cho coding R0–R4.
 > **Nguồn yêu cầu:** `ChatSAR_PROJECT_HANDOFF(1).md`, `ChatSAR_MASTER_PLAN_2026-10-29.md` và các quyết định trong trao đổi ngày 29/10/2026.  
 > **Đối tượng:** Codex triển khai dự án mới **ChatSAR**; chủ dự án dùng để duyệt từng mốc và nghiệm thu.  
 > **Ngôn ngữ làm việc:** tiếng Việt, thuật ngữ tiếng Anh giải thích khi cần.  
 > **Mục tiêu:** MVP demo chính xác và có thể kiểm chứng cho Text-to-SQL, RAG, Hybrid; **không xây nền tảng doanh nghiệp**.
+
+**Cách đọc bản cập nhật 05/11:** mục 16 và các checklist nền tảng giữ làm đặc tả/lịch sử, không phản ánh trạng thái nghiệm thu hiện tại; xem đầu PREFLIGHT về Giai đoạn 1. Mục 17 thay thiết kế R1 cũ và là hợp đồng đề xuất duy nhất cho Giai đoạn 2. Trong các mục chung, “approved relationship” nghĩa là quan hệ **backend đã vượt auto-approval gate §17.4**, không phải người dùng bấm duyệt. Không suy nghĩa quan hệ chỉ từ tên hoặc tập giá trị. Mục 18/Giai đoạn 3 giữ phạm vi Hybrid.
 
 ---
 
@@ -55,7 +57,7 @@ Các thông số như 20 MiB/file, 50.000 rows/sheet, 350–600 tokens/chunk, 20
 
 ### 1.1. Kịch bản demo bắt buộc
 
-**Demo SQL:** user đăng nhập → tạo workspace → upload CSV/XLSX → xem preview và xác nhận schema/relationships → hỏi bằng tiếng Việt → có bảng kết quả chính xác và nguồn → hỏi tiếp thay điều kiện.
+**Demo SQL:** mở chat (khách hoặc đăng nhập theo policy hiện hữu) → upload CSV/XLSX → workspace mặc định nếu cần → tự chuẩn bị và xem preview trước Save → backend tự kiểm quan hệ theo §17.4 → hỏi bằng tiếng Việt → kết quả/nguồn → hỏi tiếp. Người dùng không chọn/duyệt PK/FK/JOIN.
 
 **Demo RAG:** user upload PDF có text/DOCX/TXT/MD → parse/chunk/embed → truy vấn nội dung → tìm kiếm và BGE rerank → trả lời tiếng Việt kèm nguồn đúng document revision/trang/đoạn → khi thiếu nguồn nói rõ chưa đủ bằng chứng.
 
@@ -168,7 +170,6 @@ Task routing là **gợi ý chọn luồng**, không phải semantic oracle. Có
 ChatSAR/
 ├── AGENTS.md
 ├── README.md
-├── Impliment_plan.md
 ├── .env.example
 ├── .gitignore
 ├── compose.yaml
@@ -197,6 +198,7 @@ ChatSAR/
 │   └── harness/
 ├── infra/
 └── docs/
+    ├── IMPLIMENT_PLAN.md
     ├── ARCHITECTURE.md
     ├── CONTRACTS.md
     ├── CAPABILITIES.md
@@ -246,7 +248,7 @@ Codex phải tạo và tài liệu hóa **một lệnh cho mỗi hành vi**: bui
 1. **Receive:** validate file extension, content signature/MIME, size, zip/worksheet limits, checksum, owner workspace; lưu original vào storage riêng.
 2. **Parse:** CSV xử lý UTF-8 BOM/delimiter/quote, XLSX chọn sheet; không đánh giá/executing Excel formulas; thông báo cached formula values hoặc thiếu cache.
 3. **Profile:** infer candidate types, nullable, uniqueness, duplicates, leading-zero TEXT IDs, decimal/date locale, sample values, possible relationships. Đây là **gợi ý**, không auto-trust.
-4. **Review UI:** user xác nhận types, keys, aliases, grain/units và relationship; hiển thị cảnh báo mất precision/date ambiguities.
+4. **Review UI:** tự chuẩn bị và preview trước/sau trước Save theo luồng hiện hữu; chi tiết types/aliases/grain/units có thể chỉnh khi cần. Không thêm bước user chọn/approve PK/FK/relationship; backend discovery/validation theo §17.4, dữ liệu mơ hồ phải báo rõ.
 5. **Normalize:** chuyển sang PostgreSQL với kiểu được xác nhận; lỗi row-level có thông báo, không tự bỏ hàng/ép float cho tiền; lưu row/source provenance.
 6. **Publish atomically:** tạo physical table/revision và catalog; kiểm row count/checksums; chỉ sau đó đặt `ready`.
 7. **Recover:** job có trạng thái durable, idempotent theo file checksum + config/revision; restart không làm mất upload đã publish hoặc charge/reparse vô hạn.
@@ -410,7 +412,7 @@ Mỗi chunk chứa: chunk ID, document ID, revision ID, workspace ID, text, head
 
 - TXT/Markdown: local decode và parse; không gọi LlamaParse.
 - DOCX: local parser giữ đoạn/heading/bảng; không làm rơi nội dung quan trọng trong phạm vi demo.
-- PDF có text: PyMuPDF local baseline, kiểm reading order, multi-column; Docling là ứng viên local khi layout khó.
+- PDF có text: PyMuPDF và Docling là ứng viên benchmark, chưa chọn mặc định. PyMuPDF bắt buộc AGPL/commercial license gate; xem strategy/so sánh tại §17.5, không nâng dependency/Python khi chưa có bằng chứng.
 - PDF khó: LlamaParse chỉ khi cloud/data policy cho phép; benchmark tier Cost Effective và Agentic nếu cần.
 - OCR scan/biểu đồ chưa có benchmark: thông báo unsupported/partial, không hứa hỗ trợ.
 
@@ -617,7 +619,7 @@ React + TypeScript strict + Vite + React Router. UI sáng, màu xanh lam nhẹ; 
 |---|---|---|
 | Login | Google Sign-In, logout/session | Invalid token, expired session, denied auth |
 | Workspaces | Create/list/select, owner filter | Zero workspace, forbidden workspace |
-| Dataset Manager | CSV/XLSX upload, choose sheet, data preview, review types/keys/relationships, publish | Unsupported file, size limit, invalid rows, user review pending |
+| Dataset Manager | CSV/XLSX upload, choose sheet, tự chuẩn bị, preview trước/sau, publish; backend kiểm quan hệ | Unsupported file, size limit, invalid rows, uncertain relationships không cản single-table |
 | Chat | Compose/send, source scope chips, answer status, result table, follow-up, history | Clarify, provider unavailable, execution error, partial |
 | Document Manager | Upload, parse/index progress, document list/revision, view source | Parser failure, stale revision, missing page |
 | Evidence Drawer | SQL source, filters, metric, typed table; document citation page/excerpt | Forbidden citation, missing source |
@@ -698,7 +700,7 @@ Typed Task → Value Grounding → SQL compiler → PG oracle
        +------------+------------------+
        |                               |
        v                               v
-Approved JOINs                 Document ingestion + parser
+Auto-validated JOINs           Document ingestion + parser
        |                               |
        |                     cleaning → chunking → embedding
        |                               |
@@ -815,65 +817,291 @@ Milestone có thể làm song song BE/FE khi wire contract đã khóa, nhưng **
 
 ---
 
-## 17. Phase 2 — Generalized SQL + RAG/BGE + Conversation
+## 17. Phase 2 — Automatic Relationships, Document Ingestion, RAG & Unified Chat
 
-**Mục tiêu:** mở JOIN có điều kiện; ingest tài liệu đa định dạng; truy xuất có nguồn bằng embedding + lexical + BGE; follow-up giữ trust/revision.
+### 17.1. Trạng thái, quyết định và ranh giới
 
-### Milestone R1 — Approved JOINs và Value Grounding nâng cao
+**PLANNED / PENDING OWNER APPROVAL — chưa triển khai.** Ngày 05/11/2026 chủ dự án yêu cầu cập nhật hợp đồng này trước khi duyệt coding. Quyết định sản phẩm đã xác nhận: **không yêu cầu người dùng chọn PK/FK, vẽ JOIN hoặc duyệt từng quan hệ**. Backend tự kiểm chứng và kích hoạt quan hệ đủ bằng chứng; LLM chỉ đề xuất. Đây là thay đổi thay thế reviewer UI ở R1 cũ, không phải thay đổi runtime đã thực hiện. Các chi tiết thiết kế nội bộ dưới đây còn chờ duyệt; số đo Giai đoạn 1 trong PREFLIGHT giữ nguyên.
 
-**Phụ thuộc:** Phase 1 accepted.
+Trải nghiệm đích: **Upload dữ liệu → Tự chuẩn bị → Tự nhận diện quan hệ → Tự chọn năng lực AI → Chat → Verified Answer**. “Verified” chỉ áp dụng cho facts/evidence đã qua guard tương ứng, không chứng minh mọi diễn giải của model đúng. Nguồn chưa có quan hệ chắc chắn vẫn hỏi một bảng bình thường. Thiếu nghĩa nghiệp vụ thì hỏi bằng ngôn ngữ phổ thông hoặc nói chưa đủ căn cứ, không đưa công việc duyệt khóa về người dùng.
 
-- [ ] Tạo reviewer UI cho relation cardinality, PK/FK uniqueness, grain và join direction; không tự approve bằng tên cột.
-- [ ] Compiler approved 2–3 tables, inner/left join khi phù hợp; aggregation giữ đúng fact grain, fanout guards.
-- [ ] Literal candidate mapping có provenance/confirmation; ambiguous year/unit/join paths → clarify.
-- [ ] PostgreSQL oracle cho 1:N/N:1, LEFT JOIN, null orphan, missing fact, COUNT, time.
-- [ ] Câu SQL multi-table hiển thị source provenance và query result đúng.
+- Giữ một backend, một PostgreSQL/pgvector, Compose `chatsar`, storage và lịch sử hiện hữu; không compiler/planner/retrieval engine cạnh tranh.
+- Giới hạn SQL: 2–3 bảng, equality INNER/LEFT JOIN, không CROSS/NATURAL/raw SQL, không many-to-many hoặc fact-to-fact aggregation chưa chứng minh an toàn.
+- RAG-only và SQL-only dùng chung chat nhưng **Hybrid SQL + tài liệu/policy evaluator vẫn ở mục 18, Giai đoạn 3**. Câu cần cả hai trong một kết luận phải nêu giới hạn, không triển khai Hybrid trá hình ở router.
+- Thứ tự bắt buộc: **R0 → R1 → R2 → R3 → R4 → Exit Gate**. Chỉ mở mốc sau khi mốc trước được nghiệm thu; chuẩn bị hợp đồng liên quan được làm ở R0, không coding vượt gate.
+- Nhiệm vụ hiện tại không gọi model/parser/embedding/reranker, không tải weights, không tăng caps/flags. **36 lượt Gemini manual của Giai đoạn 1 không phải ngân sách Giai đoạn 2.** Mọi model-live sau này cần quyền riêng về dữ liệu, provider, calls/credits/USD và điều kiện dừng.
 
-**Acceptance:** cross-domain multi-table đúng oracle; không critical fanout, wrong COUNT hay silent value mapping; không thêm regex/domain patches.
+### 17.2. Nền tảng tái sử dụng và hợp đồng tương thích
 
-### Milestone R2 — Document Ingestion & Embeddings
+Kiểm kê source ngày 05/11: `auth.py`, `guest.py`, `workspace.py` giữ principal/session/CSRF; `datasets.py`, `tabular.py`, `setup.py` giữ upload/checksum/full-table validation/immutable publish; `planning.py` giữ QueryRequest; `query.py` giữ QueryPlan/binder/SQLAlchemy compiler/reader; `conversation.py`, `evidence.py`, `answers.py` giữ idempotency/checkpoint/typed facts/SQL lịch sử; `providers.py`, `observability.py` giữ dispatch/ledger/redaction. Frontend tái sử dụng `App`, `Chat`, `Datasets`, `AIReview`, `Workspace`, `Result`, `Menu` và typed DTO trong `api.ts`/`data.ts`. Tên module mới chỉ chốt khi có trách nhiệm thật; không chuyển hàng loạt các file đang chạy thành cây package mới.
 
-**Phụ thuộc:** Phase 1 storage/workspace, source revision contract.
+Snapshot nền tảng: 10 migration hiện hữu, 19 module backend; app metadata và physical `data.r_<revision>` đã tồn tại. **Relationship/document/chunk/vector/job lease metadata mô tả dưới đây chưa tồn tại trong runtime.** Không sửa lại migration đã áp dụng, gold hoặc rows đã publish. Migration mới phải additive, có tên theo chức năng, quyền app/reader rõ và readiness kiểm version mới trước bật năng lực.
 
-- [ ] Tạo document upload/revision/checksum/job/status UI; local TXT/MD/DOCX/PDF text parsers.
-- [ ] LlamaParse adapter opt-in cho synthetic hard docs khi được phép; test version/tier/pages/credits; không tự upload internal docs.
-- [ ] Normalized doc contract với raw/clean/heading/table/page anchors; parser quality oracle.
-- [ ] Structure-aware chunker, source mapping, duplicate prevention; chọn embedding model sau benchmark.
-- [ ] pgvector exact retrieval baseline; reindex theo model revision; document ownership filter.
-- [ ] Background job/restart recovery không mất file/chunk hoặc chi phí lặp vượt trần.
+Đề xuất extension, khóa wire schema tại R0:
 
-**Acceptance:** tài liệu mẫu parse đầy đủ, chunks mở nguồn trang/đoạn, embeddings persisted, CPU/GPU usage có đo và owner B không thấy doc A.
+| Biên | Bổ sung dự kiến | Tương thích bắt buộc |
+|---|---|---|
+| QueryRequest → QueryPlan | source bindings do server cấp; table/column IDs có phạm vi; edge IDs, INNER/LEFT, root grain và metric grain | LLM không chọn owner/physical name/ON SQL. Single-table không có edges giữ nguyên ý nghĩa và compiler hiện hữu; legacy plan/envelope đọc được, không rewrite |
+| Authorized source snapshot | owner/workspace, tập dataset/document revisions, permission snapshot, relationship validation IDs | Resolve từ server sau auth; đổi revision/quyền phải kiểm lại trước dispatch/execute/source read |
+| SQL execution evidence | các revision/edge IDs, grain, validation digest và SQL/typed rows thực đã chạy | Lưu cùng message; không compile lại SQL khi mở lịch sử; chỉ tên bind, không raw private parameters trong trace |
+| Document evidence | document/revision/chunk + source anchor + authorized excerpt | Backend cấp ID; model chỉ trỏ evidence được cấp, không bịa ID hoặc nâng trust |
+| Answer/conversation | SQL hoặc RAG evidence có kiểu, status/limitations, verified references theo task | Legacy SQL 1 nguồn hiển thị được; lỗi/partial/stale không trở thành premise verified; chưa thêm HYBRID runtime |
+| HTTP dự kiến | document upload/job/source; đọc relationship evidence trong source details; extension chat source scope | Owner/CSRF/idempotency; không endpoint user approve relation, không HTTP admin quota hoặc raw SQL. Chi tiết DTO/error codes khóa trước coding |
 
-### Milestone R3 — Retrieval + BGE + Citation Quality
+### 17.3. R0 — Readiness, Research, Design Contracts & Benchmark Preparation
 
-**Phụ thuộc:** R2 + read-only BGE/GPU inventory PASS.
+1. **Mục tiêu:** chốt thiết kế và chuẩn độc lập trước code; xác nhận đâu là fact từ nguồn chính thức, đâu là đề xuất, đâu là số đo ChatSAR. Không dùng tài liệu này tự cấp quyền bắt đầu.
+2. **Phụ thuộc:** nghiệm thu kỹ thuật single-table 01/11 giữ nguyên; owner duyệt kế hoạch và chỉ định phạm vi R0. Kiểm lại hardware/provider compatibility tại ngày triển khai, không dùng kiểm kê cũ thay hiện trạng.
+3. **Tái sử dụng:** Rules, CONTRACTS, OPERATIONS, independent PostgreSQL oracle, checksum manifests, fixture isolation và provider ledger hiện hữu.
+4. **Module cần mở rộng:** thiết kế interfaces cho catalog/relationship, documents/retrieval và chat; chỉ nghiên cứu/đặc tả ở mốc này, chưa mở production module.
+5. **Database:** thiết kế ER/constraints/indexes và thứ tự migration additive; snapshot/backout compatibility. Không áp migration R1/R2 ở R0.
+6. **API/data contracts:** khóa schema bảng ở §17.2, relationship states/evidence ở §17.4, document/index/job ở §17.5; mẫu request/response và legacy reads phải có acceptance examples trước coding.
+7. **Backend:** kiểm kích thước catalog/caps/candidate-search cost, quyền source, integrity hashes; định nghĩa một source snapshot cho toàn lượt. Full-table scans có timeout, không ghi profile chưa hoàn tất thành validated.
+8. **Frontend:** phác luồng upload nhiều file, workspace mặc định, chat/source/progress/clarification; kiểm keyboard/mobile/error flow với chủ dự án. Không coding UI mới ở R0.
+9. **AI/provider:** xác minh cấu hình, quyền dữ liệu và khả dụng là ba khái niệm riêng. Gemini mặc định; Knowledge conditional, LlamaParse conditional; không paid health probe. Chốt schema/capability canary tối thiểu cho mốc được cấp quyền sau này.
+10. **Bảo mật:** threat model cross-owner JOIN/vector/citation, private document transfer, malicious upload và prompt injection. Chốt policy không gửi toàn tài liệu private do chỉ bấm upload.
+11. **Chi phí/tài nguyên:** lập bảng calls/reserves/parser pages/credits, retries/UNKNOWN; kiểm CPU/RAM/disk/GPU/CUDA, model cache/path/hash, Torch/Transformers. RTX3050 6GB/RAM16GB là tham chiếu cũ, chưa là cam kết tài nguyên.
+12. **Unit:** chuẩn bị test specification về states/compatibility/permission; tests hiện hữu giữ nguyên. Chưa ghi unit mới PASS khi chỉ có test design.
+13. **PostgreSQL oracle:** SQL viết tay độc lập cho relation metrics, LEFT filters, grain và numeric; không gọi compiler để tạo gold. Khóa fixtures trước model tuning.
+14. **Held-out:** lập tập độc lập theo schema/domain và tập tài liệu tiếng Việt, false relations và no-answer; khóa hashes/labels/split/denominator, thứ tự chạy, stop policy và per-class coverage. Người soạn biết labels phải ghi internal held-out, không external blind.
+15. **Model-live:** NOT_RUN ở nhiệm vụ lập kế hoạch; chỉ synthetic/đã được phép, budget riêng sau duyệt. Offline fail phải sửa trước, không đốt hàng trăm calls bắt lỗi cấu trúc.
+16. **Browser E2E:** khóa scenarios và cách đo UI→API→data→evidence trên exact runtime; wireframe review không được tính E2E PASS.
+17. **Persistence/restart:** định nghĩa trước/sau hash source files/revisions/relations/index/jobs/chat/SQL/citations/ledger/volume identity; không cần Google login hoặc generation mới để đọc lịch sử.
+18. **Acceptance:** owner ký design gate, budgets/data transfer policy, benchmark hashes và các ngưỡng còn TBD; hợp đồng không còn blocker bảo mật. Ngưỡng SQL multi-table ≥95% là mục tiêu, không số đo.
+19. **Rollback:** docs/fixtures theo Git, không rewrite Giai đoạn 1; thử migration chỉ sau quyền triển khai tương ứng, không reset DB hoặc dựng source cạnh tranh.
+20. **Không làm:** JOIN/RAG/embedding/worker/parser/UI production, cloud smoke hoặc tải weights chỉ vì có kế hoạch. Dừng trình owner nếu không có semantic evidence đủ mạnh cho auto-approval.
 
-- [ ] Dense baseline rồi lexical/dense fusion, reranking; không song song nhiều production retrieval pipelines, các cấu hình so sánh nằm trong evaluation harness.
-- [ ] BGE local offline load, one instance/process, FP32/FP16/batch/VRAM tests.
-- [ ] Evidence selection/adjacent-section expansion; grounded synthesis và citation IDs.
-- [ ] Answerability `answered/partial/insufficient` và gold claim-support evaluation.
-- [ ] Document source viewer chính xác page/span, unauthorized citation forbidden.
-- [ ] Langfuse spans retrieval/rerank/generation với redaction mặc định.
+### 17.4. R1 — Automatic Relationship Discovery & Safe Multi-table SQL
 
-**Acceptance:** Recall@k/citation quality có số đo cho A/B/C, dùng BGE có bằng chứng lợi ích hoặc ghi giới hạn rõ; các critical citation/owner/unknown tests đạt; RAG real E2E chạy qua browser.
+#### 17.4.1. Candidate generation và validation
 
-### Milestone R4 — Conversation Trust + Multi-source UX
+Phương pháp nội bộ đề xuất dựa trên nghiên cứu UCC/IND và semantics PostgreSQL ở §17.9; **không coi discovery algorithm là chứng minh nghĩa nghiệp vụ**.
 
-**Phụ thuộc:** R1 và R3.
+1. **Scope:** chỉ xét revisions đã publish, cùng owner/workspace, còn quyền đọc. Không compare datasets khác owner kể cả checksum/value giống nhau. Server tạo typed catalog snapshot và giới hạn search.
+2. **Khóa ứng viên:** ưu tiên constraints/source schema có provenance; profile toàn bảng số dòng, non-null, distinct tuple, duplicate groups. PK ứng viên phải unique và mọi thành phần NOT NULL. Unique snapshot không tự trở thành khóa nghiệp vụ hay permission.
+3. **Khóa ghép:** xét tuple có thứ tự và mapping từng thành phần, không suy từ uniqueness riêng lẻ. Đề xuất cap chiều rộng 3 và cap candidates/time; R0 khóa sau profiling. Cap hết → discovery incomplete/uncertain, không ready giả. Không nạp thư viện profiling lớn nếu SQL hiện hữu đủ.
+4. **Quan hệ ứng viên:** compatible exact types/units/entity roles; IND giữa distinct non-null referencing tuples và target tuples. Tên giống nhau/overlap/similarity/LLM semantics chỉ dùng shortlist/ranking, không kích hoạt.
+5. **Kiểm cấu trúc toàn dữ liệu:** target unique/non-null toàn tuple; child duplicate distribution; all-null/partial-null tuples; matched/unmatched rows và distinct keys; orphan count, inclusion coverage; phân phối số child/parent (min/max), cardinality và direction. Empty/vacuous inclusion/all-null source không đủ bằng chứng chấp nhận.
+6. **NULL:** SQL equality giữ NULL không match. Composite partial-NULL ghi riêng, mặc định uncertain cho auto-approval; optional all-NULL chỉ được phép khi có semantics rõ. Không coalesce key, không cast TEXT IDs sang số, không casefold/trim để tạo match âm thầm.
+7. **Ngữ nghĩa:** cần quan hệ/entity role/grain được nguồn đáng tin xác nhận, ví dụ manifest/schema đi kèm có nguồn và được đối chiếu columns/revisions, hoặc contract nghiệp vụ có provenance kiểm được. Manifest không phải lệnh thực thi và không được cấp quyền. Mô tả do model sinh, hai LLM đồng ý, tên cột giống và sample trùng **không phải bằng chứng ngữ nghĩa độc lập**.
+8. **Quan hệ cạnh tranh:** so tất cả candidate targets/role paths được tìm trong scope; một key trỏ billing/customer và shipping/customer là hai nghĩa khác nhau. “Shortest path” hoặc score cao nhất không giải quyết ambiguity. Search bị cắt/candidate role chưa rõ → uncertain.
+9. **Grain:** lưu một dòng của mỗi bảng biểu diễn gì và metric thuộc grain nào; grain do model phỏng đoán chưa được coi verified. Nếu không đủ bằng chứng grain, không cho aggregate multi-table có nguy cơ sai.
+10. **Kết thúc:** persist mọi số đếm/digest/policy version/nguồn evidence; rejected ghi lý do xác định; uncertain ghi evidence thiếu. Không có chứng cứ mạnh trong CSV phổ thông thì giữ uncertain, cho hỏi single-table, không hứa tự hiểu mọi file.
 
-- [ ] Verified result references giữ query plan, dataset/doc revisions, scope, evidence.
-- [ ] Follow-up “tháng trước”, “chỉ quận 3”, “xem chi tiết”, context changes/clarification; không dùng prose chưa xác minh.
-- [ ] Stale/failed/partial reference handling; workspace switch không rò chat/results.
-- [ ] FE evidence drawer, document manager, progress/job states và error messaging hoàn thiện.
-- [ ] Restart/recreate/cancel/retry/incomplete job E2E; no repeated cloud calls on browser retry.
+#### 17.4.2. Auto-approval gate và lifecycle
 
-**Acceptance:** follow-up SQL và RAG đúng scope/source; provider failure không biến thành fact; A/B owner isolation, history persistence, browser E2E, no raw traceback.
+**Active = authorization hợp lệ ∧ revision/integrity khớp ∧ validation toàn bảng hoàn tất ∧ target unique/non-null ∧ không orphan cho non-null tuples ∧ NULL policy rõ ∧ ngữ nghĩa/role/grain có evidence độc lập ∧ không ambiguity ∧ policy gate đạt.** Đây là policy nội bộ bảo thủ cần kiểm bằng oracle; không phải công thức confidence đã hiệu chuẩn. Score chỉ xếp thứ tự điều tra; không dùng confidence LLM tự khai hoặc ngưỡng overlap để thay bất kỳ vế nào.
 
-### Phase 2 exit gate
+| Trạng thái đề xuất | Điều kiện | Có được JOIN? |
+|---|---|---|
+| candidate / validating | Chưa đủ phép kiểm hoặc scan đang chạy | Không |
+| active | Tất cả vế gate đạt trên đúng revision pair và validation policy | Có, chỉ trong query còn vượt query-time guards |
+| uncertain | Thiếu semantics/grain, cạnh tranh, partial NULL, orphan hoặc scan không hoàn tất | Không; câu một bảng tiếp tục |
+| rejected | Sai kiểu/target duplicate hoặc evidence phủ định rõ | Không |
+| stale / disabled | Revision/checksum/schema/policy/quyền thay đổi hoặc bị vô hiệu hóa | Không; không tự hồi phục bằng evidence cũ |
 
-- [ ] SQL multi-table & RAG E2E trên nhiều schema/docs, independent oracles; embedding/BGE thật có benchmark và tài nguyên/latency được ghi.
-- [ ] Parser chọn theo tài liệu, không tự dùng LlamaParse mọi nơi; citation exact source và unknown states được test.
-- [ ] Không blocker security, silent corruption, owner leak, document prompt injection critical.
+Đề xuất metadata relationship: server ID; owner/workspace; source/target dataset+revision IDs/checksums; ordered column ID pairs; equality semantics/type; cardinality/direction; role; source/target grain; NULL/orphan policy; distinct/duplicate/null/orphan/match counts; full-scan/completeness flag; competing candidate IDs; semantic evidence refs và origin; validation result/digest/validator+policy version; state/reason; proposer provider/model/usage ID nếu có; created/validated/invalidated timestamps. Tách “model đề xuất” khỏi “server active”; evidence nhạy cảm không đưa lên public/trace. Unique identity theo owner/workspace/revision pair/ordered mapping/role/policy, chống hai activation do retry.
+
+Graph là view trên active edges của snapshot, không cần graph DB. Revision mới tạo candidate/validation mới, không sửa edge của revision cũ; edge cũ chỉ dùng cho nguồn cũ vẫn còn quyền. Query-time kiểm owner/quyền hiện hành, revision/checksum/schema digest, policy/version, trạng thái và toàn path. Immutable snapshot có digest hợp lệ có thể reuse scan; integrity mismatch → stale và dừng, không scan xong rồi đổi nguồn giữa lượt. Source read và historical citation vẫn kiểm quyền hiện hành; lịch sử giữ provenance, không tự chạy lại.
+
+#### 17.4.3. Safe graph selection và aggregation
+
+- Server chỉ cấp graph hợp lệ cho model chọn edge IDs; bind explicit ON từ cặp cột metadata. Không infer ON bằng tên cột hoặc để model sinh SQL. Duy nhất compiler SQLAlchemy Core hiện hữu được mở rộng.
+- 2–3 tables và một đường có nghĩa phù hợp câu hỏi. Nhiều role/path còn hợp lý → hỏi “Bạn muốn theo địa chỉ giao hay thanh toán?”; không yêu cầu user approve quan hệ hoặc chọn FK. Cycle/self-join/bridge many-to-many chưa có oracle → unsupported.
+- Mỗi metric có input table/grain và expected multiplicity. Aggregate fact→dimension N:1/1:1 chỉ an toàn khi từng fact đóng góp đúng một lần hoặc bị loại đúng INNER/filter semantics. 1:N projection có thể mở rộng dòng nhưng phải ghi output grain và thử riêng.
+- SUM/COUNT/AVG từ phía một sang phía nhiều và nhiều facts 1:N:N bị chặn nếu không có chứng minh giữ grain. R1 **chưa hỗ trợ pre-aggregation tùy ý/fact-to-fact**; đây là negative tests, không dùng DISTINCT để vá. AVG không lấy trung bình của các trung bình.
+- LEFT JOIN không đổi thành INNER do đặt filter nhầm WHERE/ON. Planner phải biểu diễn population, match condition và filter sau join riêng, compiler không tự dời predicate. COUNT(*) của hàng left không thay COUNT(child key); COUNT non-null/distinct dùng đúng nguồn và NULL semantics.
+- Empty/no-match giữ NULL, không zero; Decimal NUMERIC và time `[start,end)` theo timezone giữ nguyên. Key IDs TEXT giữ `0007`, không cast để tăng inclusion. Execution read-only/timeout/caps và bound parameters vẫn bắt buộc.
+
+#### 17.4.4. Hợp đồng triển khai và nghiệm thu R1
+
+1. **Mục tiêu:** tìm quan hệ tự động có evidence, hỏi multi-table chính xác; không thay single-table đã nghiệm thu.
+2. **Phụ thuộc:** R0 PASS, relationship/QueryRequest extension khóa; benchmark được viết trước implementation.
+3. **Tái sử dụng:** dataset revisions/catalog, full-table validator, QueryRequest→QueryPlan, compiler/reader/evidence và frontend source panel.
+4. **Modules:** mở rộng `datasets/setup` cho profile evidence, catalog responsibility cho graph/validation, `planning/query` cho binding/grain/joins; chỉ tách relationship module nếu trách nhiệm cần rõ, không compiler thứ hai.
+5. **Migration:** thêm relationship/candidate validation metadata và ownership/revision constraints/indexes; không sửa physical tables cũ để ép FK, không đổi PK/NULL đã publish. Chưa có migration này ở nhiệm vụ lập kế hoạch.
+6. **API/data:** source scope snapshots/edge IDs/grain theo §17.2; owner-scoped read evidence/status, discovery idempotent sau publish; không endpoint user approve. DTO/error examples khóa R0.
+7. **Backend:** scan toàn bảng, gate/state transitions/graph selection/query revalidation, invariant fail trước execute; persist exact evidence cùng SQL.
+8. **Frontend:** progress thật, nguồn sẵn sàng từng bảng và lý do chưa thể kết hợp; advanced evidence read-only. Không thêm reviewer PK/FK UI.
+9. **AI/provider:** Gemini/Knowledge chỉ đề xuất nghĩa/candidates trong scope có quyền; không active status, canonical key, grain verdict hoặc raw SQL. Không có quyền cloud vẫn profile local, uncertain nếu thiếu evidence.
+10. **Security:** owner/workspace/source authorization trên mọi edge/node/query/evidence; forged active IDs/revision/source/manifest bị từ chối; transaction snapshot tránh TOCTOU.
+11. **Cost:** deterministic profiling trước, cache theo revision/policy; metadata minimization và ledger reserve trước semantic proposal; không gọi model cho từng cặp cột hay auto retry lỗi.
+12. **Unit:** state machine, composite ordering, partial NULL, empty set, stale/revoked rights, ambiguous paths, legacy plans, fake confidence, malicious metadata và grain checker.
+13. **PG oracle:** 1:1/1:N/N:1, composite, nullable, duplicate target, orphan, INNER/LEFT, fact-dimension/fact-fact fanout, COUNT/SUM/AVG/Decimal, time, ON-vs-WHERE; compare full rows/status, không chỉ scalar trùng.
+14. **Held-out:** schema/domain mới; hai tài khoản; revision changes; false relations có cùng values nhưng khác nghĩa; không đủ evidence. Gold gồm relation truth/eligible activation, correct abstention và SQL viết tay.
+15. **Model-live:** chỉ sau offline PASS và quyền riêng; canary schema thật tối thiểu rồi tập khóa trên **một source/image fingerprint**, không ghép runtime versions. Proposal refusal/clarify chấm theo gold, giữ raw FAIL.
+16. **Browser E2E:** upload nhiều file → local/AI preparation → auto active hoặc uncertain → hỏi tự nhiên → nguồn/SQL thật; không sửa metadata thủ công sau FAIL để tính PASS.
+17. **Persistence:** restart/recreate giữ relations/validation digest/revisions và query provenance; active cũ không trỏ revision mới; history single-table/ledger nguyên vẹn.
+18. **Acceptance:** critical false-positive auto-activation = **0** trong tập nghiệm thu; critical owner/fanout/Decimal = **100% PASS**; SQL multi-table in-scope **≥95%** trên tập độc lập khóa. Báo relation precision=correct active/all active; recall=correct found/all gold discoverable; activation coverage=correct active/all gold eligible; false-positive count, SQL/aggregation correctness, false refusal và correct abstention riêng. Không được PASS bằng cách uncertain tất cả: mỗi lớp positive supported phải có activation/execution thành công; R0 khóa minimum n/per-class/recall floor trước xem outputs. Đây là targets chưa đo, không chứng minh zero lỗi ngoài tập.
+19. **Rollback:** tắt dispatch multi-table ở server khi có critical, giữ single-table và evidence/history; quay exact app image/schema-compatible, không DROP relation audit hoặc migration. Code cũ không hiểu multi-source history phải báo giới hạn, không diễn giải sai.
+20. **Không làm:** raw SQL, JOIN đoán nghĩa, user approval, many-to-many/pre-aggregate framework, RAG, Hybrid, cloud fallback ngầm hoặc sửa oracle để khớp model.
+
+### 17.5. R2 — Automatic Document Ingestion & Embeddings
+
+#### 17.5.1. Parser decision matrix — đề xuất, chưa chọn production
+
+Không cài parser trong nhiệm vụ này. Chọn theo file signature/text-layer/layout và benchmark trên cùng corpus; lỗi parser không tự trở thành quyền gửi cloud. Nguồn chính thức chỉ xác nhận capability/license, **chưa có số đo ChatSAR về RAM/CPU, tiếng Việt, độ đúng hay latency của các ứng viên**.
+
+| Ứng viên | Use case / nguồn căn cứ | Điểm phải benchmark và giới hạn | Privacy/license/cost gate |
+|---|---|---|---|
+| Local TXT/MD | Decode/parse cấu trúc sẵn có, giữ heading/list/table/source offsets | BOM/encoding, dấu Việt, code/table, phủ định và units; không execute HTML/link | Local, không cloud; kiểm license thư viện Markdown nếu thêm; baseline CPU/RAM cần đo |
+| Local DOCX (`python-docx` ứng viên) | OOXML paragraphs/headings/tables [S6] | Nested/merged tables, headers/footnotes/text boxes/reading order phải kiểm, không suy hỗ trợ đầy đủ từ API; page number không ổn định nếu chưa render | Local; kiểm license exact dependency/transitives tại R0; không tự tạo trang PDF giả |
+| PyMuPDF | Text/blocks/page coordinates, PDF text candidate [S7] | Multi-column order/table headers, font encoding/Việt, scanned page detection; đo text/cell fidelity và CPU/RAM | **AGPL hoặc commercial**; phải chốt điều kiện phân phối/phục vụ người ngoài, license app/deps và phương án được owner duyệt trước chọn. Repo public không tự chứng minh tuân thủ; chưa chọn mặc định |
+| Docling | Layout/reading order/table structure/OCR capabilities [S8] | Multi-column/table/scans/Việt, model cold load, CPU/RAM/VRAM, caps và partial pages; có thể nặng hơn text parser, phải đo | Code MIT; model licenses riêng, kiểm transitive/PDF backend license và weights. Không tự tải models hoặc bật remote services |
+| LlamaParse | Cloud parse có page/layout/table outputs [S9] | Cùng gold pages/cells/order/Việt; SDK/tier/region/version, timeout/job status và actual credits | Chỉ dữ liệu/provider được phép + reserve pages/credits/USD; upload private cần quyền hợp lệ, cache/idempotency và retention/deletion policy. Không mặc định mọi PDF |
+
+Chọn một strategy theo file class với luật escalation chất lượng rõ: text đơn giản local; layout khó thử candidate đã benchmark; scanned PDF chỉ OCR khi engine/ngôn ngữ/weights/license/resource đã được duyệt và có gold. Nếu không đủ điều kiện → `unsupported`/`needs_review`/partial, không đánh ready text rỗng. Partial parsing chỉ truy xuất phần tốt khi thông báo rõ coverage và câu hỏi không cần phần mất; mặc định không đủ nguồn cho kết luận toàn tài liệu. Parser routing có một implementation và cùng normalized contract.
+
+#### 17.5.2. Normalized document, index và job contracts
+
+- **Original/revision:** owner/workspace/document/revision, file checksum/MIME/size/storage ref, original filename an toàn; parser ID/version/options/model revision, parse timestamp, language; raw extracted blocks bất biến và normalized content có transform/source mapping.
+- **Content:** ordered sections/headings/paragraphs; tables có row/column/header/caption/cell spans; page refs và bounding boxes nếu parser thực sự cung cấp; source char offsets có encoding/convention rõ. TXT/MD/DOCX dùng section/paragraph/offset, page nullable với lý do, không bịa trang.
+- **Chunks:** stable server IDs theo revision/chunker config; heading path, table headers/cells, text/checksum/token count, page/section/offset/block refs. Giữ phủ định, số liệu, đơn vị, điều kiện/ngoại lệ và context. Raw-to-normalized offsets phải map ngược, không dùng normalized offset giả làm original offset.
+- **Index generation:** document revision + chunker revision + embedding model ID/weights revision/dimension/dtype/normalization/distance metric + generation ID/status/coverage/error. Query embedding phải cùng contract; mismatch bị chặn trước vector search.
+- **Status:** parse/index độc lập (`pending/running/ready/partial/failed` theo schema khóa R0), errors/warnings/missing pages và actual progress counts; chỉ ready khi integrity/coverage và commit publication hoàn tất. Không coi file uploaded là searchable.
+- **Jobs:** DB durable `queued → validating → parsing → normalizing → chunking → embedding → indexing → ready`, nhánh `blocked_permission/blocked_budget/needs_review/failed/cancel_requested/cancelled` khi semantics chốt. Lưu stage/attempt/lease owner+expiry/checkpoint/idempotency/config/revision/cost refs. Upload retry không tạo job/index generation/charge thứ hai cùng scope.
+- **Recovery:** claim một job bằng transaction/lease, stale lease mới được reclaim; checkpoint commit rồi resume, không replay cloud request UNKNOWN. Cloud dispatch ghi trước network, timeout vẫn giữ reserve/count; đối soát request/job ID từ provider chỉ khi có API chính thức/quyền. Không dựa process background task trong RAM để bảo đảm durable.
+- **Publish/reindex:** build generation mới chưa public; verify counts/checksum/dimension → chuyển pointer atomically; giữ original và generation cũ cho history/rollback. Không trộn vector spaces. Cleanup index cũ chỉ sau retention/reference check, không xóa vì vừa đổi model.
+- **Executor:** ưu tiên DB-backed job executor trong API hiện hữu, concurrency bounded. Chỉ thêm một worker cùng codebase nếu đo CPU-bound parse/long task làm vi phạm API latency hoặc restart/recovery cần tách process; ghi evidence/ADR/resource cap trước thêm service. Không Redis/Celery mặc định.
+
+#### 17.5.3. Embedding selection và triển khai R2
+
+Ứng viên **BGE-M3** (model card: 1024 chiều, multilingual) [S10] và **multilingual-e5-small** (384 chiều, candidate nhẹ hơn) [S11]; không chọn chỉ vì cùng họ BGE. Kiểm license/weights/tokenizer/version và prompt/pooling/normalization theo từng model. Đo tiếng Việt có dấu/không dấu, IDs, số liệu, cross-language, dài/ngắn: retrieval Recall@k/MRR/nDCG, dimensions, RAM/VRAM peak, cold loading time, latency p50/p95, throughput/batch và truncation effects. Model card không chứng minh chất lượng ChatSAR hoặc fit 6GB.
+
+1. **Mục tiêu:** tự parse/chunk/embed đúng nguồn, tiến độ thật và có restart recovery; chưa synthesis RAG production trước R3.
+2. **Phụ thuộc:** R1 accepted theo chuỗi mốc, R0 parser/license/privacy/model contracts; storage/isolation Giai đoạn 1.
+3. **Tái sử dụng:** upload MIME/checksum/storage, owner/workspace, limits/typed errors, provider ledger/idempotency, PostgreSQL/pgvector hiện hữu; không DB mới.
+4. **Modules:** documents/chunk/index responsibilities mới khi cần; mở rộng config/provider accounting/datasets UI/API DTO; không sửa tabular parser ổn định cho DOCX/PDF bằng nhánh đoán.
+5. **Migration:** documents/revisions/blocks-or-normalized-content/chunks/index generations/embeddings/job checkpoints; owner/revision FK, model dimension và indexes. Job/tabular compatibility giữ; schema cụ thể khóa R0, không tạo toàn bộ mô hình lý thuyết nếu không dùng.
+6. **API/data:** document upload/job GET/source GET theo §17.2; authenticated file/page/span access, polling real stages; idempotency và duplicate response, caps/error codes mô tả trước code.
+7. **Backend:** parser policy, lossless normalization/source maps, chunk boundary giữ tables/conditions, cache permission-scoped, exact pgvector search baseline; không ANN trước khi đo.
+8. **Frontend:** upload nhiều file, per-file progress/errors, source viewer và ready/partial rõ; không yêu cầu user chọn parser/embedding; thông báo ngắn vì sao chưa sẵn sàng.
+9. **AI/provider:** local first theo strategy đã chọn; Gemini/Knowledge không làm parser mặc định; cloud parser chỉ trong data/budget policy. Embedding là local inference, reranker không tạo vector.
+10. **Security:** zip/page/bytes/CPU/time limits, filename/path traversal, không macro/link/remote URL fetch, documents là dữ liệu không lệnh; owner-filter trước dedupe/source/index access; không lộ checksum existence khác tenant.
+11. **Cost/resource:** cache theo owner/revision/checksum/parser/options, reserve trước upload cloud, count cả lỗi/retry. Bounded batch/concurrency, không nạp nhiều embedding instance; không eviction model dùng chung hoặc download tự động.
+12. **Unit:** parser fixtures/Unicode/numeric/negative conditions/table mappings/chunk anchors, job transitions/lease/retry/cancel, idempotency, dimension mismatch, private policy và caps.
+13. **PG oracle:** atomic generation publication, vector dimension/model binding, owner prefilter, stale pointer, rollback transaction, job claim/recovery và no duplicate chunks/charges.
+14. **Held-out:** corpus TXT/MD/DOCX/PDF text/multi-column/table/scan có gold manual về reading order, page/cell/negation/units và expected partial/unsupported; cùng corpus so parsers, không chỉ điểm text similarity.
+15. **Model-live:** parser cloud/embedding inference thật sau quyền riêng, pin weights/code; so với gold trước R3. Không ghi mock parse/embedding là live.
+16. **Browser E2E:** upload → real stage → source/anchors; cache/reupload, bad file, partial và quyền A/B; không synthetic source trên account thật nếu fixtures cô lập đủ.
+17. **Persistence:** kill/restart executor tại mỗi checkpoint, upload/index generation/lease còn đúng, resume không charge lặp; file/old revisions còn đọc và source checksums khớp.
+18. **Acceptance:** critical numbers/negation/conditions/table/source mapping/owner integrity **100% trên gold critical**; cả embedding candidates có metrics trên cùng split/hardware và một model được chọn. Fidelity/Recall/latency/RAM caps cụ thể còn TBD phải khóa R0 trước held-out; không thể nghiệm thu chỉ vì job ready.
+19. **Rollback:** ngừng nhận job mới, giữ checkpoint/original/current index pointer; quay compatible executor/model/index generation; không DROP original/chunks/evidence đang được history tham chiếu.
+20. **Không làm:** OCR đại trà/biểu đồ chưa benchmark, LlamaParse mặc định, download weights ngoài quyền, RAG answers/Hybrid hoặc thêm queue/service cho hình thức.
+
+### 17.6. R3 — Retrieval, BGE Reranker & Grounded Answers
+
+**Benchmark bắt buộc A/B/C trên cùng corpus/query split/source revisions:** A dense; B dense + lexical; C dense + lexical + BGE reranker. Chúng là cấu hình evaluation của cùng pipeline, chỉ **một** cấu hình production được chọn theo evidence. Nếu C không đủ quality/resource thì báo và trình owner chọn; không giấu BGE unavailable hoặc nghiệm thu BGE khi chỉ dùng dense.
+
+1. **Mục tiêu:** RAG-only có factual support và citations mở đúng nguồn, không dùng relevance score làm xác suất đúng.
+2. **Phụ thuộc:** R2 accepted, source/chunk/index contract và BGE/GPU inventory/permission PASS; R0 thresholds đã khóa.
+3. **Tái sử dụng:** pgvector, documents/index của R2, session/owner, provider budget/redaction, AnswerEnvelope và evidence/conversation storage.
+4. **Modules:** retrieval/evidence selection và grounded synthesis; mở rộng `providers`, `answers/evidence`, source viewer. Một adapter inference đã benchmark, không cả FlagEmbedding lẫn CrossEncoder runtime.
+5. **Migration:** chỉ lexical index/retrieval execution/evidence refs thực sự cần; pin model/index metadata, không copy corpus sang vector DB mới.
+6. **API/data:** query source snapshot, backend-issued evidence allowlist, citation document/revision/page-or-section/chunk/excerpt/owner scope; offsets/bbox nếu có, `anchor_precision` rõ. FE không gửi arbitrary chunk IDs để mở private text.
+7. **Backend:** permission/revision/model filter **trước** dense/lexical candidates; exact search baseline, lexical tiếng Việt benchmark; fusion/dedup deterministic; retrieve adjacent context khi cần, bounded evidence token cap, support/completeness guards.
+8. **Frontend:** source viewer mở đúng revision/page/span; no-answer/conflict/partial rõ; citation unavailable/forbidden không rò excerpt hoặc document title của owner khác.
+9. **AI/provider:** model synthesis chỉ supplied evidence, không instructions trong docs; không tự tạo citation IDs hoặc claim “đã xác minh”. Membership chỉ kiểm tham chiếu, claim support chấm độc lập theo gold/manual; không thêm model judge bắt buộc để che thiếu evidence.
+10. **Security:** prompt injection, forged evidence ID, cross-owner/cross-workspace retrieval/source access, stale/cross-revision citations, authorized excerpt khi quyền đổi giữa retrieve/render.
+11. **Cost/resource:** một local BGE instance; pin actual path/model/weights hash/config/license/Torch/Transformers/CUDA/cache; offline read-only cache. Đo FP32 baseline vs FP16 ranking drift/quality, batch 4/8 và max length là starting values. Giới hạn concurrency, shared GPU headroom, load/warmup/coldstart/OOM. Không download/reload mỗi request; CPU fallback chỉ nếu đã đo/duyệt, giữ status rõ. Synthesis reserve/cap tính cả evidence, Langfuse lỗi không chặn answer.
+12. **Unit:** rank fusion/dedup, empty candidates, citation IDs/anchor validation, contradiction/negation/number preservation, model mismatch, injection và OOM/unavailable error taxonomy.
+13. **PG oracle:** prefilter candidates không rò owner, exact cosine/distance semantics khớp embedding normalization, stale generation rejection, evidence/result refs atomically persisted; số học trong tables không tự nâng thành Hybrid evaluator.
+14. **Held-out:** không có đáp án, conflicting/stale docs, multi-page, bảng thiếu header, điều khoản ngoại lệ, parse partial, injection, cross-owner, BGE offline/embedding mismatch; gold per claim + required evidence/coverage/abstention.
+15. **Model-live:** inference BGE/embedding thực và synthesis được phép, cùng corpus/weights/runtime. A/B/C đo Recall@k (gold evidence level khóa trước), MRR/nDCG có gold ranking; citation support, answer completeness, false refusal, unsupported answer, p50/p95, peak GPU/CPU memory, calls/tokens/USD/credits. Cached và uncached tách riêng; public model benchmark không thay ChatSAR measurement.
+16. **Browser E2E:** hỏi tự nhiên → grounded answer → click exact source; no-answer/partial/conflict/expired session; browser kết nối full stack thật, SSR/DTO test không thay E2E.
+17. **Persistence:** answer/citations/generation/model revision và excerpts còn truy xuất qua restart; không re-embed/generate khi đọc history; unavailable source không tự thay revision.
+18. **Acceptance:** critical permission/source fabrication/injection **100% PASS**; supported-answer target **≥90%**, quality/latency/resource và retrieval floors khóa R0. Báo unsupported claims/false refusal/count per domain riêng; A/B/C có đủ measurements và lựa chọn production được duyệt. Không chọn tốt nhất bằng một câu demo.
+19. **Rollback:** ngừng RAG mới hoặc quay retrieval config/index generation đã nghiệm thu; giữ source/evidence/history; fallback chỉ trong policy đã đo, không âm thầm giảm chất lượng hoặc vượt cloud permission.
+20. **Không làm:** nhiều retrieval engines cạnh tranh, dùng BGE làm embedding, score=truth, LLM tự tạo citations, Hybrid/policy, tăng VRAM bằng nhiều containers GPU chưa có căn cứ.
+
+### 17.7. R4 — Unified Chat UX, Automatic Provider Routing & Trusted Multi-source Experience
+
+Thiết kế dựa nguyên tắc chat tự nhiên/tổ chức chats+sources của tài liệu ChatGPT [S14–S15] và WCAG [S16]; đây là áp dụng cho ChatSAR, **không tuyên bố sao chép toàn bộ giao diện ChatGPT hiện hành**. Không sao chép thương hiệu/assets. Dùng React/TypeScript hiện hữu, chưa mặc định thêm React Router/state framework chỉ vì kế hoạch cũ nhắc.
+
+**Luồng lần đầu:** mở trang thấy ô chat/hướng dẫn ngắn → upload một/nhiều file → server tạo workspace mặc định nếu cần (idempotent, owner-scoped) → per-file chuẩn bị → quan hệ tự kiểm → sources đủ điều kiện sẵn sàng → gợi ý câu hỏi từ catalog/evidence thật → trả lời tự nhiên có SQL/citation. Gợi ý không được chứa fact chưa tính hoặc values private chưa có quyền. Guest vẫn tạm, Google history riêng; login không tự nhập guest data hay thay chính sách nguồn.
+
+1. **Mục tiêu:** một chat dễ dùng cho SQL-only hoặc RAG-only, nguồn và trust rõ, không bắt người phổ thông chọn engine/parser/model/PK/FK hoặc kiểm mọi phép tính.
+2. **Phụ thuộc:** R1 và R3 accepted; contracts source scope/conversation/readiness đã khóa R0. Không mở R4 để trưng bày trước correctness.
+3. **Tái sử dụng:** sidebar/search/history/profile/new chat/pill composer/plus upload, two evidence panels, backend idempotency/checkpoint và verified context hiện hữu.
+4. **Modules:** `App/Chat/Workspace/Datasets/Result/Menu` và DTO; `conversation/planning/providers` mở rộng task/source binding. Không router/SQL generator thứ hai hoặc UI chứa business rules.
+5. **Migration:** additive source refs/multi-source conversation/result provenance nếu cần; legacy `revision_id` không tự reinterpret hoặc xóa, migration backfill chỉ khi chứng minh nguồn duy nhất. Không sửa profile/OAuth.
+6. **API/data:** source snapshot list authorized revisions + task SQL/RAG/clarify/unsupported; provider readiness fields tách configured/verified/current/permission/budget; stable error/status. Không frontend keys hoặc user nhập API key vào chat.
+7. **Backend:** chọn năng lực theo question và sources ready được phép trong cùng pipeline; ambiguous business scope hỏi ngắn. SQL+RAG combined cần Hybrid trả giới hạn theo policy; không tự chọn nguồn mới chỉ vì model available.
+8. **Frontend:** theme sáng xanh dương nhẹ, ít viền/ô màu, rounded composer, sidebar project/workspace grouping/history/search/new chat, source viewer/profile/context rõ; responsive mobile. Keyboard navigation/focus, screen reader labels, contrast, reduced motion và live status; loading/error/recovery phản ánh stages thật, giữ draft khi lỗi. Chi tiết kỹ thuật vào panel nâng cao.
+9. **AI/provider:** Gemini default, Knowledge chỉ khi môi trường/network/quyền/capability và budget phù hợp; không cần user bật công tắc kỹ thuật. Backend chọn đúng một provider cho lượt, lưu selected/actual/reason. Chưa có quyền chuyển dữ liệu thì báo chưa thể dùng, không tự gửi sang fallback. Parser/embedding/BGE tự được gọi khi task cần và có readiness đã kiểm.
+10. **Security/privacy:** tenant/source/session/CSRF xuyên suốt context switch; policy xử lý minh bạch ở upload/source details, thu hồi quyền có hiệu lực lượt sau. Zero-config không phải consent toàn tài liệu private hoặc mọi provider. Cloud data transfer kiểm server trước network; không backfill permission nguồn cũ.
+11. **Cost/resource:** không gọi cloud định kỳ để health, không nạp BGE chỉ để hiện dấu xanh. Một model instance mỗi loại và shared GPU scheduling bounded; ưu tiên embedding ingestion batch nhỏ/CPU nếu benchmark đủ, tránh cạnh tranh reranker foreground. Lưu local queue/latency/memory; không hứa “luôn sẵn sàng” khi thiếu quyền, hết budget hoặc GPU lỗi.
+12. **Unit:** task/source/readiness truth table, legacy history, trust states, DTO, context switching, source suggestions, duplicate upload/send/retry và no technical controls bắt buộc.
+13. **PG oracle:** conversation/result/source refs cùng snapshot, cross-owner switch, revocation/idempotency concurrency, stale revisions không trở premise; numeric SQL output vẫn đúng oracle R1.
+14. **Held-out:** hỏi tự nhiên xuyên domain, đổi filter/time/source, “xem chi tiết”, independent/refine/reset, partial/error/stale turns, same filename khác revision; no-answer và false refusal có gold riêng.
+15. **Model-live:** budget riêng tối thiểu cho routing/grounded follow-up đủ lớp; provider/model/source fingerprint tách rõ. R1/R3 evidence còn đúng bytes được tái dùng, không lặp model để đủ mẫu số.
+16. **Browser E2E:** first-user upload nhiều loại, workspace auto-create một lần, real prepare/relations/RAG, nguồn/SQL/citations, tìm history, đổi context/profile, guest→Google, hai accounts, keyboard/mobile, lỗi429/503/parser/GPU; không dùng UI fake timing làm PASS.
+17. **Persistence:** reload/restart/recreate giữ authorized sources/chat/results/SQL/citations/jobs; token guest không restore, Google session còn theo policy. Cancel không coi cloud đã hủy; retry dùng idempotency key của operation cũ, recovery không replay unknown.
+18. **Acceptance:** end-to-end SQL/RAG/follow-up đúng gold trong phạm vi, legacy history còn đọc; critical permissions/typed facts/trust/persistence **100% PASS**; browser thật exact image và không có controls PK/FK/engine/provider setup bắt buộc. Chỉ status hiện đã đo được coi available; accessibility checklist có evidence, không tự tuyên bố chứng nhận WCAG.
+19. **Rollback:** quay frontend/backend compatible DTO cùng lúc; giữ source refs/evidence, server tắt năng lực chưa an toàn; không rollback DB bằng xóa history hay tạo source stack thứ hai.
+20. **Không làm:** Hybrid SQL+RAG/policy evaluator, agent framework, settings quota kỹ thuật bắt user quản lý, cloud switch ngầm, Google OAuth đổi, hoặc rewrite UI trong nhiệm vụ lập kế hoạch hiện tại.
+
+#### Readiness, privacy và failure policy chung
+
+| Tình huống | Hành vi dự kiến | Bằng chứng cần nghiệm thu |
+|---|---|---|
+| Configured nhưng chưa verified | Hiện chưa kiểm chứng, không ghi available | Config validator + offline capability tests; live chỉ khi có quyền |
+| Available nhưng thiếu data permission/budget | Block trước network, giải thích ngắn, giữ nguồn local | Negative test + ledger không dispatch |
+| Gemini429/503/timeout | Persist failure/UNKNOWN/reserve/count; không auto replay/chuyển Knowledge | Fault injection + usage audit; retry mới chỉ theo policy/budget được duyệt |
+| Knowledge bị chặn mạng/quyền | Không chọn fallback; không đổi endpoint/allowlist tự động | Read-only diagnostics/test, không paid probe lặp |
+| Parser partial/failure, job restart | Giữ raw/checkpoint/coverage; không đánh ready toàn phần | Per-stage failure/recovery oracle |
+| GPU/BGE unavailable/OOM | Free đúng tài nguyên riêng nếu an toàn; bounded batch recovery có test; explicit unavailable hoặc fallback đã duyệt | CUDA/peak-memory/quality/latency test; không đụng model cache chung |
+| Embedding mismatch/stale revisions | Chặn query hoặc chọn generation tương thích có nguồn; không mix vectors | PG oracle + history/source tests |
+| Langfuse unavailable | Answer tiếp tục, redacted diagnostic không secrets | Trace transport fault test, không dùng trace làm ledger |
+| Migration/source integrity/rollback fail | Không bật capability; giữ DB/volumes/checkpoints và báo operator | Migration compatibility/rollback test; không reset dữ liệu |
+
+Cloud payload tối thiểu theo tác vụ: SQL metadata đã cấp quyền; semantic relationship chỉ bounded metadata/evidence được phép; RAG chỉ necessary excerpts, không upload cả private document tự động. Redact PII/secrets, logs/traces mặc định IDs/status/timings/token/reserve; original+history retention theo policy rõ, cache scope owner. R0 chốt provider retention/deletion và policy version khi quyền xử lý thay đổi. Không biến zero-config UI thành quyền ngầm mới cho dữ liệu lịch sử.
+
+### 17.8. Phase 2 Exit Gate — hợp đồng tổng nghiệm thu
+
+1. **Mục tiêu:** nghiệm thu đúng SQL multi-table + RAG + conversation đã hỗ trợ, chưa nghiệm thu Hybrid hoặc mọi file/câu hỏi.
+2. **Phụ thuộc:** R0–R4 accepted với evidence/ref/SHA riêng, mọi contract changes có quyết định; owner cho tổng nghiệm thu.
+3. **Tái sử dụng:** oracles/manifests đã khóa, CI/runbooks, image/source fingerprints và data snapshots; không dựng implementation khác để chấm implementation chính.
+4. **Modules:** chỉ hardening lỗi có repro trong scope; không thêm feature/new provider hoặc refactor cosmetic ở exit.
+5. **Database:** migration đủ/version đúng, additive compatibility/backup+restore/rollback evidence, uploads/revisions/ledger/grants/review audit và volumes bảo toàn.
+6. **API/data:** legacy Giai đoạn 1 round-trip và new contracts khóa; source/evidence authorization nhất quán, no raw model SQL.
+7. **Backend:** tất cả structural, grain, permissions, budget, revision và answerability gates có test; không critical open defect.
+8. **Frontend:** first-user workflow và source/history/SQL/citation đúng runtime; không required technical setup, progress/error/recovery/accessibility có bằng chứng.
+9. **AI/provider:** actual provider/model/SDK/weights/config/source fingerprint ghi mỗi run; configured khác verified/available/authorized. Provider không được thử thật phải BLOCKED/NOT_RUN, owner quyết định phạm vi, không lấp bằng mock.
+10. **Security:** critical owner/workspace/source/citation/SQL readonly/DDL-DML/CSRF/injection/private transfer **100% PASS**, không average che leak.
+11. **Cost:** grants/ledger/reserves/UNKNOWN/retries/parser credits trong quyền riêng; không sử dụng36manual cũ, báo measured/estimated/unavailable tách; local GPU/RAM/latency caps đạt số đã khóa R0.
+12. **Unit/static:** Ruff/format/Mypy/backend/frontend/types/build và các regression liên quan PASS, không skip ẩn.
+13. **PG oracle:** critical grain/fanout/Decimal/NULL/time/source/isolation/persistence **100% PASS**; SQL in-scope ≥95%, denominator gồm wrong/false refusal/unnecessary partial, full rows/shape/order theo gold.
+14. **Held-out:** hashes/split/source giữ; precision/recall/activation coverage/critical false-positive0, SQL/aggregation, retrieval Recall@k/MRR/nDCG, claim support/completeness/unsupported claims/false refusal/status correctness báo riêng n/đúng/sai theo domain. Không tuning trên held-out; case đã nhìn để sửa trở regression và replacement khóa trước dùng.
+15. **Model-live:** canary→bounded locked benchmark, offline trước; không gộp nhiều runtime thành accuracy; dừng nhóm khi critical wrong answer/system failure/UNKNOWN chưa được đối soát, không sửa prompt theo từng câu FAIL hoặc đổi gold.
+16. **Browser E2E:** full stack exact image thật cho upload/auto relationships/SQL/RAG/citation/follow-up/two-account/history/error; CI xanh/SSR không thay browser/model-live.
+17. **Persistence:** restart/recreate phù hợp và source+DB/checksum+history+SQL/citation/job/index+ledger+volume checks trước/sau đạt; restore vào đích an toàn được cấp quyền, không đè DB đang dùng.
+18. **Acceptance:** tất cả critical gates PASS; RAG supported-answer target ≥90%, SQL≥95% và false refusal≤3% theo §19, relation/retrieval floors/latency/resources đã khóa R0. Nếu còn TBD/NOT_RUN critical → chưa accepted; sample nhỏ báo uncertainty, không quảng cáo 0 lỗi tuyệt đối.
+19. **Rollback:** exact images/config/schema compatibility và source/index generation pointers đã thử; giữ original/ledger/audit, không force-push/merge/drop volumes để phục hồi.
+20. **Không làm:** merge PR/main hoặc bắt đầu Giai đoạn 3 khi owner chưa cho phép; Hybrid vẫn theo nguyên phạm vi mục18.
+
+**Các điểm cần owner phê duyệt khi đọc kế hoạch:** policy semantic evidence/uncertain của R1 (không thể suy nghĩa chắc chắn chỉ từ CSV); schema/API extensions và cap search; parser license/strategy, embedding/topology sau benchmark; minimum n/recall/activation/retrieval/fidelity/latency/resource thresholds tại R0; quyền dữ liệu/cloud budget riêng và thứ tự coding từng mốc. Quyết định bỏ user approval đã được owner xác nhận, không hỏi duyệt lại từng relation. Chưa có kết quả thử nghiệm R1–R4 để tuyên bố implementation sẵn có.
+
+### 17.9. Nguồn nghiên cứu đã đối chiếu ngày 05/11/2026
+
+Nguồn xác nhận phương pháp/capability; các gate/grain/evidence policy và topology ở trên là **thiết kế nội bộ đề xuất**. Không suy performance/accuracy trên máy ChatSAR từ paper/model card.
+
+- **S1 —** [Ducc: Scalable Discovery of Unique Column Combinations](https://www.vldb.org/pvldb/vol7/p301-heise.pdf): UCC/candidate key discovery, không chứng minh entity semantics.
+- **S2 —** [Bauckmann/Leser/Naumann: Efficient and Exact Computation of Inclusion Dependencies](https://hpi.de/fileadmin/user_upload/90_Research_Groups/database/IS_Files/publications/2010/HPI_34_Efficient_and_Exact_Computation_of_Inclusion_Dependencies_for_Data_Integration.pdf): IND như điều kiện trước cho FK discovery; cần semantic evidence riêng.
+- **S3 —** [PostgreSQL17 constraints](https://www.postgresql.org/docs/17/ddl-constraints.html): composite PK/FK, unique/NULL semantics; dùng major17 của runtime, không nâng DB theo `current` docs.
+- **S4 —** [PostgreSQL17 joins](https://www.postgresql.org/docs/17/tutorial-join.html): INNER/LEFT và unmatched rows; grain checks nội bộ phải có counterexamples.
+- **S5 —** [SQLAlchemy2.0 SELECT/JOIN](https://docs.sqlalchemy.org/en/20/tutorial/data_select.html): explicit ON/aliases/aggregates; mở compiler hiện hữu, không raw SQL path.
+- **S6 —** [python-docx documentation](https://python-docx.readthedocs.io/en/latest/): API paragraphs/tables; fidelity của nội dung đặc biệt và trang phải benchmark.
+- **S7 —** [PyMuPDF license/copyright](https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright): AGPL/commercial; lựa chọn sản phẩm phải có license gate.
+- **S8 —** [Docling repository](https://github.com/docling-project/docling) và [supported formats](https://docling-project.github.io/docling/usage/supported_formats/): layout/table/OCR capabilities, code MIT/model licenses riêng; compatibility exact Python3.11/weights phải kiểm R0, không tự nâng Python.
+- **S9 —** [LlamaParse Parse overview](https://developers.llamaindex.ai/llamaparse/parse/): cloud parsing và source output; tier/SDK/pricing/retention phải xác minh tại ngày dùng, chưa pin từ snippet lịch sử.
+- **S10 —** [BAAI/bge-m3 model card](https://huggingface.co/BAAI/bge-m3): embedding candidate multilingual1024d; chưa được chọn hay tải cho ChatSAR.
+- **S11 —** [intfloat/multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small): candidate384d; kiểm pooling/query-prefix/truncation theo model, benchmark tiếng Việt riêng.
+- **S12 —** [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3): cross-encoder relevance; FP16 có trade-off, không là embedding hoặc truth score.
+- **S13 —** [pgvector official repository](https://github.com/pgvector/pgvector): exact/approximate search và filtering; triển khai phải theo version0.8.1 đang dùng, benchmark owner-filtered recall trước ANN.
+- **S14 —** [OpenAI: Use ChatGPT](https://learn.chatgpt.com/docs/use-chatgpt): natural language/file workflow và review kết quả.
+- **S15 —** [OpenAI: Projects and chats](https://learn.chatgpt.com/docs/projects): nhóm chats/sources, sidebar/search/new chat; không là specification để sao chép thương hiệu/UI pixel.
+- **S16 —** [W3C WCAG2.2 quick reference](https://www.w3.org/WAI/WCAG22/quickref/): keyboard/focus/labels/contrast/status; cần test ChatSAR, không tự gắn compliance từ thiết kế.
 
 ---
 
@@ -1146,7 +1374,7 @@ Gate: PASS | FAIL | BLOCKED, lý do và evidence refs
 
 > **Không chạy ngay.** Chỉ dùng khi chủ dự án đã duyệt Design Approval Gate và cho phép bắt đầu Phase 1.
 
-> Hãy đọc toàn bộ `Impliment_plan.md`, `ChatSAR_MASTER_PLAN_2026-10-29.md` và `ChatSAR_PROJECT_HANDOFF(1).md` (nếu có), sau đó đọc `AGENTS.md`. Làm đúng kế hoạch MVP, không tự mở rộng công nghệ. Trước tiên chỉ kiểm tra repo, môi trường, Docker ports, dữ liệu, model path, Langfuse version và Knowledge network ở chế độ không phá hủy; trình bày những thông tin nào đã xác minh và thông tin nào còn giả định. Không gọi Gemini/LlamaParse có phí, không tải model mới, không sửa/tắt ShopQuery, không upgrade Langfuse hoặc sửa Google OAuth cũ khi chưa được tôi duyệt. Nếu Design Approval Gate đã được xác nhận đầy đủ, hãy bắt đầu đúng milestone F1, triển khai một vertical slice nhỏ nhất, viết oracle và negative tests trước các tính năng AI, rồi báo cáo theo Mục 21. Dừng ở gate được giao, không tự chuyển sang milestone khác nếu còn critical blockers. Mọi lỗi ngữ nghĩa phải được điều tra nguyên nhân gốc, không vá regex/prompt theo từng câu hỏi; CI PASS không thay model-live và browser E2E.
+> Đây là mẫu mở đầu Giai đoạn1 mang tính lịch sử. Dùng đúng `docs/IMPLIMENT_PLAN.md`, `docs/ChatSAR_MASTER_PLAN.md`, `Skills/Rules.md` và `AGENTS.md`; không tạo bản sao theo tên cũ. Giai đoạn1 đã nghiệm thu theo PREFLIGHT. Với Giai đoạn2, chỉ bắt đầu đúng mốc mục17 sau lệnh duyệt mới của owner, không dùng mẫu F1 cũ làm quyền coding/cloud. Giữ nguồn/dữ liệu/volumes/secrets/quota và các dịch vụ khác; oracle/negative tests trước AI, một pipeline, báo riêng offline/live/browser và dừng ở gate được giao.
 
 ---
 

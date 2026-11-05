@@ -1,5 +1,21 @@
 # Quyết định và kiểm tra tiền triển khai ChatSAR
 
+## 05/11/2026 — Tự kiểm quan hệ, zero-config và hợp đồng Giai đoạn 2
+
+**Quyết định sản phẩm do chủ dự án xác nhận trong yêu cầu cleanup/plan:** bỏ bước user chọn hoặc approve PK/FK/cardinality/JOIN; upload→tự chuẩn bị→tự kiểm quan hệ→tự chọn năng lực→chat có nguồn. “Approved relationship” từ nay là backend đã vượt gate, không phải user bấm duyệt. **Thiết kế kỹ thuật mục17 của Implementation Plan là PLANNED / PENDING OWNER APPROVAL**, chưa được triển khai hay cấp quyền coding/cloud. Giai đoạn1 đã nghiệm thu kỹ thuật giữ phạm vi/điểm/rawFAIL/NOT_RUN cũ, không nâng thành nghiệm thu JOIN/RAG.
+
+Backend là thẩm quyền activation: kiểm toàn dữ liệu uniqueness/NULL/orphan/inclusion/composite/cardinality/revisions/owner và semantic role/grain evidence độc lập; model Gemini/Knowledge chỉ đề xuất. Cùng tên/values/LLM confidence không đủ. Thiếu evidence/competing paths/search incomplete → uncertain, không JOIN; single-table tiếp tục. Không silent wrong JOIN, không TEXT-ID→number/NULL→0, không DISTINCT vá fanout. Source manifest cũng cần provenance và validation, không nhận như lệnh hay quyền. Giới hạn này có thể làm ít quan hệ tự kích hoạt trên CSV thiếu metadata; phải báo activation coverage/recall và correct abstention, không giấu bằng precision trên tập rỗng.
+
+Không thêm reviewer UI hoặc compiler thứ hai. QueryRequest/QueryPlan/SQLAlchemy compiler hiện hữu được mở rộng tương thích legacy, server cấp source/edge IDs/revisions; grain/authorization query-time là gate riêng sau activation. Relationship/document/index migrations chỉ là đề xuất additive, chưa áp vào DB hiện hữu.
+
+Zero-config là trải nghiệm, không là quyền gửi dữ liệu private tới mọi cloud. Có policy minh bạch, metadata/excerpts tối thiểu, quyền provider+dataset/document+budget kiểm trước network; không upload toàn private document chỉ do upload vào ChatSAR. Readiness tách configured/verified/current availability/data permission/budget. Không cloud polling để health, không silent fallback tới Knowledge hoặc replay UNKNOWN.
+
+Parser/embedding phải được chọn bằng benchmark: TXT/MD local; DOCX local candidate; PDF so PyMuPDF (AGPL/commercial license gate) và Docling (code MIT, model/transitive licenses riêng), LlamaParse conditional. Chưa chọn production parser/embedding từ tên model. BGE reranker không phải embedding; benchmark dense/dense+lexical/dense+lexical+BGE, một production retrieval path. RTX3050/RAM16GB là kiểm kê cũ, cần kiểm lại; một instance/bounded concurrency, không worker/GPU service mới nếu chưa có evidence.
+
+Thứ tự R0 contracts/oracle trước coding → R1 automatic safe JOIN → R2 ingestion/embeddings/jobs → R3 retrieval/BGE/citations → R4 unified chat/trust/routing → Exit. Hybrid/policy vẫn Giai đoạn3. SQL multi-table target≥95%, critical false-positive activation0 và security/fanout/Decimal100% trên tập nghiệm thu; các floor/latency/resource còn lại phải khóa R0 trước held-out, không coi targets là số đo. Mỗi mốc có20 mục trách nhiệm/tests/gates/rollback tại [Implementation Plan§17](IMPLIMENT_PLAN.md#17-phase-2--automatic-relationships-document-ingestion-rag--unified-chat), nguồn chính thức/paper tại§17.9. Không tạo kế hoạch thứ hai.
+
+Quyền cleanup cho phép đồng bộ trực tiếp hai plan, thay lệnh lịch sử “không sửa plan”; không cho JOIN/RAG/embedding/parser/worker/UI code, không merge/main, không dùng36manualGemini, cloud credits mới0. Giữ secrets/config/quota/migrations/DB/ledger/audit/volumes, shared build/model caches và dịch vụ khác.
+
 ## 01/11/2026 — Ủy quyền chốt nghiệm thu kỹ thuật ngắn
 
 Yêu cầu “FINAL SHORT ACCEPTANCE & PHASE 2 READINESS” mới cho phép Codex quyết định PHASE_1_TECHNICALLY_ACCEPTED — READY_FOR_PHASE_2 khi gate đạt. Đây là quyền rõ ràng thay điều kiện chỉ READY_FOR_USER_ACCEPTANCE trước đó; vẫn không mergePR1 hoặc triển khaiPhase2. Tận dụng bằng chứng live cùngbytes đãđạt là yêu cầu trực tiếp: audit lại nguồn/ledger/migrations/persistence/secrets vàhai panelUI, không replay model. Quyền tốiđa8HTTP trong36manual đã dùng0, budget/grant/ledgergiữ. Không cóproductionbugmới cần sửa. Giữ26NL/12regNOT_RUN,điểmstrict/adjudicatedvàrawrankingFAILvới audit. HandoffR1/R2/hợpđồng/baselineDB/xácnhậnphạmvi ởđầuPREFLIGHT; không tạo vòngtesthoặcframeworkmới.

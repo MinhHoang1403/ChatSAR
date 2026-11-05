@@ -1,5 +1,60 @@
 # Bằng chứng triển khai Giai đoạn 1
 
+## Cleanup, Docker và kế hoạch Giai đoạn 2 — 05/11/2026
+
+**PLAN_READY_FOR_REVIEW — CACHE_CLEANUP_BLOCKED.** Kế hoạch đã cập nhật để owner review; chưa tuyên bố hoàn tất toàn bộ cleanup vì lệnh xóa cache bị công cụ chặn. Giai đoạn 1 vẫn **PHASE_1_TECHNICALLY_ACCEPTED** trong phạm vi single-table ngày 01/11, không đổi điểm/gold/raw FAIL / 26 NL + 12 regression NOT_RUN. Giai đoạn 2 **PLANNED / PENDING OWNER APPROVAL**, chưa triển khai JOIN/RAG/parser/embedding/BGE/worker/UI, chưa merge PR #1/main.
+
+### Source và danh sách giữ/xóa
+
+Baseline local/remote trước làm việc: `feature/sql-foundation`, `1cf62100714b40c0702aec9152547ed225e4260c`, working tree sạch. PR #1 OPEN/Draft/unmerged, CI baseline push 41769230899 / PR 41769237230 SUCCESS; CI commit bàn giao phải kiểm riêng sau push, không dùng baseline thay kết quả mới. Chỉ sửa 11 file Markdown hiện hữu; production/dependencies/Compose/Dockerfiles/migrations/gold không đổi, không tạo kế hoạch hoặc repository thứ hai. README bỏ các bản tóm tắt trạng thái đã cũ/trùng, giữ lịch sử đầy đủ trong PREFLIGHT/Decisions/Capabilities.
+
+| Hạng mục | Phân loại | Bằng chứng | Quyết định/thực tế |
+|---|---|---|---|
+| Backend 19 module | KEEP | AST import/reference trong app/tests; `main:app` là Uvicorn entrypoint Dockerfile; `__init__` giữ package | Không phát hiện production module đủ bằng chứng dư, xóa 0 source |
+| Frontend/source/config/lockfiles | KEEP | Vite entry/import graph qua typecheck/build, 18 tests; build HTML/JS/CSS khớp runtime | Giữ; không UI mới/refactor/dependency upgrade |
+| Evaluations/oracle/fixtures/tests | KEEP | CI gọi runtime/integration/planning/acceptance/persistence; model_live là CLI có prepare-only/live explicit; checksum manifests/oracles còn dùng | Không xóa harness chỉ vì không import từ app, không đổi gold/scores |
+| `operations/usage_review.py` | KEEP | Operator CLI/runbook/tests và audit full reserve; không phải API module | Giữ quyền/ledger history, không chạy apply review mới |
+| 10 migrations/bootstrap/CI/Dockerfiles | KEEP | Readiness/schema_migrations, Docker startup, workflow và vận hành | Không sửa/drop/reapply migration cũ; không build DB |
+| Artifacts nghiệm thu/lỗi/snapshots và scripts hỗ trợ | KEEP/REVIEW | Evidence refs trong PREFLIGHT/reports; có thể còn cần audit/recovery, một số scratch chưa đủ chứng minh độc lập | Giữ toàn bộ, Git ignore; không xóa chỉ theo tuổi/tên |
+| `.env`, IDE settings, venv/node_modules | KEEP | Cấu hình đang dùng, dependencies/dev recovery; source tracked không có generated files | Không reset/ghi đè; owner cập nhật key được giữ |
+| 12 cache/build directories | REMOVE candidate, thực thi BLOCKED | Root / ReparsePoint đã kiểm; 84 files / 66,069,038 bytes có thể tái tạo; frontend dist đã so bytes | Công cụ từ chối cả computed allowlist và fixed LiteralPaths (`blocked by policy`); không có lý do chi tiết hơn. **Không xóa**, không lách bằng công cụ khác, giải phóng 0 byte |
+
+12 đường dẫn candidate: root `.mypy_cache/.pytest_cache/.ruff_cache`; backend cùng 3 cache; `backend/app/__pycache__`, `backend/tests/__pycache__`, `evaluations/__pycache__`, `evaluations/tests/__pycache__`, `operations/__pycache__`, `frontend/dist`. Không gồm venv/node_modules/model weights/uploads/DB hoặc artifacts kiểm toán. Không còn file tracked cache/build cần `.gitignore` mới; Git đang ignore đúng nhóm.
+
+### Docker và bảo toàn dữ liệu
+
+- Snapshot host trước/sau: 31 containers (ChatSAR 3), 64 image refs / 51 unique image IDs. ChatSAR chỉ có 2 app images đang dùng, không có image cũ/dangling đủ điều kiện xóa; image xóa 0, image build mới 0, dung lượng Docker giải phóng 0. Shared build cache 38.62 GB giữ REVIEW vì không đủ ownership evidence tách ChatSAR; không prune/model reload.
+- API `sha256:a64386015a2824bd640d2bbfadf3f2b5602e5ffcace7cf9450c407c5cc2cf058`, web `sha256:07a8e6baa4a0a5f2e27e4209fa0df6e2751d3d3d60fc7471b3469c52e8387ada`; db giữ digest pin `137f044b…` trong compose. 19 app modules và requirements.lock khớp local; frontend build `index-B-ahbBtE.js`, `index-Czll-LwL.css`,index.html khớp container+HTTP từng byte. File 50x.html là vendor Nginx, không lẫn với Vite output. Image không có label Git SHA nên xác minh bằng source/dependency/served-content fingerprints, không bịa image commit label.
+- Restart đúng api/web đã kiểm, không restart DB. Trong lúc làm việc, `.env` thay đổi; chỉ biến GEMINI_API_KEY khác runtime, **owner xác nhận tự cập nhật khóa**. Codex không sửa/khôi phục `.env`, không in keys; recreate riêng API bằng existing image / no-build / no-deps / --wait sau kiểm không có pending. Cuối phiên Compose environment khớp runtime, không generate để thử key; availability của key mới chưa được nghiệm thu live.
+- Chỉ API container ID thay; web/db IDs, image IDs, mounts, `chatsar_database`, `chatsar_uploads`, `chatsar_default`, toàn volumes/networks và 28 external containers giữ nguyên. Mount array được sort theo Destination khi so, tránh coi thứ tự inspect là thay mount. Không tác động ShopQuery/Langfuse/Knowledge hoặc tài nguyên dự án khác.
+- Snapshot toàn 25 bảng app/data: counts+fullrow digest trước tests/sau tests/sau restart / sau recreate bằng nhau; 14 original upload SHA256 và 10 migrations/app bytes giữ. 2 Google users, 6 workspaces, 14 datasets/revisions/jobs, 10 conversations, 12 messages/result records, 19 sessions, 2 grants, 568 usage, 7 review audit, 2 sharing events còn nguyên. SQL/queryplans/envelopes/revisions/checksums nằm trong full row snapshot, physical tables cũng được hash. `.env` hash chỉ khác đầu phiên do owner thay key; bản owner đã cập nhật giữ nguyên qua restart/recreate.
+- Harness GET-only trong process TestClient/create_app(recover_jobs=False), principal override chỉ trong harness, không có endpoint/auth bypass production: đọc 2 accounts / 6 workspaces / 14 sources / 10 chats / 12 messages / 12 results, 9 messages có SQL đã lưu; 6 cross-owner workspace reads bị chặn. Mock generation “raise if called” không bị gọi. Đây là đọc API với DB thật, **không browser E2E hoặc fresh Google login**; auth/session verifier có integration riêng. Không tạo dữ liệu tổng hợp trên tài khoản thật.
+- Ledger 568 (Gemini 563 / Knowledge 5), grant 464/500, 36 manual / reserve 6.8002886 USD / known estimate 0.7158162 USD và UNKNOWN/audit giữ nguyên bởi exact full row hash. **Cloud/model/parser/embedding/reranker calls mới 0**, không đổi budget/quota/flags/OAuth hoặc review usage. Test quota có rows UUID riêng và teardown đúng rows của test; ledger gốc trước/sau bất biến.
+
+### Kiểm thử trong nhiệm vụ này
+
+| Tầng | PASS | FAIL | BLOCKED/NOT_RUN |
+|---|---|---|---|
+| Backend | Ruff, format 31 files, Mypy 19 modules, 211 unit | 0 | Không model-live mới |
+| Integration | 49 methods: 8 auth + 35 datasets + 6 guest, PostgreSQL thật/providers mock | 0 | Không fresh Google login mới |
+| Evaluation | 47 tests có PostgreSQL; 25 SQL oracle; 75 gold + 5 replacement checks | 0 | Model-semantic run mới NOT_RUN; không dùng làm accuracy |
+| Frontend | 18 tests, TypeScript và production build; 3 served files byte-match | 0 | Browser E2E mới NOT_RUN, không thay bằng SSR |
+| Docker | Compose config quiet, 3 healthy, 6 direct health checks + HTTP web/proxy/runtime harness, restart api/web và recreate API | 0 | Không local image build vì source/deps không đổi; CI build kiểm exact commit |
+| Persistence | 25 table hashes / 14 file hashes / 10 migrations / history + SQL / ledger / grants / reviews / volume identity trước/sau | 0 | Restore test mới NOT_RUN, không cần trong cleanup không xóa DB |
+| Security | Owner negative/session/CSRF/readonly trong integration; scan 130 tracked files + 3 served files không khớp secret thật từ config/container | 0 | Không claimed live key validation |
+| Cleanup | Inventory/ownership/classification | 0 | Cache deletion BLOCKED, 0 bytes freed; shared cache REVIEW/KEEP |
+| CI | Kết quả exact commit cuối xác nhận qua GitHub Actions trong báo cáo bàn giao | — | Không lấy CI baseline làm PASS commit mới |
+
+Unit có một Starlette/httpx deprecation warning từ dependency locked; không nâng dependency vì không phải regression của cleanup. Không gộp unit/PG/mock thành model/browser acceptance. Lỗi assertion ban đầu khi kiểm web do vendor 50x.html ngoài Vite và snapshot env do owner đổi key đã được phân loại, không sửa production; final nội dung ứng dụng/hash dữ liệu không lệch.
+
+### Kế hoạch và bàn giao
+
+Đọc [Implementation Plan mục 17](IMPLIMENT_PLAN.md#17-phase-2--automatic-relationships-document-ingestion-rag--unified-chat): 17.1–17.2 trạng thái/tái sử dụng/hợp đồng; 17.3 R0; 17.4 R1 candidate/validation/auto-approval/grain; 17.5 R2 parser/license/document/jobs/embedding; 17.6 R3 retrieval/BGE/citations; 17.7 R4 UX/routing/privacy/readiness; 17.8 Exit/decisions cần duyệt; 17.9 nguồn. Mỗi mốc 20 mục có dependency/modules/migrations/API/BE/FE/provider/security/cost/unit/PG/heldout/live/browser/restart/acceptance/rollback/out-of-scope. Master/Contracts/Decisions/Capabilities/Operations/AGENTS/Rules/README và evaluation README đã đồng bộ trọng yếu; ghi rõ lịch sử không thay kết quả cũ.
+
+Rủi ro cần duyệt: CSV thiếu semantic/grain evidence sẽ uncertain; parser license/fidelity và embedding/GPU fit chưa đo; threshold recall/activation/fidelity/latency/resources cần khóa R0 trước held-out; ngân sách/quyền cloud Giai đoạn 2 chưa cấp. Quyết định bỏ user approval đã được owner xác nhận, không hỏi approve từng relation. Hybrid giữ Giai đoạn 3. Không tự bắt đầu R0/R1 sau bàn giao.
+
+Evidence local (không push public): `artifacts/cleanup-2026-11-05/` gồm source-audit, docker-before/final, persistence-before/after-tests/after-restart/final, regression.log, history-read, config-drift-check, cache-removal-inventory và secret-scan. 0 source files xóa / 0 production changes; 11 Markdown files đổi. Branch/commit local=remote / CI exact SHA / working tree được ghi trong báo cáo cuối sau push; không ghi SHA tự tham chiếu sai trong tài liệu.
+
 ## Nghiệm thu kỹ thuật cuối — 01/11/2026
 
 **PHASE_1_TECHNICALLY_ACCEPTED — READY_FOR_PHASE_2.** Chủ dự án đã ủy quyền Codex chốt nghiệm thu kỹ thuật trong yêu cầu “FINAL SHORT ACCEPTANCE & PHASE 2 READINESS”. Trạng thái này thay READY_FOR_USER_ACCEPTANCE của checkpoint trước; không phải quyền merge PR #1 hoặc triển khai code Giai đoạn 2. Không còn lỗi nghiêm trọng mới được phát hiện trong phạm vi nghiệm thu ngắn đã thống nhất.
